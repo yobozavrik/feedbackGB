@@ -40,7 +40,7 @@ export function PhotoInput({ label, onChange }: Props) {
     <div>
       <label className="field-label">{label}</label>
       <div
-        className="flex items-center gap-3 rounded-2xl border-2 border-dashed border-blush-200 bg-white/60 p-3"
+        className="flex items-center gap-3 rounded-2xl border-2 border-dashed border-ink-300/40 bg-elev2 p-3 transition hover:border-brand-500/40"
         onClick={() => inputRef.current?.click()}
         role="button"
         tabIndex={0}
@@ -53,23 +53,19 @@ export function PhotoInput({ label, onChange }: Props) {
           <img
             src={preview}
             alt="preview"
-            className="h-20 w-20 flex-shrink-0 rounded-xl object-cover"
+            className="h-16 w-16 flex-shrink-0 rounded-xl object-cover"
           />
         ) : (
-          <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-xl bg-blush-100 text-3xl">
+          <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl bg-elev text-3xl">
             📷
           </div>
         )}
-        <div className="min-w-0 flex-1 text-sm">
+        <div className="min-w-0 flex-1 text-[14px]">
           <div className="font-medium text-ink-900">
             {preview ? "Замінити фото" : "Додати фото"}
           </div>
-          <div className="truncate text-xs text-ink-500">
-            {busy
-              ? "Обробка..."
-              : error
-                ? error
-                : "Камера або галерея • стискається автоматично"}
+          <div className="truncate text-[12px] text-ink-500">
+            {busy ? "Обробка..." : error ? error : "Камера або галерея"}
           </div>
         </div>
         {preview ? (
@@ -81,7 +77,7 @@ export function PhotoInput({ label, onChange }: Props) {
               onChange(null);
               if (inputRef.current) inputRef.current.value = "";
             }}
-            className="rounded-full bg-blush-100 px-2.5 py-1 text-xs font-medium text-blush-600"
+            className="rounded-full bg-brand-50 px-2.5 py-1 text-[12px] font-medium text-brand-600"
           >
             ✕
           </button>

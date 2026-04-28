@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Header } from "@/components/Header";
 import { FeedbackForm } from "@/components/FeedbackForm";
@@ -19,16 +20,22 @@ export default function FeedbackCategoryPage({
     <main>
       <Header subtitle={category.short} />
 
-      <section
-        className={`card mb-4 overflow-hidden bg-gradient-to-br ${category.gradient} p-5`}
+      {/* Back row */}
+      <Link
+        href="/"
+        className="mb-3 inline-flex h-9 items-center gap-1 px-1 text-[13px] text-ink-500 hover:text-ink-700"
       >
+        ← Назад
+      </Link>
+
+      <section className={`relative mb-4 overflow-hidden rounded-3xl ${category.gradient} p-5`}>
         <div className="flex items-start gap-3">
-          <div className="text-4xl">{category.emoji}</div>
+          <div className="text-[36px] leading-none">{category.emoji}</div>
           <div>
-            <h1 className="font-display text-lg font-bold text-ink-900">
+            <h1 className="font-display text-[19px] font-semibold leading-tight text-ink-900">
               {category.title}
             </h1>
-            <p className="mt-1 text-sm leading-snug text-ink-700/90">
+            <p className="mt-1 text-[13px] leading-snug text-ink-700">
               {category.description}
             </p>
           </div>
