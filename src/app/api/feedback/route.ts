@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getCategory, type CategoryId, CATEGORIES } from "@/lib/categories";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { buildSummary } from "@/lib/summary";
 import { validateInitData } from "@/lib/telegram";
+import { SESSION_COOKIE, verifySession } from "@/lib/session";
 import type { FeedbackPayload } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -34,31 +36,36 @@ export async function POST(req: Request) {
     }
   }
 
+  // Auth: prefer PIN session; Telegram initData is optional/secondary.
+  const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
+
   const { user, valid } = validateInitData(
     payload.init_data,
     process.env.TELEGRAM_BOT_TOKEN,
   );
 
   const display =
-    user
+    sess?.full_name ||
+    (user
       ? [user.first_name, user.last_name].filter(Boolean).join(" ").trim() ||
         user.username ||
         null
-      : null;
+      : null);
 
-  // If validation fails (or no init_data), still record but flag.
   const verified = valid;
+
+  // For sellers we ignore client-provided store_id and trust the session.
+  const effectiveStoreId =
+    sess?.role === "seller" && sess.store_id != null
+      ? sess.store_id
+      : (payload.store_id ?? null);
 
   let photoUrl: string | null = payload.photo_url ?? null;
   const supabase = getServerSupabase();
 
   // If we got a base64 data URL and Supabase Storage is available, upload it
   // and replace with public URL. Otherwise we keep the data URL inline.
-  if (
-    supabase &&
-    photoUrl &&
-    photoUrl.startsWith("data:image/")
-  ) {
+  if (supabase && photoUrl && photoUrl.startsWith("data:image/")) {
     try {
       photoUrl = await uploadPhoto(supabase, photoUrl);
     } catch (e) {
@@ -66,17 +73,31 @@ export async function POST(req: Request) {
     }
   }
 
+  // Resolve store name for the summary string (best-effort).
+  let storeName: string | null = null;
+  if (supabase && effectiveStoreId) {
+    const { data } = await supabase
+      .from("v_stores")
+      .select("name")
+      .eq("id", effectiveStoreId)
+      .maybeSingle();
+    storeName = (data as { name: string } | null)?.name ?? null;
+  }
+
   const summary = buildSummary(
-    { ...payload, photo_url: photoUrl },
+    { ...payload, store_id: effectiveStoreId, photo_url: photoUrl },
     {
       display_name: display,
       username: user?.username ?? null,
     },
+    storeName,
   );
 
   const record = {
     category: payload.category as CategoryId,
-    store: payload.store?.trim() || null,
+    store_id: effectiveStoreId,
+    store_label: payload.store_label?.trim() || null,
+    user_id: sess?.uid ?? null,
     fields: payload.fields ?? {},
     photo_url: photoUrl,
     tg_user_id: user?.id ?? null,
@@ -87,7 +108,6 @@ export async function POST(req: Request) {
   };
 
   if (!isSupabaseConfigured() || !supabase) {
-    // Dev fallback: log so the developer can still see it.
     console.info("[feedback] (no Supabase) ", JSON.stringify(record));
     return NextResponse.json({ ok: true, persisted: false });
   }
@@ -113,7 +133,7 @@ export async function GET(req: Request) {
   }
 
   const { data, error } = await supabase
-    .from("feedback")
+    .from("feedback_feed")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(1000);
@@ -125,10 +145,12 @@ export async function GET(req: Request) {
     const rows = (data ?? []) as Array<Record<string, unknown>>;
     const headers = [
       "created_at",
-      "category",
-      "store",
+      "category_title",
+      "store_name",
       "tg_display_name",
       "tg_username",
+      "tg_verified",
+      "status",
       "summary",
       "photo_url",
     ];

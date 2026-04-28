@@ -4,31 +4,36 @@ import { CATEGORIES } from "@/lib/categories";
 
 export const dynamic = "force-dynamic";
 
-interface Row {
+interface FeedRow {
   id: string;
   created_at: string;
   category: string;
-  store: string | null;
-  tg_display_name: string | null;
-  tg_username: string | null;
-  summary: string;
+  category_emoji: string | null;
+  category_title: string | null;
+  store_id: number | null;
+  store_name: string | null;
+  fields: Record<string, unknown> | null;
   photo_url: string | null;
+  tg_user_id: number | null;
+  tg_username: string | null;
+  tg_display_name: string | null;
+  tg_verified: boolean;
+  summary: string;
+  status: string;
 }
 
-async function fetchRows(): Promise<{ rows: Row[]; error: string | null }> {
+async function fetchRows(): Promise<{ rows: FeedRow[]; error: string | null }> {
   const supabase = getServerSupabase();
   if (!supabase) {
     return { rows: [], error: "Supabase ще не налаштовано" };
   }
   const { data, error } = await supabase
-    .from("feedback")
-    .select(
-      "id, created_at, category, store, tg_display_name, tg_username, summary, photo_url",
-    )
+    .from("feedback_feed")
+    .select("*")
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) return { rows: [], error: error.message };
-  return { rows: (data as Row[]) ?? [], error: null };
+  return { rows: (data as FeedRow[]) ?? [], error: null };
 }
 
 export default async function AdminPage() {
@@ -42,7 +47,8 @@ export default async function AdminPage() {
         <div className="card mb-4 p-5 text-sm leading-relaxed text-ink-700">
           <p className="font-medium text-ink-900">Supabase не підключено</p>
           <p className="mt-1">
-            Додай у `.env`: <code className="rounded bg-blush-100 px-1">NEXT_PUBLIC_SUPABASE_URL</code>{" "}
+            Додай у `.env`:{" "}
+            <code className="rounded bg-blush-100 px-1">NEXT_PUBLIC_SUPABASE_URL</code>{" "}
             та{" "}
             <code className="rounded bg-blush-100 px-1">SUPABASE_SERVICE_ROLE_KEY</code>{" "}
             (або anon), потім застосуй <code>supabase/schema.sql</code>.
@@ -72,17 +78,24 @@ export default async function AdminPage() {
               className={`card overflow-hidden bg-gradient-to-br ${cat?.gradient ?? "from-white to-white"} p-4`}
             >
               <div className="flex items-start gap-3">
-                <div className="text-2xl">{cat?.emoji ?? "📝"}</div>
+                <div className="text-2xl">{r.category_emoji ?? cat?.emoji ?? "📝"}</div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-display text-sm font-semibold text-ink-900">
-                      {cat?.title ?? r.category}
+                      {r.category_title ?? cat?.title ?? r.category}
                     </span>
                     <span className="text-[11px] text-ink-500">{date}</span>
                   </div>
-                  <div className="mt-0.5 text-[11px] text-ink-500">
-                    {r.store || "—"} •{" "}
-                    {r.tg_display_name || r.tg_username || "анонім"}
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-ink-500">
+                    <span>{r.store_name || "—"}</span>
+                    <span>•</span>
+                    <span>
+                      {r.tg_display_name || r.tg_username || "анонім"}
+                      {r.tg_verified ? " ✓" : ""}
+                    </span>
+                    {r.status && r.status !== "new" ? (
+                      <span className="pill bg-white/70 text-ink-700">{r.status}</span>
+                    ) : null}
                   </div>
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-snug text-ink-700">
                     {r.summary}
@@ -103,7 +116,7 @@ export default async function AdminPage() {
       </ul>
 
       <div className="mt-5 text-center text-xs text-ink-500">
-        Експорт у CSV / JSON: <code>/api/feedback?format=json</code>
+        Експорт: <code>/api/feedback?format=json</code> або <code>?format=csv</code>
       </div>
     </main>
   );

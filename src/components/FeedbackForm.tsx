@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Category } from "@/lib/categories";
 import { useTelegram } from "./TelegramProvider";
 import { PhotoInput } from "./PhotoInput";
@@ -11,12 +11,26 @@ interface Props {
   category: Category;
 }
 
+interface SessionUser {
+  full_name: string;
+  role: "seller" | "admin";
+  store_id: number | null;
+}
+
 export function FeedbackForm({ category }: Props) {
   const router = useRouter();
-  const { initData, webApp, user } = useTelegram();
+  const { initData, webApp } = useTelegram();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
+  const [me, setMe] = useState<SessionUser | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((j) => setMe(j?.user ?? null))
+      .catch(() => {});
+  }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -38,9 +52,12 @@ export function FeedbackForm({ category }: Props) {
         f.kind === "number" && raw ? Number(raw) : raw === "" ? null : raw;
     }
 
+    const storeIdRaw = (data.get("store_id") as string | null) ?? "";
+    const storeLabelRaw = (data.get("store_label") as string | null) ?? "";
     const payload = {
       category: category.id,
-      store: (data.get("store") as string | null) || undefined,
+      store_id: storeIdRaw ? Number(storeIdRaw) : null,
+      store_label: storeLabelRaw || null,
       fields,
       photo_url: photo,
       init_data: initData || undefined,
@@ -69,9 +86,23 @@ export function FeedbackForm({ category }: Props) {
     }
   }
 
+  // If user is a seller bound to a specific store, lock store selection.
+  const lockedStoreId = me?.role === "seller" ? me.store_id : null;
+
   return (
     <form onSubmit={onSubmit} className="card animate-fade-up space-y-5 p-5">
-      <StoreSelect />
+      {me ? (
+        <div className="text-xs text-ink-500">
+          Від: <span className="font-medium text-ink-900">{me.full_name}</span>
+          {me.role === "admin" ? " (адмін)" : ""}
+        </div>
+      ) : null}
+
+      {lockedStoreId ? (
+        <input type="hidden" name="store_id" value={lockedStoreId} />
+      ) : (
+        <StoreSelect />
+      )}
 
       {category.fields.map((f) => {
         if (f.kind === "photo") {
@@ -136,12 +167,6 @@ export function FeedbackForm({ category }: Props) {
           {submitting ? "Відправляю..." : "Відправити 💌"}
         </button>
       </div>
-
-      {!user ? (
-        <p className="pt-1 text-center text-[11px] text-ink-500">
-          Запущено поза Telegram — фідбек збережеться без імені.
-        </p>
-      ) : null}
     </form>
   );
 }

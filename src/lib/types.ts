@@ -10,7 +10,10 @@ export interface TelegramUser {
 
 export interface FeedbackPayload {
   category: CategoryId;
-  store?: string;
+  /** FK to feedbackgb.stores; null when "Не вказувати" or "Інший". */
+  store_id?: number | null;
+  /** Free-form store label (used when store_id is null and user picked "Інший"). */
+  store_label?: string | null;
   fields: Record<string, string | number | null>;
   photo_url?: string | null;
   /** Raw initData string from Telegram WebApp — server validates HMAC. */

@@ -6,11 +6,12 @@ import type { FeedbackPayload } from "./types";
  * This is what the AI agent / analyst will scan or vectorize.
  *
  * Format:
- *   [Категорія] (магазин: <store>) — поле: значення; поле: значення
+ *   [Категорія] (магазин: <name>) від <user> — поле: значення; поле: значення
  */
 export function buildSummary(
   payload: FeedbackPayload,
   user: { display_name?: string | null; username?: string | null } = {},
+  storeName?: string | null,
 ): string {
   const cat = getCategory(payload.category);
   const catLabel = cat ? `${cat.emoji} ${cat.title}` : payload.category;
@@ -20,7 +21,8 @@ export function buildSummary(
           .filter(Boolean)
           .join(" ")}`
       : "";
-  const store = payload.store ? ` (магазин: ${payload.store})` : "";
+  const storeText = storeName || payload.store_label;
+  const store = storeText ? ` (магазин: ${storeText})` : "";
 
   const parts: string[] = [];
   for (const [k, v] of Object.entries(payload.fields ?? {})) {
