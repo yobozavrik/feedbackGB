@@ -115,7 +115,7 @@ create or replace function feedbackgb.verify_pin(p_pin text)
 returns feedbackgb.users
 language plpgsql
 security definer
-set search_path = feedbackgb, public, pg_catalog
+set search_path = feedbackgb, extensions, public, pg_catalog
 as $$
 declare
   u feedbackgb.users;
@@ -138,7 +138,7 @@ create or replace function feedbackgb.set_user_pin(p_user_id uuid, p_pin text)
 returns void
 language plpgsql
 security definer
-set search_path = feedbackgb, public, pg_catalog
+set search_path = feedbackgb, extensions, public, pg_catalog
 as $$
 begin
   if p_pin !~ '^\d{4,6}$' then
@@ -431,21 +431,21 @@ begin
   if not exists (select 1 from feedbackgb.users where full_name = 'Галя Балувана') then
     v_id := gen_random_uuid();
     insert into feedbackgb.users (id, full_name, pin_hash, role, store_id)
-    values (v_id, 'Галя Балувана', crypt('1234', gen_salt('bf', 10)), 'admin', null);
+    values (v_id, 'Галя Балувана', extensions.crypt('1234', extensions.gen_salt('bf', 10)), 'admin', null);
   end if;
 
   -- 3 sellers tied to spots 1/2/3
   if not exists (select 1 from feedbackgb.users where full_name = 'Продавчиня — Кварц') then
     insert into feedbackgb.users (full_name, pin_hash, role, store_id)
-    values ('Продавчиня — Кварц', crypt('1111', gen_salt('bf', 10)), 'seller', 1);
+    values ('Продавчиня — Кварц', extensions.crypt('1111', extensions.gen_salt('bf', 10)), 'seller', 1);
   end if;
   if not exists (select 1 from feedbackgb.users where full_name = 'Продавчиня — Шкільна') then
     insert into feedbackgb.users (full_name, pin_hash, role, store_id)
-    values ('Продавчиня — Шкільна', crypt('2222', gen_salt('bf', 10)), 'seller', 2);
+    values ('Продавчиня — Шкільна', extensions.crypt('2222', extensions.gen_salt('bf', 10)), 'seller', 2);
   end if;
   if not exists (select 1 from feedbackgb.users where full_name = 'Продавчиня — Герцена') then
     insert into feedbackgb.users (full_name, pin_hash, role, store_id)
-    values ('Продавчиня — Герцена', crypt('3333', gen_salt('bf', 10)), 'seller', 3);
+    values ('Продавчиня — Герцена', extensions.crypt('3333', extensions.gen_salt('bf', 10)), 'seller', 3);
   end if;
 end $$;
 
