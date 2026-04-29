@@ -12,7 +12,6 @@ export async function middleware(req: NextRequest) {
   if (
     pathname === "/login" ||
     pathname.startsWith("/api/auth/") ||
-    pathname.startsWith("/api/stores") ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico" ||
     pathname.startsWith("/icons/")
@@ -24,13 +23,24 @@ export async function middleware(req: NextRequest) {
   const sess = await verifySession(tok);
 
   if (!sess) {
+    // API calls without a session get JSON 401 instead of an HTML redirect.
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+    }
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith("/admin") && sess.role !== "admin") {
+  // Admin-only surfaces.
+  const isAdminRoute =
+    pathname.startsWith("/admin") ||
+    (pathname.startsWith("/api/feedback") && req.method !== "POST");
+  if (isAdminRoute && sess.role !== "admin") {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
     const url = req.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
