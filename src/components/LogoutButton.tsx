@@ -12,7 +12,7 @@ export function LogoutButton() {
         router.replace("/login");
         router.refresh();
       }}
-      className="text-ink-500 underline-offset-2 hover:underline"
+      className="rounded-full px-2 py-0.5 text-ink-500 underline-offset-2 hover:text-ink-700 hover:underline"
     >
       вийти
     </button>

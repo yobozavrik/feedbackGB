@@ -30,10 +30,12 @@ export interface Category {
   title: string;
   short: string;
   description: string;
-  /** Tailwind gradient classes for the card / header. */
+  /** Tailwind background class for the card tint. */
   gradient: string;
   /** Tailwind text color class for accent. */
   accent: string;
+  /** Short tint key (matches Tailwind cat-* color). */
+  tint: "missing" | "supply" | "idea" | "spotted" | "tech" | "voice";
   fields: CategoryField[];
 }
 
@@ -45,8 +47,9 @@ export const CATEGORIES: Category[] = [
     short: "Чого не вистачило сьогодні",
     description:
       "Зафіксуй позицію, якої не було на полиці, але яку питали клієнти або яка має бути.",
-    gradient: "from-blush-200 to-blush-100",
-    accent: "text-blush-600",
+    gradient: "bg-cat-missing/40",
+    accent: "text-brand-600",
+    tint: "missing",
     fields: [
       {
         id: "item_name",
@@ -77,8 +80,9 @@ export const CATEGORIES: Category[] = [
     short: "Привезли не те / зіпсоване / запізно",
     description:
       "Опиши, що не так з постачанням: кількість, якість, час, документи.",
-    gradient: "from-peach-200 to-peach-100",
-    accent: "text-peach-300",
+    gradient: "bg-cat-supply/40",
+    accent: "text-amber-400",
+    tint: "supply",
     fields: [
       {
         id: "supplier_or_item",
@@ -104,8 +108,9 @@ export const CATEGORIES: Category[] = [
     short: "Що покращити в моєму магазині",
     description:
       "Пропозиції щодо викладки, асортименту, обладнання, обслуговування — все що підвищить продажі або зручність.",
-    gradient: "from-lavender-200 to-lavender-100",
-    accent: "text-lavender-400",
+    gradient: "bg-cat-idea/40",
+    accent: "text-ink-900",
+    tint: "idea",
     fields: [
       {
         id: "title",
@@ -131,8 +136,9 @@ export const CATEGORIES: Category[] = [
     short: "Класна ідея ззовні — фото + опис",
     description:
       "Бачила круту викладку, нестандартний товар чи фішку в іншому магазині? Поділись — ми порівняємо й, можливо, впровадимо.",
-    gradient: "from-mint-200 to-mint-100",
-    accent: "text-mint-300",
+    gradient: "bg-cat-spotted/40",
+    accent: "text-ink-900",
+    tint: "spotted",
     fields: [
       {
         id: "where",
@@ -158,8 +164,9 @@ export const CATEGORIES: Category[] = [
     short: "Обладнання, ремонт, чистота",
     description:
       "Не працює холодильник, тече кран, треба ремонт, ліхтар перегорів — фіксуй сюди.",
-    gradient: "from-blush-100 to-lavender-100",
-    accent: "text-blush-500",
+    gradient: "bg-cat-tech/40",
+    accent: "text-ink-900",
+    tint: "tech",
     fields: [
       {
         id: "what_broken",
@@ -189,8 +196,9 @@ export const CATEGORIES: Category[] = [
     short: "Що часто питають, на що скаржаться",
     description:
       "Зворотний зв'язок від клієнтів: побажання, скарги, повторювані запити.",
-    gradient: "from-peach-100 to-blush-100",
-    accent: "text-peach-300",
+    gradient: "bg-cat-voice/40",
+    accent: "text-ink-900",
+    tint: "voice",
     fields: [
       {
         id: "topic",
