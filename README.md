@@ -56,6 +56,16 @@ npm run dev
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY` (Settings → API → `service_role`)
+   - `SESSION_SECRET` — згенеруй `openssl rand -hex 32`. У проді обов'язково,
+     має відрізнятися від service role key.
+5. Задай PIN-и для користувачів (адмін + продавчині) з SQL Editor:
+   ```sql
+   select id, full_name from feedbackgb.users order by full_name;
+   select feedbackgb.set_user_pin('<uuid>', '<6-8 digits>');
+   ```
+   PIN-и в репо **не зберігаються**. Якщо ти оновлюєш стару інсталяцію —
+   спочатку застосуй `supabase/002_security_hardening.sql`, він скине всі
+   наявні pin_hash і закриє анонімний доступ до RPC-функцій.
 
 ### 2. Telegram бот
 
