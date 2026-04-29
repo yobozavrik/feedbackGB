@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY = "feedback-gb:store_id";
 
@@ -15,24 +15,16 @@ interface Props {
 }
 
 /**
- * Quick-pick chips for "which shop am I in".
+ * Searchable store selector for admins (sellers see a read-only chip instead).
  *
- * Loads `/api/stores` (cached on the server). If nothing comes back we fall
- * back to the placeholder Магазин №1-5 so the form always works.
- *
- * Remembers the last picked store_id in localStorage so a sales-rep working
- * the same shop all day doesn't re-tap on every fb.
+ * Pulls /api/stores (server-cached, joined to ERP categories.spots) and
+ * remembers the last picked store_id in localStorage.
  */
 export function StoreSelect({ name = "store_id" }: Props) {
-  const [stores, setStores] = useState<Store[]>([
-    { id: 1, name: "Магазин №1" },
-    { id: 2, name: "Магазин №2" },
-    { id: 3, name: "Магазин №3" },
-    { id: 4, name: "Магазин №4" },
-    { id: 5, name: "Магазин №5" },
-  ]);
-  const [storeId, setStoreId] = useState<number | "other" | null>(null);
-  const [custom, setCustom] = useState("");
+  const [stores, setStores] = useState<Store[]>([]);
+  const [storeId, setStoreId] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -56,57 +48,73 @@ export function StoreSelect({ name = "store_id" }: Props) {
     }
   }, [storeId]);
 
-  const submitId = typeof storeId === "number" ? String(storeId) : "";
-  const submitLabel = storeId === "other" ? custom.trim() : "";
+  const selected = useMemo(
+    () => stores.find((s) => s.id === storeId) ?? null,
+    [stores, storeId],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return stores.slice(0, 8);
+    return stores.filter((s) => s.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [stores, query]);
 
   return (
-    <div>
+    <div className="relative">
       <label className="field-label">Магазин</label>
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-        <button
-          type="button"
-          onClick={() => setStoreId(null)}
-          className={chipClass(storeId === null)}
-        >
-          Не вказувати
-        </button>
-        {stores.map((s) => (
+      {selected ? (
+        <div className="flex items-center gap-2">
+          <span className="pill bg-cat-missing/40 text-ink-900">
+            <span aria-hidden>📍</span>
+            {selected.name}
+          </span>
           <button
             type="button"
-            key={s.id}
-            onClick={() => setStoreId(s.id)}
-            className={chipClass(storeId === s.id)}
+            onClick={() => {
+              setStoreId(null);
+              setOpen(true);
+            }}
+            className="text-[12px] text-ink-500 underline-offset-2 hover:underline"
           >
-            {s.name}
+            змінити
           </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => setStoreId("other")}
-          className={chipClass(storeId === "other")}
-        >
-          Інший
-        </button>
-      </div>
-      {storeId === "other" ? (
-        <input
-          type="text"
-          className="field-input mt-2"
-          placeholder="Назва магазину"
-          value={custom}
-          onChange={(e) => setCustom(e.target.value)}
-        />
-      ) : null}
-      <input type="hidden" name={name} value={submitId} />
-      <input type="hidden" name="store_label" value={submitLabel} />
+        </div>
+      ) : (
+        <>
+          <input
+            type="text"
+            className="field-input"
+            placeholder="🔍 Знайти магазин"
+            value={query}
+            onFocus={() => setOpen(true)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setOpen(true);
+            }}
+          />
+          {open && filtered.length > 0 ? (
+            <ul className="mt-1 max-h-60 overflow-y-auto rounded-2xl border border-ink-300/30 bg-elev shadow-soft">
+              {filtered.map((s) => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStoreId(s.id);
+                      setQuery("");
+                      setOpen(false);
+                    }}
+                    className="block w-full px-4 py-2.5 text-left text-[14px] text-ink-900 hover:bg-elev2"
+                  >
+                    {s.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      )}
+      <input type="hidden" name={name} value={storeId ?? ""} />
+      <input type="hidden" name="store_label" value="" />
     </div>
   );
-}
-
-function chipClass(active: boolean) {
-  return `rounded-xl border px-2.5 py-2 text-xs font-medium transition ${
-    active
-      ? "border-blush-300 bg-blush-100 text-blush-600 shadow-soft"
-      : "border-ink-300/30 bg-white/70 text-ink-700 hover:bg-white"
-  }`;
 }

@@ -1,61 +1,56 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  content: [
-    "./src/**/*.{js,ts,jsx,tsx,mdx}",
-  ],
+  content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
-        cream: "#FFF8F3",
-        blush: {
-          50: "#FFF5F7",
-          100: "#FFE4EC",
-          200: "#FFC9D9",
-          300: "#FFA8C0",
-          400: "#FF85A8",
-          500: "#F76391",
-          600: "#E04679",
+        bg: "rgb(var(--bg) / <alpha-value>)",
+        elev: "rgb(var(--elev) / <alpha-value>)",
+        elev2: "rgb(var(--elev-2) / <alpha-value>)",
+        brand: {
+          50: "rgb(var(--brand-50) / <alpha-value>)",
+          500: "rgb(var(--brand-500) / <alpha-value>)",
+          600: "rgb(var(--brand-600) / <alpha-value>)",
         },
-        peach: {
-          100: "#FFE8D6",
-          200: "#FFD0AE",
-          300: "#FFB585",
-        },
-        lavender: {
-          100: "#EFE7FF",
-          200: "#D9C9FF",
-          300: "#BFA8FF",
-          400: "#A287FF",
-        },
-        mint: {
-          100: "#DDF5EC",
-          200: "#A9E5CC",
-          300: "#74D2AC",
+        amber: {
+          400: "rgb(var(--accent-amber) / <alpha-value>)",
         },
         ink: {
-          900: "#2A1A2E",
-          700: "#5A4A60",
-          500: "#8A7B90",
-          300: "#C4BAC9",
+          900: "rgb(var(--ink-900) / <alpha-value>)",
+          700: "rgb(var(--ink-700) / <alpha-value>)",
+          500: "rgb(var(--ink-500) / <alpha-value>)",
+          300: "rgb(var(--ink-300) / <alpha-value>)",
         },
+        cat: {
+          missing: "rgb(var(--cat-missing) / <alpha-value>)",
+          supply: "rgb(var(--cat-supply) / <alpha-value>)",
+          idea: "rgb(var(--cat-idea) / <alpha-value>)",
+          spotted: "rgb(var(--cat-spotted) / <alpha-value>)",
+          tech: "rgb(var(--cat-tech) / <alpha-value>)",
+          voice: "rgb(var(--cat-voice) / <alpha-value>)",
+        },
+        success: "rgb(var(--success) / <alpha-value>)",
+        danger: "rgb(var(--danger) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
         display: ["var(--font-display)", "system-ui", "sans-serif"],
       },
       boxShadow: {
-        soft: "0 8px 24px -8px rgba(247, 99, 145, 0.18)",
-        card: "0 4px 16px -4px rgba(42, 26, 46, 0.08)",
-        glow: "0 0 0 4px rgba(255, 169, 192, 0.25)",
+        soft: "0 1px 2px rgba(43,27,27,0.04), 0 8px 24px rgba(43,27,27,0.06)",
+        ring: "0 0 0 4px rgb(var(--brand-500) / 0.18)",
       },
       borderRadius: {
         "4xl": "2rem",
       },
       animation: {
-        "fade-up": "fadeUp 0.35s ease-out",
-        "pop": "pop 0.25s ease-out",
-        "shimmer": "shimmer 2.5s linear infinite",
+        "fade-up": "fadeUp 0.35s cubic-bezier(0.2, 0.8, 0.2, 1)",
+        pop: "pop 0.4s cubic-bezier(0.2, 1.6, 0.4, 1)",
+        shake: "shake 0.22s ease-in-out",
+        shimmer: "shimmer 1.4s linear infinite",
+        "pulse-soft": "pulseSoft 1.4s ease-in-out infinite",
       },
       keyframes: {
         fadeUp: {
@@ -63,13 +58,23 @@ const config: Config = {
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         pop: {
-          "0%": { transform: "scale(0.96)" },
-          "60%": { transform: "scale(1.02)" },
-          "100%": { transform: "scale(1)" },
+          "0%": { transform: "scale(0.5)", opacity: "0" },
+          "60%": { transform: "scale(1.1)", opacity: "1" },
+          "100%": { transform: "scale(1)", opacity: "1" },
+        },
+        shake: {
+          "0%, 100%": { transform: "translateX(0)" },
+          "20%": { transform: "translateX(-4px)" },
+          "50%": { transform: "translateX(4px)" },
+          "80%": { transform: "translateX(-2px)" },
         },
         shimmer: {
           "0%": { backgroundPosition: "-400px 0" },
           "100%": { backgroundPosition: "400px 0" },
+        },
+        pulseSoft: {
+          "0%, 100%": { opacity: "0.4", transform: "scale(0.9)" },
+          "50%": { opacity: "1", transform: "scale(1.1)" },
         },
       },
     },
