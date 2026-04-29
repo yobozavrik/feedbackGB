@@ -1,5 +1,5 @@
 -- =============================================================================
--- FeedbackGB — full backend schema
+-- FeedbackGB — full backend schema (SECURITY-HARDENED)
 -- =============================================================================
 -- Apply once via Supabase Studio → SQL Editor (run the whole file as one
 -- script) or via psql:
@@ -18,6 +18,13 @@
 --     PGRST_DB_SCHEMAS=public,storage,graphql_public,categories,...,feedbackgb
 --   After restart, run `NOTIFY pgrst, 'reload schema';` (or just hit the
 --   server) and the API picks up the new tables automatically.
+--
+-- SECURITY NOTE:
+--   * No default privileges on functions for `anon` / `authenticated`.
+--     Every SECURITY DEFINER function is explicitly revoked from public
+--     and granted only to `service_role` (app reaches DB with service role).
+--   * No seeded PINs. PINs are set out-of-band via
+--     `feedbackgb.set_user_pin(uuid, text)` from SQL Editor (service_role).
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -30,13 +37,16 @@ create extension if not exists "vector";     -- pgvector (AI embeddings)
 create schema if not exists feedbackgb;
 
 -- Grants for Supabase roles (no-op if those roles don't exist).
+-- IMPORTANT: we DO NOT grant execute on functions to anon/authenticated by
+-- default. Application always reaches the DB with service_role — never from
+-- the browser. Granting execute to anon would expose SECURITY DEFINER
+-- functions (`verify_pin`, `set_user_pin`, …) to the public internet.
 do $$
 begin
   if exists (select 1 from pg_roles where rolname = 'authenticator') then
-    execute 'grant usage on schema feedbackgb to authenticator, anon, authenticated, service_role';
-    execute 'alter default privileges in schema feedbackgb grant select on tables to anon, authenticated';
+    execute 'grant usage on schema feedbackgb to service_role';
     execute 'alter default privileges in schema feedbackgb grant select, insert, update, delete on tables to service_role';
-    execute 'alter default privileges in schema feedbackgb grant execute on functions to anon, authenticated, service_role';
+    execute 'alter default privileges in schema feedbackgb grant execute on functions to service_role';
     -- service_role may need to FK-reference categories.spots
     execute 'grant references on table categories.spots to service_role';
   end if;
@@ -57,11 +67,11 @@ create or replace view feedbackgb.v_stores as
   from categories.spots s
   where s.is_deleted = false;
 
--- Allow read of the view to all roles
+-- Only service_role reads v_stores (the API proxies it via /api/stores).
 do $$
 begin
   if exists (select 1 from pg_roles where rolname = 'authenticator') then
-    execute 'grant select on feedbackgb.v_stores to anon, authenticated, service_role';
+    execute 'grant select on feedbackgb.v_stores to service_role';
   end if;
 end $$;
 
@@ -93,25 +103,46 @@ on conflict (id) do update set
 -- -----------------------------------------------------------------------------
 -- 4. Users (PIN auth)
 --    pin_hash uses bcrypt via pgcrypto.crypt(). PIN never stored in plaintext.
+--    PIN length: 6-8 digits. Login is user_id + pin (no linear scan, no
+--    PIN-collision ambiguity).
 -- -----------------------------------------------------------------------------
 create table if not exists feedbackgb.users (
   id          uuid primary key default gen_random_uuid(),
   full_name   text not null,
-  pin_hash    text not null,                                       -- bcrypt
+  pin_hash    text,                                               -- bcrypt, null until admin sets it
   store_id    integer references categories.spots(spot_id),
   role        text not null default 'seller'
               check (role in ('seller', 'admin')),
   is_active   boolean not null default true,
   created_at  timestamptz not null default now(),
-  last_login  timestamptz
+  last_login  timestamptz,
+  failed_attempts int not null default 0,
+  locked_until    timestamptz
 );
 
 create index if not exists users_active_idx on feedbackgb.users (is_active);
 create index if not exists users_role_idx   on feedbackgb.users (role);
 
--- Helper to verify a 4-digit PIN with constant-time bcrypt comparison.
+-- Helper returning the minimal user list for the login picker. The API
+-- reaches this with service_role and then exposes only (id, full_name, store_id, role).
+create or replace view feedbackgb.v_login_users as
+  select id, full_name, role, store_id
+  from feedbackgb.users
+  where is_active
+  order by full_name asc;
+
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'authenticator') then
+    execute 'grant select on feedbackgb.v_login_users to service_role';
+  end if;
+end $$;
+
+-- verify_pin(uuid, text) — verifies the PIN for a specific user.
 -- Returns the user row when the PIN matches, NULL otherwise.
-create or replace function feedbackgb.verify_pin(p_pin text)
+-- Enforces 4–8 digit format (4/5 allowed only for legacy rows during migration;
+-- the API enforces 6+ going forward).
+create or replace function feedbackgb.verify_pin(p_user_id uuid, p_pin text)
 returns feedbackgb.users
 language plpgsql
 security definer
@@ -120,20 +151,43 @@ as $$
 declare
   u feedbackgb.users;
 begin
-  if p_pin is null or p_pin !~ '^\d{4,6}$' then
+  if p_user_id is null or p_pin is null or p_pin !~ '^\d{4,8}$' then
     return null;
   end if;
-  -- bcrypt-compare against every active user; fast enough for <10k users.
-  for u in select * from feedbackgb.users where is_active loop
-    if u.pin_hash = crypt(p_pin, u.pin_hash) then
-      update feedbackgb.users set last_login = now() where id = u.id;
-      return u;
-    end if;
-  end loop;
-  return null;
+
+  select * into u from feedbackgb.users
+   where id = p_user_id and is_active;
+  if not found or u.pin_hash is null then
+    return null;
+  end if;
+
+  -- Respect the account lockout window set by the API on repeated failures.
+  if u.locked_until is not null and u.locked_until > now() then
+    return null;
+  end if;
+
+  if u.pin_hash = crypt(p_pin, u.pin_hash) then
+    update feedbackgb.users
+       set last_login = now(),
+           failed_attempts = 0,
+           locked_until = null
+     where id = u.id
+    returning * into u;
+    return u;
+  else
+    update feedbackgb.users
+       set failed_attempts = failed_attempts + 1,
+           locked_until = case
+             when failed_attempts + 1 >= 10 then now() + interval '1 hour'
+             else locked_until
+           end
+     where id = u.id;
+    return null;
+  end if;
 end $$;
 
--- Helper to create / reset a user PIN (admin/seed path; service_role only).
+-- Helper to create / reset a user PIN. SECURITY DEFINER; only service_role
+-- can EXECUTE it (grants below). Enforces a 6-digit minimum.
 create or replace function feedbackgb.set_user_pin(p_user_id uuid, p_pin text)
 returns void
 language plpgsql
@@ -141,12 +195,29 @@ security definer
 set search_path = feedbackgb, extensions, public, pg_catalog
 as $$
 begin
-  if p_pin !~ '^\d{4,6}$' then
-    raise exception 'PIN must be 4-6 digits';
+  if p_pin !~ '^\d{6,8}$' then
+    raise exception 'PIN must be 6-8 digits';
   end if;
   update feedbackgb.users
-     set pin_hash = crypt(p_pin, gen_salt('bf', 10))
+     set pin_hash = crypt(p_pin, gen_salt('bf', 10)),
+         failed_attempts = 0,
+         locked_until = null
    where id = p_user_id;
+end $$;
+
+-- Lock down every SECURITY DEFINER function we just (re)created. Revoke from
+-- PUBLIC / anon / authenticated, grant only to service_role. The API uses
+-- service_role; the browser must never invoke these via PostgREST.
+revoke all on function feedbackgb.verify_pin(uuid, text) from public;
+revoke all on function feedbackgb.set_user_pin(uuid, text) from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on function feedbackgb.verify_pin(uuid, text) from anon, authenticated';
+    execute 'revoke all on function feedbackgb.set_user_pin(uuid, text) from anon, authenticated';
+    execute 'grant execute on function feedbackgb.verify_pin(uuid, text) to service_role';
+    execute 'grant execute on function feedbackgb.set_user_pin(uuid, text) to service_role';
+  end if;
 end $$;
 
 -- -----------------------------------------------------------------------------
@@ -236,7 +307,10 @@ declare
   d jsonb;
   who text;
 begin
+  -- Prefer the app-set actor (API does `select set_config('app.actor', <uid>, true)`
+  -- per-request). Fall back to the JWT sub if present, else to 'service_role'.
   who := coalesce(
+    nullif(current_setting('app.actor', true), ''),
     current_setting('request.jwt.claims', true)::jsonb ->> 'sub',
     'service_role'
   );
@@ -266,7 +340,7 @@ begin
     return OLD;
   end if;
   return null;
-end $$ language plpgsql security definer;
+end $$ language plpgsql;
 
 drop trigger if exists feedback_audit on feedbackgb.feedback;
 create trigger feedback_audit
@@ -324,8 +398,17 @@ create or replace function feedbackgb.refresh_stats() returns void as $$
   refresh materialized view concurrently feedbackgb.feedback_stats_daily;
 $$ language sql;
 
+revoke all on function feedbackgb.refresh_stats() from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on function feedbackgb.refresh_stats() from anon, authenticated';
+    execute 'grant execute on function feedbackgb.refresh_stats() to service_role';
+  end if;
+end $$;
+
 -- -----------------------------------------------------------------------------
--- 8. Helper analytics functions
+-- 8. Helper analytics functions (service_role only)
 -- -----------------------------------------------------------------------------
 create or replace function feedbackgb.top_missing_items(
   p_store_id integer default null,
@@ -351,6 +434,15 @@ create or replace function feedbackgb.top_missing_items(
   limit p_limit;
 $$;
 
+revoke all on function feedbackgb.top_missing_items(integer, timestamptz, timestamptz, int) from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on function feedbackgb.top_missing_items(integer, timestamptz, timestamptz, int) from anon, authenticated';
+    execute 'grant execute on function feedbackgb.top_missing_items(integer, timestamptz, timestamptz, int) to service_role';
+  end if;
+end $$;
+
 create or replace function feedbackgb.search_feedback_by_embedding(
   query_embedding vector(1536),
   match_count int default 10,
@@ -375,6 +467,15 @@ create or replace function feedbackgb.search_feedback_by_embedding(
   limit match_count;
 $$;
 
+revoke all on function feedbackgb.search_feedback_by_embedding(vector, int, text) from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on function feedbackgb.search_feedback_by_embedding(vector, int, text) from anon, authenticated';
+    execute 'grant execute on function feedbackgb.search_feedback_by_embedding(vector, int, text) to service_role';
+  end if;
+end $$;
+
 -- -----------------------------------------------------------------------------
 -- 9. Row Level Security
 -- -----------------------------------------------------------------------------
@@ -385,25 +486,22 @@ alter table feedbackgb.categories enable row level security;
 
 drop policy if exists categories_read_all on feedbackgb.categories;
 create policy categories_read_all on feedbackgb.categories
-  for select using (true);
+  for select to service_role using (true);
 
--- Users: anon/authenticated cannot read. service_role bypasses RLS.
--- (Login flow uses verify_pin() function which is SECURITY DEFINER, so it
--- works even with RLS on.)
-
--- Feedback: anon/authenticated cannot read directly — admin UI uses
--- service_role server-side.
-
--- Audit log: service_role only.
+-- Users / feedback / audit_log: no policies for anon/authenticated.
+-- service_role bypasses RLS anyway. The app always reaches the DB as
+-- service_role; the browser never does.
 
 -- -----------------------------------------------------------------------------
 -- 10. Storage bucket
+--     Private by default — admin UI generates short-lived signed URLs.
+--     If you need public sharing, toggle the bucket to public in Studio.
 -- -----------------------------------------------------------------------------
 do $$
 begin
   if exists (select 1 from information_schema.tables where table_schema='storage' and table_name='buckets') then
     insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-    values ('feedback-photos', 'feedback-photos', true, 5242880, array['image/jpeg','image/png','image/webp'])
+    values ('feedback-photos', 'feedback-photos', false, 5242880, array['image/jpeg','image/png','image/webp'])
     on conflict (id) do update set
       public = excluded.public,
       file_size_limit = excluded.file_size_limit,
@@ -412,53 +510,43 @@ begin
 end $$;
 
 -- -----------------------------------------------------------------------------
--- 11. Seed: sample admin + sellers (so the app works the moment SQL completes)
+-- 11. Seed users WITHOUT PINs
+--     Each user row is created active but with pin_hash = NULL so they cannot
+--     log in until an operator calls `feedbackgb.set_user_pin(<uuid>, '<pin>')`
+--     from the SQL Editor (service_role).
 --
---    Default PINs (CHANGE LATER!):
---      admin   1234  →  Галя Балувана (admin)
---      seller  1111  →  Продавчиня магазину Кварц (spot 1)
---      seller  2222  →  Продавчиня магазину Шкільна (spot 2)
---      seller  3333  →  Продавчиня магазину Герцена (spot 3)
---
---    Reset / change PIN later:
---      select feedbackgb.set_user_pin('<user_uuid>', '4321');
+--     Example rotation (run once after applying schema):
+--       select id, full_name from feedbackgb.users;
+--       select feedbackgb.set_user_pin('<admin-uuid>', '<6-8 digit pin>');
 -- -----------------------------------------------------------------------------
 do $$
-declare
-  v_id uuid;
 begin
-  -- admin
   if not exists (select 1 from feedbackgb.users where full_name = 'Галя Балувана') then
-    v_id := gen_random_uuid();
-    insert into feedbackgb.users (id, full_name, pin_hash, role, store_id)
-    values (v_id, 'Галя Балувана', extensions.crypt('1234', extensions.gen_salt('bf', 10)), 'admin', null);
+    insert into feedbackgb.users (full_name, role, store_id)
+    values ('Галя Балувана', 'admin', null);
   end if;
-
-  -- 3 sellers tied to spots 1/2/3
   if not exists (select 1 from feedbackgb.users where full_name = 'Продавчиня — Кварц') then
-    insert into feedbackgb.users (full_name, pin_hash, role, store_id)
-    values ('Продавчиня — Кварц', extensions.crypt('1111', extensions.gen_salt('bf', 10)), 'seller', 1);
+    insert into feedbackgb.users (full_name, role, store_id)
+    values ('Продавчиня — Кварц', 'seller', 1);
   end if;
   if not exists (select 1 from feedbackgb.users where full_name = 'Продавчиня — Шкільна') then
-    insert into feedbackgb.users (full_name, pin_hash, role, store_id)
-    values ('Продавчиня — Шкільна', extensions.crypt('2222', extensions.gen_salt('bf', 10)), 'seller', 2);
+    insert into feedbackgb.users (full_name, role, store_id)
+    values ('Продавчиня — Шкільна', 'seller', 2);
   end if;
   if not exists (select 1 from feedbackgb.users where full_name = 'Продавчиня — Герцена') then
-    insert into feedbackgb.users (full_name, pin_hash, role, store_id)
-    values ('Продавчиня — Герцена', extensions.crypt('3333', extensions.gen_salt('bf', 10)), 'seller', 3);
+    insert into feedbackgb.users (full_name, role, store_id)
+    values ('Продавчиня — Герцена', 'seller', 3);
   end if;
 end $$;
 
 -- =============================================================================
 -- Done.
 --
--- Quick smoke test (in SQL Editor):
---   select * from feedbackgb.v_stores limit 5;
---   select id, full_name, role, store_id from feedbackgb.users;
---   select (feedbackgb.verify_pin('1234')).full_name;   -- should return 'Галя Балувана'
---
--- Insert a fake feedback as service_role:
---   insert into feedbackgb.feedback (category, store_id, fields, summary)
---   values ('missing_item', 2, '{"item_name":"тест"}', '🛒 тест запис');
---   select * from feedbackgb.feedback_feed;
+-- After applying:
+--   1. Rotate PINs:
+--      select id, full_name from feedbackgb.users;
+--      select feedbackgb.set_user_pin('<uuid>', '<6-8 digits>');
+--   2. Sanity check:
+--      select full_name from feedbackgb.users where is_active;
+--      select (feedbackgb.verify_pin('<uuid>', '<pin>')).full_name;
 -- =============================================================================

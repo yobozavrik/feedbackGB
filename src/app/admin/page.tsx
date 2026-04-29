@@ -25,6 +25,8 @@ export interface FeedRow {
   status: string;
 }
 
+const SIGNED_URL_TTL = 60 * 10; // 10 minutes
+
 async function fetchRows(): Promise<{ rows: FeedRow[]; error: string | null }> {
   const supabase = getServerSupabase();
   if (!supabase) {
@@ -36,7 +38,40 @@ async function fetchRows(): Promise<{ rows: FeedRow[]; error: string | null }> {
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) return { rows: [], error: error.message };
-  return { rows: (data as FeedRow[]) ?? [], error: null };
+  const rows = (data as FeedRow[]) ?? [];
+
+  // Resolve "sb:<path>" references to short-lived signed URLs. Anything else
+  // is dropped (we no longer trust arbitrary http/https/data URLs in the DB).
+  await Promise.all(
+    rows.map(async (r) => {
+      r.photo_url = await resolvePhotoUrl(supabase, r.photo_url);
+    }),
+  );
+
+  return { rows, error: null };
+}
+
+async function resolvePhotoUrl(
+  supabase: NonNullable<ReturnType<typeof getServerSupabase>>,
+  raw: string | null,
+): Promise<string | null> {
+  if (!raw) return null;
+  if (raw.startsWith("sb:")) {
+    const path = raw.slice(3);
+    const { data } = await supabase.storage
+      .from("feedback-photos")
+      .createSignedUrl(path, SIGNED_URL_TTL);
+    return data?.signedUrl ?? null;
+  }
+  // Legacy records: only accept same-project Supabase storage URLs.
+  const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  if (
+    projectUrl &&
+    raw.startsWith(`${projectUrl}/storage/v1/object/public/feedback-photos/`)
+  ) {
+    return raw;
+  }
+  return null;
 }
 
 export default async function AdminPage() {
