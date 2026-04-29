@@ -4,6 +4,14 @@
  *
  * Implemented with the WebCrypto API so the same code works in both the
  * Node.js runtime (API routes) and the Edge runtime (middleware).
+ *
+ * SECURITY:
+ *   * Signing key comes from `SESSION_SECRET` (32+ bytes, random).
+ *   * In production (`NODE_ENV === 'production'`) the server refuses to sign
+ *     with the dev fallback — missing env = loud 500, not a silently weak
+ *     secret.
+ *   * We DELIBERATELY do NOT fall back to SUPABASE_SERVICE_ROLE_KEY — coupling
+ *     the two means a leaked DB key also forges user sessions.
  */
 
 export interface SessionPayload {
@@ -17,15 +25,21 @@ export interface SessionPayload {
   iat: number;
 }
 
+// Plain cookie name (no __Host- prefix so local http dev still works). In
+// production Secure is set (see api/auth/login/route.ts).
 const COOKIE_NAME = "fbgb_session";
 const ONE_DAY = 60 * 60 * 24;
+const DEV_FALLBACK = "dev-only-secret-change-me";
 
 function getSecret(): string {
-  return (
-    process.env.SESSION_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    "dev-only-secret-change-me"
-  );
+  const s = process.env.SESSION_SECRET;
+  if (s && s.length >= 16) return s;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "SESSION_SECRET is not set (or too short). Refusing to sign sessions in production.",
+    );
+  }
+  return DEV_FALLBACK;
 }
 
 function b64urlEncode(bytes: Uint8Array): string {
@@ -78,7 +92,13 @@ export async function verifySession(
   const [body, sig] = token.split(".");
   if (!body || !sig) return null;
   const enc = new TextEncoder();
-  const key = await getKey();
+  let key: CryptoKey;
+  try {
+    key = await getKey();
+  } catch {
+    // Missing SESSION_SECRET in prod: fail closed.
+    return null;
+  }
   const expected = new Uint8Array(
     await crypto.subtle.sign("HMAC", key, enc.encode(body)),
   );
@@ -87,7 +107,9 @@ export async function verifySession(
   try {
     const dec = new TextDecoder();
     const parsed = JSON.parse(dec.decode(b64urlDecode(body))) as SessionPayload;
-    if (parsed.iat && Date.now() - parsed.iat > 30 * ONE_DAY * 1000) return null;
+    const now = Date.now();
+    if (!parsed.iat || parsed.iat > now + 60_000) return null;
+    if (now - parsed.iat > SESSION_MAX_AGE * 1000) return null;
     return parsed;
   } catch {
     return null;
@@ -95,4 +117,4 @@ export async function verifySession(
 }
 
 export const SESSION_COOKIE = COOKIE_NAME;
-export const SESSION_MAX_AGE = 30 * ONE_DAY; // 30 days
+export const SESSION_MAX_AGE = 14 * ONE_DAY; // 14 days
