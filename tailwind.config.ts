@@ -25,6 +25,8 @@ const config: Config = {
         },
         cat: {
           missing: "rgb(var(--cat-missing) / <alpha-value>)",
+          overstock: "rgb(var(--cat-overstock) / <alpha-value>)",
+          defect: "rgb(var(--cat-defect) / <alpha-value>)",
           supply: "rgb(var(--cat-supply) / <alpha-value>)",
           idea: "rgb(var(--cat-idea) / <alpha-value>)",
           spotted: "rgb(var(--cat-spotted) / <alpha-value>)",

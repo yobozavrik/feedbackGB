@@ -24,14 +24,44 @@ export function buildSummary(
   const storeText = storeName || payload.store_label;
   const store = storeText ? ` (магазин: ${storeText})` : "";
 
+  // v1 priority flow: render product + quantity as a leading, compact
+  // phrase before the per-field breakdown (e.g. "Пельмені «Селянські» · 3 шт").
+  const fields = { ...(payload.fields ?? {}) };
+  const productName =
+    typeof fields.product_name === "string" ? fields.product_name.trim() : "";
+  const productUnit =
+    typeof fields.product_unit === "string" ? fields.product_unit.trim() : "";
+  const qtyRaw = fields.quantity ?? payload.quantity ?? null;
+  const quantity =
+    typeof qtyRaw === "number" && Number.isFinite(qtyRaw)
+      ? qtyRaw
+      : typeof qtyRaw === "string" && qtyRaw.trim() !== "" && !Number.isNaN(Number(qtyRaw))
+        ? Number(qtyRaw)
+        : null;
+
+  // Hide these from the generic per-field dump; they're rendered in the head.
+  delete fields.product_name;
+  delete fields.product_unit;
+  delete fields.quantity;
+
+  let head = "";
+  if (productName) {
+    head = ` — ${productName}`;
+    if (quantity !== null) {
+      head += ` · ${quantity}${productUnit ? ` ${productUnit}` : ""}`;
+    }
+  } else if (quantity !== null) {
+    head = ` — кількість: ${quantity}${productUnit ? ` ${productUnit}` : ""}`;
+  }
+
   const parts: string[] = [];
-  for (const [k, v] of Object.entries(payload.fields ?? {})) {
+  for (const [k, v] of Object.entries(fields)) {
     if (v === null || v === undefined || v === "") continue;
     const fieldLabel = cat?.fields.find((f) => f.id === k)?.label ?? k;
     parts.push(`${fieldLabel}: ${String(v).trim()}`);
   }
 
-  const body = parts.length ? ` — ${parts.join("; ")}` : "";
+  const body = parts.length ? `${head ? ";" : " —"} ${parts.join("; ")}` : "";
   const photo = payload.photo_url ? ` [фото: ${payload.photo_url}]` : "";
-  return `${catLabel}${store}${who}${body}${photo}`;
+  return `${catLabel}${store}${who}${head}${body}${photo}`;
 }
