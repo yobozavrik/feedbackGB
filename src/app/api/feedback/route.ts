@@ -121,6 +121,51 @@ export async function POST(req: Request) {
       ? payload.store_label.trim().slice(0, MAX_STORE_LABEL_LEN)
       : null;
 
+  // v1 priority flow: structured product reference + quantity.
+  // product_id is a bigint PK from categories.products; we accept any positive
+  // integer and let Postgres reject unknown FKs.
+  const productId =
+    typeof payload.product_id === "number" &&
+    Number.isFinite(payload.product_id) &&
+    payload.product_id > 0 &&
+    Number.isInteger(payload.product_id)
+      ? payload.product_id
+      : null;
+
+  const quantity =
+    typeof payload.quantity === "number" &&
+    Number.isFinite(payload.quantity) &&
+    payload.quantity >= 0 &&
+    payload.quantity <= 1_000_000
+      ? payload.quantity
+      : null;
+
+  // v1 priority categories: new product-picker UI submits
+  //   { product_id, quantity, fields: { comment?, photo? } }
+  // while the legacy UI still submits { fields: { item_name, ... } }.
+  // We accept either shape, but when product_id is set (modern flow)
+  // we require a positive quantity to keep data clean.
+  if (category.requiresProduct) {
+    const itemName =
+      typeof cleanFields["item_name"] === "string"
+        ? (cleanFields["item_name"] as string).trim()
+        : "";
+    if (!productId && !itemName) {
+      return NextResponse.json(
+        { error: "Обери товар або введи назву" },
+        { status: 400 },
+      );
+    }
+  }
+  if (productId !== null && category.requiresQuantity) {
+    if (quantity === null || quantity <= 0) {
+      return NextResponse.json(
+        { error: "Вкажи кількість" },
+        { status: 400 },
+      );
+    }
+  }
+
   // TG init_data is strictly optional. We only copy TG identity into the DB
   // if HMAC validation succeeded — never trust the client's claimed TG id.
   const initData =
@@ -163,10 +208,37 @@ export async function POST(req: Request) {
 
   const display = sess.full_name;
 
+  // Look up product name for the summary and for storing a redundant
+  // display string on the fields jsonb (helpful for legacy admin view).
+  let productName: string | null = null;
+  let productUnit: string | null = null;
+  if (supabase && productId !== null) {
+    const { data } = await supabase
+      .from("v_products")
+      .select("name, unit")
+      .eq("id", productId)
+      .maybeSingle();
+    const p = data as { name: string | null; unit: string | null } | null;
+    productName = p?.name ?? null;
+    productUnit = p?.unit ?? null;
+  }
+
+  // Surface product_name + quantity in fields so buildSummary and legacy
+  // admin/CSV consumers render the same string as before without needing a
+  // schema change.
+  const fieldsForSummary: Record<string, string | number | null> = {
+    ...cleanFields,
+  };
+  if (productName) fieldsForSummary["product_name"] = productName;
+  if (quantity !== null) fieldsForSummary["quantity"] = quantity;
+  if (productUnit) fieldsForSummary["product_unit"] = productUnit;
+
   const summary = buildSummary(
     {
       ...payload,
-      fields: cleanFields,
+      product_id: productId,
+      quantity: quantity,
+      fields: fieldsForSummary,
       store_id: effectiveStoreId,
       store_label: storeLabel,
       photo_url: photoUrl,
@@ -183,6 +255,8 @@ export async function POST(req: Request) {
     store_id: effectiveStoreId,
     store_label: storeLabel,
     user_id: sess.uid,
+    product_id: productId,
+    quantity: quantity,
     fields: cleanFields,
     photo_url: photoUrl,
     tg_user_id: tgValid ? tgUser?.id ?? null : null,

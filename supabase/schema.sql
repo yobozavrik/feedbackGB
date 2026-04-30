@@ -47,8 +47,13 @@ begin
     execute 'grant usage on schema feedbackgb to service_role';
     execute 'alter default privileges in schema feedbackgb grant select, insert, update, delete on tables to service_role';
     execute 'alter default privileges in schema feedbackgb grant execute on functions to service_role';
-    -- service_role may need to FK-reference categories.spots
-    execute 'grant references on table categories.spots to service_role';
+    -- service_role may need to FK-reference categories.spots / products
+    -- and read the ERP product catalog used by the v1 priority flow.
+    execute 'grant usage    on schema categories              to service_role';
+    execute 'grant references on table categories.spots       to service_role';
+    execute 'grant references on table categories.products    to service_role';
+    execute 'grant select   on categories.products            to service_role';
+    execute 'grant select   on categories.categories          to service_role';
   end if;
 end $$;
 
@@ -89,11 +94,13 @@ create table if not exists feedbackgb.categories (
 
 insert into feedbackgb.categories (id, emoji, title, short, sort_order) values
   ('missing_item',       '🛒', 'Не вистачає товару',          'Чого не вистачило сьогодні',                1),
-  ('supply_problem',     '📦', 'Проблема з постачанням',     'Привезли не те / зіпсоване / запізно',      2),
-  ('store_idea',         '💡', 'Ідея для магазину',           'Що покращити в моєму магазині',             3),
-  ('spotted_elsewhere',  '👀', 'Підгледіла в іншому місці',   'Класна ідея ззовні — фото + опис',          4),
-  ('tech_issue',         '🔧', 'Технічна проблема',           'Обладнання, ремонт, чистота',               5),
-  ('customer_voice',     '🗣', 'Голос клієнта',               'Що часто питають / на що скаржаться',       6)
+  ('overstock',          '📈', 'Багато товару',               'Залежався або зайвий запас',                2),
+  ('defect',             '💔', 'Брак товару',                 'Пошкоджений, прострочений, битий',          3),
+  ('supply_problem',     '📦', 'Проблема з постачанням',     'Привезли не те / зіпсоване / запізно',      4),
+  ('store_idea',         '💡', 'Ідея для магазину',           'Що покращити в моєму магазині',             5),
+  ('spotted_elsewhere',  '👀', 'Підгледіла в іншому місці',   'Класна ідея ззовні — фото + опис',          6),
+  ('tech_issue',         '🔧', 'Технічна проблема',           'Обладнання, ремонт, чистота',               7),
+  ('customer_voice',     '🗣', 'Голос клієнта',               'Що часто питають / на що скаржаться',       8)
 on conflict (id) do update set
   emoji = excluded.emoji,
   title = excluded.title,
@@ -236,7 +243,12 @@ create table if not exists feedbackgb.feedback (
   -- author (PIN-authenticated user; nullable for legacy/anonymous)
   user_id         uuid references feedbackgb.users(id),
 
-  -- structured per-category answers
+  -- v1 priority flow: structured product link + amount
+  -- (missing_item / overstock / defect). NULL for non-product categories.
+  product_id      bigint references categories.products(id) on delete set null,
+  quantity        numeric,
+
+  -- structured per-category answers (extras beyond product + quantity)
   fields          jsonb not null default '{}'::jsonb,
 
   -- public URL or data: URL fallback
@@ -266,6 +278,12 @@ create index if not exists feedback_category_idx   on feedbackgb.feedback (categ
 create index if not exists feedback_store_idx      on feedbackgb.feedback (store_id);
 create index if not exists feedback_status_idx     on feedbackgb.feedback (status);
 create index if not exists feedback_user_idx       on feedbackgb.feedback (user_id);
+create index if not exists feedback_product_idx
+  on feedbackgb.feedback (product_id)
+  where product_id is not null;
+create index if not exists feedback_product_store_time_idx
+  on feedbackgb.feedback (store_id, product_id, created_at desc)
+  where product_id is not null;
 create index if not exists feedback_summary_trgm_idx
   on feedbackgb.feedback using gin (summary gin_trgm_ops);
 
@@ -365,6 +383,10 @@ create or replace view feedbackgb.feedback_feed as
     u.full_name    as user_full_name,
     u.role         as user_role,
     f.fields,
+    f.product_id,
+    p.name         as product_name,
+    p.unit         as product_unit,
+    f.quantity,
     f.photo_url,
     f.tg_user_id,
     f.tg_username,
@@ -377,7 +399,47 @@ create or replace view feedbackgb.feedback_feed as
   from feedbackgb.feedback f
   left join feedbackgb.categories c on c.id = f.category
   left join categories.spots      s on s.spot_id = f.store_id
-  left join feedbackgb.users      u on u.id = f.user_id;
+  left join feedbackgb.users      u on u.id = f.user_id
+  left join categories.products   p on p.id = f.product_id;
+
+-- -----------------------------------------------------------------------------
+-- 7b. Product catalog views (v1 priority flow — Мало / Багато / Брак)
+--     v_products           — flat, non-hidden POS catalog for the picker.
+--     v_popular_products   — rolling 7-day popularity per store.
+-- -----------------------------------------------------------------------------
+create or replace view feedbackgb.v_products as
+  select
+    p.id,
+    p.name,
+    p.category_id                         as category_id,
+    c.category_name,
+    coalesce(c.sort_order, 9999)          as category_sort,
+    p.unit,
+    p.barcode,
+    p.photo,
+    p.cost
+  from categories.products p
+  left join categories.categories c on c.category_id = p.category_id
+  where coalesce(c.category_hidden, 0) = 0;
+
+create or replace view feedbackgb.v_popular_products as
+  select
+    f.store_id,
+    f.product_id,
+    count(*)::int                         as uses_7d,
+    max(f.created_at)                     as last_used_at
+  from feedbackgb.feedback f
+  where f.product_id is not null
+    and f.created_at > now() - interval '7 days'
+  group by f.store_id, f.product_id;
+
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'authenticator') then
+    execute 'grant select on feedbackgb.v_products          to service_role';
+    execute 'grant select on feedbackgb.v_popular_products  to service_role';
+  end if;
+end $$;
 
 create materialized view if not exists feedbackgb.feedback_stats_daily as
   select
