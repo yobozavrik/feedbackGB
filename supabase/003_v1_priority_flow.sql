@@ -105,7 +105,11 @@ begin
 end $$;
 
 -- 7. Refresh feedback_feed so admin UI can see product info.
-create or replace view feedbackgb.feedback_feed as
+--    DROP first because CREATE OR REPLACE can't reorder existing columns,
+--    and we're inserting product_id/product_name/product_unit/quantity into
+--    the middle of the column list. The view has no dependents that store data.
+drop view if exists feedbackgb.feedback_feed;
+create view feedbackgb.feedback_feed as
   select
     f.id,
     f.created_at,
