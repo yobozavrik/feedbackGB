@@ -2,7 +2,6 @@ import {
   AreaChartOutlined,
   AuditOutlined,
   DashboardOutlined,
-  FormOutlined,
   SettingOutlined,
   ShopOutlined,
   TeamOutlined,
@@ -11,17 +10,16 @@ import {
 import type { ProLayoutProps } from "@ant-design/pro-components";
 
 /**
- * Структура sidebar-у адмінки (v1, skeleton).
+ * Структура sidebar-у адмінки.
  *
- * Поки активні тільки три пункти, які відповідають реальним сторінкам:
- *   /admin            — Огляд / Стрічка фідбеку
+ * Активні розділи:
+ *   /admin            — Огляд (KPI + heatmap + стрічка фідбеку ProTable)
+ *   /admin/analytics  — Аналітика (графіки)
  *   /admin/users      — Користувачі
  *   /admin/audit      — Журнал дій
+ *   /admin/tools      — Інструменти (звіт / дзеркало / експорт)
  *
- * Решта розділів — "coming-soon" (`disabled: true`), щоб користувач бачив
- * повну мапу адмінки і на яких етапах будуть нові розділи. Кожен наступний
- * PR (Аналітика, Магазини, Інструменти, Налаштування) умикатиме свій
- * пункт меню.
+ * Disabled (coming-soon): Магазини і Налаштування.
  */
 export const adminRoute: ProLayoutProps["route"] = {
   path: "/admin",
@@ -30,13 +28,6 @@ export const adminRoute: ProLayoutProps["route"] = {
       path: "/admin",
       name: "Огляд",
       icon: <DashboardOutlined />,
-    },
-    {
-      path: "/admin/feedback",
-      name: "Фідбек",
-      icon: <FormOutlined />,
-      disabled: true,
-      tooltip: "Окремий розділ зі стрічкою фідбеку — наступний PR",
     },
     {
       path: "/admin/analytics",
