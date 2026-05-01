@@ -27,7 +27,7 @@ import {
   theme as antdTheme,
 } from "antd";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   StoreFeedRow,
   StoreRow,
@@ -132,6 +132,16 @@ export function StoresClient({
 }: Props) {
   const { token } = antdTheme.useToken();
   const [openId, setOpenId] = useState<number | null>(null);
+  // Ширина Drawer-а рахується після mount, щоб не було SSR vs CSR
+  // hydration mismatch на вузьких viewports (375 тощо).
+  const [drawerWidth, setDrawerWidth] = useState(720);
+  useEffect(() => {
+    const update = () =>
+      setDrawerWidth(Math.min(720, window.innerWidth));
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   const sellersByStore = useMemo(() => {
     const m = new Map<number, StoreSeller[]>();
@@ -478,7 +488,7 @@ export function StoresClient({
       <Drawer
         open={openId != null}
         onClose={() => setOpenId(null)}
-        width={Math.min(720, typeof window !== "undefined" ? window.innerWidth : 720)}
+        width={drawerWidth}
         title={
           openSummary ? (
             <Space size={8}>
