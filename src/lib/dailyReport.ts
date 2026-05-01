@@ -1,7 +1,15 @@
 import { getServerSupabase } from "@/lib/supabase";
 
+type Supabase = NonNullable<ReturnType<typeof getServerSupabase>>;
+
 export const KYIV_TZ = "Europe/Kyiv";
 export const REPORT_HOUR_KYIV = 21;
+
+// Photos in the report are pulled from a private Supabase Storage bucket via
+// short-lived signed URLs. Telegram needs ~minutes to fetch; an hour is plenty.
+const PHOTO_SIGNED_URL_TTL_SEC = 60 * 60;
+// Telegram caption ceiling is 1024 chars; leave headroom.
+const TELEGRAM_CAPTION_MAX = 1000;
 
 interface FeedRow {
   id: string;
@@ -16,6 +24,7 @@ interface FeedRow {
   product_unit: string | null;
   quantity: number | string | null;
   fields: Record<string, unknown> | null;
+  photo_url: string | null;
   summary: string;
 }
 
@@ -54,7 +63,7 @@ export async function buildAndSendDailyReport(): Promise<ReportResult> {
   const { data, error } = await supabase
     .from("feedback_feed")
     .select(
-      "id, created_at, category, category_emoji, category_title, store_id, store_name, user_full_name, product_name, product_unit, quantity, fields, summary",
+      "id, created_at, category, category_emoji, category_title, store_id, store_name, user_full_name, product_name, product_unit, quantity, fields, photo_url, summary",
     )
     .gte("created_at", cutoffIso)
     .order("created_at", { ascending: true });
@@ -71,13 +80,79 @@ export async function buildAndSendDailyReport(): Promise<ReportResult> {
 
   const text = formatReport(rows, todayKyiv);
   try {
-    await sendTelegram(botToken, chatId, text);
+    await sendTelegramText(botToken, chatId, text);
+    await sendPhotosForRows(supabase, botToken, chatId, rows);
   } catch (e) {
     console.error("daily-report telegram error", e);
     return { ok: false, error: "telegram_send_failed", status: 502 };
   }
 
   return { ok: true, sent: true, total: rows.length, kyiv_date: todayKyiv };
+}
+
+async function sendPhotosForRows(
+  supabase: Supabase,
+  botToken: string,
+  chatId: string,
+  rows: FeedRow[],
+): Promise<void> {
+  for (const r of rows) {
+    if (!r.photo_url) continue;
+    const url = await resolvePhotoUrl(supabase, r.photo_url);
+    if (!url) continue;
+    let caption = formatPhotoCaption(r);
+    if (caption.length > TELEGRAM_CAPTION_MAX) {
+      caption = `${caption.slice(0, TELEGRAM_CAPTION_MAX - 1)}…`;
+    }
+    try {
+      await sendTelegramPhoto(botToken, chatId, url, caption);
+    } catch (e) {
+      // Per-row failure shouldn't poison the whole report; log and continue.
+      console.error("daily-report sendPhoto failed", { id: r.id, e });
+    }
+  }
+}
+
+async function resolvePhotoUrl(
+  supabase: Supabase,
+  raw: string | null,
+): Promise<string | null> {
+  if (!raw) return null;
+  if (raw.startsWith("sb:")) {
+    const path = raw.slice(3);
+    const { data } = await supabase.storage
+      .from("feedback-photos")
+      .createSignedUrl(path, PHOTO_SIGNED_URL_TTL_SEC);
+    return data?.signedUrl ?? null;
+  }
+  // Legacy records: only accept same-project Supabase storage URLs.
+  const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  if (
+    projectUrl &&
+    raw.startsWith(`${projectUrl}/storage/v1/object/public/feedback-photos/`)
+  ) {
+    return raw;
+  }
+  return null;
+}
+
+function formatPhotoCaption(r: FeedRow): string {
+  const emoji = r.category_emoji ?? "📝";
+  const title = r.category_title ?? r.category;
+  const store = r.store_name ?? "магазин не вказано";
+  const author = r.user_full_name ?? "анонім";
+  let item: string | null = null;
+  if (r.product_name) {
+    const qty =
+      r.quantity != null
+        ? ` · ${r.quantity}${r.product_unit ? ` ${r.product_unit}` : ""}`
+        : "";
+    item = `${r.product_name}${qty}`;
+  } else if (typeof r.fields?.["item_name"] === "string") {
+    item = r.fields["item_name"] as string;
+  }
+  const tail = item ? ` · ${item}` : "";
+  return `${emoji} ${title} · ${store}${tail} (${author})`;
 }
 
 export function getKyivClock(): { hour: number; minute: number } {
@@ -186,7 +261,7 @@ function plural(n: number, one: string, few: string, many: string): string {
   return many;
 }
 
-async function sendTelegram(
+async function sendTelegramText(
   botToken: string,
   chatId: string,
   text: string,
@@ -217,5 +292,33 @@ async function sendTelegram(
       });
       throw new Error(`telegram_send_failed_${res.status}`);
     }
+  }
+}
+
+async function sendTelegramPhoto(
+  botToken: string,
+  chatId: string,
+  photoUrl: string,
+  caption: string,
+): Promise<void> {
+  const res = await fetch(
+    `https://api.telegram.org/bot${botToken}/sendPhoto`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        photo: photoUrl,
+        caption,
+      }),
+    },
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error("telegram sendPhoto failed", {
+      status: res.status,
+      body: body.slice(0, 300),
+    });
+    throw new Error(`telegram_photo_failed_${res.status}`);
   }
 }
