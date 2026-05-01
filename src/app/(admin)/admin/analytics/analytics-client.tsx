@@ -144,7 +144,7 @@ export function AnalyticsClient({ rows, error }: Props) {
     }
     for (const r of filtered) {
       const key = new Date(r.created_at).toISOString().slice(0, 10);
-      const title = r.category_title ?? r.category;
+      const title = stats.byCategoryTitle.get(r.category) ?? r.category;
       const inner = buckets.get(key);
       if (inner && inner.has(title)) {
         inner.set(title, (inner.get(title) ?? 0) + 1);
@@ -157,7 +157,7 @@ export function AnalyticsClient({ rows, error }: Props) {
       }
     }
     return out;
-  }, [filtered, categoryData, periodConfig.days]);
+  }, [filtered, categoryData, periodConfig.days, stats.byCategoryTitle]);
 
   const topStoresData = useMemo(() => {
     return Array.from(stats.byStore.entries())
