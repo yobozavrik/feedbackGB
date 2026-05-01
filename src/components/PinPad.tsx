@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { identifyUser, track } from "@/lib/analytics";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "OK"];
 const PIN_LENGTH = 6;
@@ -43,14 +44,23 @@ export function PinPad() {
     }
     setBusy(true);
     setErr(null);
+    track("login_submit_click", { user_id: userId, pin_length: nextPin.length });
     try {
       const r = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId, pin: nextPin }),
       });
-      const j = await r.json().catch(() => ({}));
+      const j = (await r.json().catch(() => ({}))) as {
+        error?: string;
+        user?: { uid: string; full_name: string; role: string; store_id: number | null };
+      };
       if (!r.ok) {
+        track("login_failure", {
+          user_id: userId,
+          status: r.status,
+          reason: j.error ?? null,
+        });
         setErr(j.error || "Невірний PIN");
         setShake(true);
         setTimeout(() => setShake(false), 250);
@@ -58,9 +68,21 @@ export function PinPad() {
         setBusy(false);
         return;
       }
+      if (j.user?.uid) {
+        identifyUser(j.user.uid, {
+          full_name: j.user.full_name,
+          role: j.user.role,
+          store_id: j.user.store_id,
+        });
+      }
+      track("login_success", {
+        role: j.user?.role ?? null,
+        store_id: j.user?.store_id ?? null,
+      });
       router.replace(next);
       router.refresh();
     } catch {
+      track("login_failure", { user_id: userId, status: 0, reason: "network" });
       setErr("Не вдалось увійти");
       setPin("");
       setBusy(false);

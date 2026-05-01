@@ -5,9 +5,9 @@ const csp = [
   "img-src 'self' data: blob: https:",
   // 'unsafe-inline' on scripts is needed for Next.js inline bootstrap; we keep
   // it narrow by pinning script-src to self + telegram.org.
-  "script-src 'self' 'unsafe-inline' https://telegram.org",
+  "script-src 'self' 'unsafe-inline' https://telegram.org https://*.i.posthog.com",
   "style-src 'self' 'unsafe-inline'",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://telegram.org",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://telegram.org https://*.i.posthog.com https://*.posthog.com",
   // Telegram Mini App runs inside an iframe from web.telegram.org / *.telegram.org.
   "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org",
   "base-uri 'self'",
