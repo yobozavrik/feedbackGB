@@ -12,10 +12,13 @@ export async function middleware(req: NextRequest) {
   if (
     pathname === "/login" ||
     pathname.startsWith("/api/auth/") ||
+    pathname.startsWith("/api/cron/") ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico" ||
     pathname.startsWith("/icons/")
   ) {
+    // /api/cron/* protects itself via CRON_SECRET; we bypass session here so
+    // Vercel Cron's authenticated calls aren't rejected as anonymous.
     return NextResponse.next();
   }
 
