@@ -19,8 +19,7 @@ import type { ProLayoutProps } from "@ant-design/pro-components";
  *   /admin/users      — Користувачі
  *   /admin/audit      — Журнал дій
  *   /admin/tools      — Інструменти (звіт / дзеркало / експорт)
- *
- * Disabled (coming-soon): Налаштування.
+ *   /admin/settings   — Налаштування (профіль, крон, інтеграції)
  */
 export const adminRoute: ProLayoutProps["route"] = {
   path: "/admin",
@@ -59,8 +58,6 @@ export const adminRoute: ProLayoutProps["route"] = {
       path: "/admin/settings",
       name: "Налаштування",
       icon: <SettingOutlined />,
-      disabled: true,
-      tooltip: "Профіль і інтеграції",
     },
   ],
 };
@@ -76,4 +73,5 @@ export const adminBreadcrumbNames: Record<string, string> = {
   "/admin/tools": "Інструменти",
   "/admin/analytics": "Аналітика",
   "/admin/stores": "Магазини",
+  "/admin/settings": "Налаштування",
 };
