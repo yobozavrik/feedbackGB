@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Manrope } from "next/font/google";
 import Script from "next/script";
+import { Suspense } from "react";
 import "@/styles/globals.css";
 import { TelegramProvider } from "@/components/TelegramProvider";
+import { PostHogProvider } from "@/components/PostHogProvider";
 
 const inter = Inter({
   subsets: ["latin", "cyrillic", "cyrillic-ext"],
@@ -48,11 +50,15 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-dvh font-sans antialiased">
-        <TelegramProvider>
-          <div className="relative mx-auto flex min-h-dvh max-w-md flex-col px-4 pb-10 pt-5 sm:px-6">
-            {children}
-          </div>
-        </TelegramProvider>
+        <Suspense fallback={null}>
+          <PostHogProvider>
+            <TelegramProvider>
+              <div className="relative mx-auto flex min-h-dvh max-w-md flex-col px-4 pb-10 pt-5 sm:px-6">
+                {children}
+              </div>
+            </TelegramProvider>
+          </PostHogProvider>
+        </Suspense>
       </body>
     </html>
   );

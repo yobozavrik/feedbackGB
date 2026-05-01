@@ -129,6 +129,7 @@ export async function POST(req: Request) {
   const res = NextResponse.json({
     ok: true,
     user: {
+      uid: user.id,
       full_name: user.full_name,
       role: user.role,
       store_id: user.store_id,
