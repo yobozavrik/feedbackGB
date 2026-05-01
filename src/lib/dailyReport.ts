@@ -10,10 +10,9 @@ export const REPORT_HOUR_KYIV = 21;
 // hour is plenty for that. Click-through links surfaced in the report use
 // SIGNED_URL_TTL_FOR_REPORT (longer-lived, see PhotoLinkBuilder).
 const PHOTO_SIGNED_URL_TTL_SEC = 60 * 60;
-// TTL for click-through links shown in the report itself. Capped to ~7 days
-// because Supabase rejects longer durations and because the report is
-// scrollable in the chat for that long anyway.
-const PHOTO_REPORT_LINK_TTL_SEC = 7 * 24 * 60 * 60;
+// Path of the click-through redirect endpoint that 302s to a freshly-minted
+// photo URL. See src/app/api/r/photo/[id]/route.ts.
+const PHOTO_REDIRECT_PATH = "/api/r/photo";
 // Telegram caption ceiling is 1024 chars; leave headroom.
 const TELEGRAM_CAPTION_MAX = 1000;
 // Скільки днів історії підтягуємо для дельти, повторів і топ-авторів.
@@ -180,76 +179,80 @@ interface PhotoLinkBuilder {
 }
 
 /**
- * Active mode (default): generate Supabase signed URLs with up-to-7d TTL.
- * Pros: works in any group, no extra infra. Cons: links expire after a week.
+ * Build the public base URL of this deployment. Tries (in order):
+ *   1. PHOTO_REDIRECT_BASE_URL (explicit override; useful for local dev or
+ *      multi-domain setups).
+ *   2. NEXT_PUBLIC_APP_URL (existing convention in many Next.js apps).
+ *   3. VERCEL_PROJECT_PRODUCTION_URL (auto-set by Vercel for the prod alias).
+ *   4. VERCEL_URL (auto-set for any Vercel deployment, including previews).
+ * Returns null if nothing is configured — caller should fall back to
+ * direct signed URLs in that case.
+ */
+function getPhotoRedirectBaseUrl(): string | null {
+  const candidates = [
+    process.env.PHOTO_REDIRECT_BASE_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    process.env.VERCEL_URL,
+  ];
+  for (const raw of candidates) {
+    if (!raw) continue;
+    let url = raw.trim();
+    if (!url) continue;
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+    return url.replace(/\/+$/, "");
+  }
+  return null;
+}
+
+/**
+ * Active mode (default): produce links that point to our own redirect
+ * endpoint `/api/r/photo/<feedback_id>`. The endpoint generates a fresh
+ * signed URL on each click. This keeps the JWT out of Telegram's hover
+ * preview and makes the links non-expiring.
  */
 class SupabaseSignedUrlBuilder implements PhotoLinkBuilder {
   readonly requiresPhotosFirst = false;
   async build(ctx: PhotoLinkBuilderContext): Promise<PhotoLinkMap> {
-    const out: PhotoLinkMap = new Map();
-    for (const r of ctx.todayRows) {
-      if (!r.photo_url) continue;
-      if (r.photo_url.startsWith("sb:")) {
-        const path = r.photo_url.slice(3);
-        const { data } = await ctx.supabase.storage
-          .from("feedback-photos")
-          .createSignedUrl(path, PHOTO_REPORT_LINK_TTL_SEC);
-        if (data?.signedUrl) out.set(r.id, data.signedUrl);
-        continue;
-      }
-      // Legacy public URL — повертаємо як є.
-      const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-      if (
-        projectUrl &&
-        r.photo_url.startsWith(
-          `${projectUrl}/storage/v1/object/public/feedback-photos/`,
-        )
-      ) {
-        out.set(r.id, r.photo_url);
-      }
-    }
-    return out;
+    return buildRedirectMap(ctx.todayRows);
   }
 }
 
 /**
- * Drive mode: використовує photo_mirror.drive_file_id (попередньо заповнюється
- * mirrorPendingPhotos). Вимагає, щоб папка GOOGLE_DRIVE_FOLDER_ID була
- * розшарена на всіх, хто клікатиме лінк.
+ * Drive mode: same redirect URL shape as Supabase mode — the redirect
+ * endpoint reads REPORT_PHOTO_LINK_MODE and 302s to drive.google.com/...
+ * when the mirror has run. We pre-run the mirror here so today's photos
+ * have a drive_file_id by the time anyone clicks.
  */
 class DriveLinkBuilder implements PhotoLinkBuilder {
   readonly requiresPhotosFirst = false;
   async build(ctx: PhotoLinkBuilderContext): Promise<PhotoLinkMap> {
-    const out: PhotoLinkMap = new Map();
-    const ids = ctx.todayRows.filter((r) => r.photo_url).map((r) => r.id);
-    if (ids.length === 0) return out;
-
-    // Синхронно джеркаємо фото на Drive, щоб drive_file_id був гарантовано
-    // заповнений до моменту розсилки. Швоввий import — щоб не додавати
-    // top-level залежності на driveMirror, якщо режим неактивний.
-    try {
-      const { mirrorPendingPhotos } = await import("@/lib/driveMirror");
-      await mirrorPendingPhotos();
-    } catch (e) {
-      console.warn("drive mirror pre-step failed", e);
+    if (ctx.todayRows.some((r) => r.photo_url)) {
+      try {
+        const { mirrorPendingPhotos } = await import("@/lib/driveMirror");
+        await mirrorPendingPhotos();
+      } catch (e) {
+        console.warn("drive mirror pre-step failed", e);
+      }
     }
+    return buildRedirectMap(ctx.todayRows);
+  }
+}
 
-    const { data } = await ctx.supabase
-      .from("photo_mirror")
-      .select("feedback_id, drive_file_id")
-      .in("feedback_id", ids)
-      .not("drive_file_id", "is", null);
-    for (const m of (data ?? []) as Array<{
-      feedback_id: string;
-      drive_file_id: string;
-    }>) {
-      out.set(
-        m.feedback_id,
-        `https://drive.google.com/file/d/${m.drive_file_id}/view`,
-      );
-    }
+function buildRedirectMap(rows: FeedRow[]): PhotoLinkMap {
+  const out: PhotoLinkMap = new Map();
+  const baseUrl = getPhotoRedirectBaseUrl();
+  if (!baseUrl) {
+    console.warn(
+      "PHOTO_REDIRECT_BASE_URL / NEXT_PUBLIC_APP_URL / VERCEL_URL not set; \ud83d\udcf7 will render without a click-through link",
+    );
     return out;
   }
+  for (const r of rows) {
+    if (!r.photo_url) continue;
+    out.set(r.id, `${baseUrl}${PHOTO_REDIRECT_PATH}/${r.id}`);
+  }
+  return out;
 }
 
 /**
