@@ -1,6 +1,6 @@
-import { Header } from "@/components/Header";
 import { getServerSupabase } from "@/lib/supabase";
 import { UsersClient } from "./users-client";
+import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 
 export const dynamic = "force-dynamic";
 
@@ -76,21 +76,18 @@ export default async function AdminUsersPage() {
   const { users, error } = await fetchData();
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-md bg-bg pb-24 pt-3">
-      <Header
-        subtitle="Користувачі та PIN-коди"
-        back={{ href: "/admin", label: "До адмін-панелі" }}
-      />
-      <div className="px-4">
-        {error ? (
-          <div className="card p-6 text-center">
-            <div className="text-3xl">⚠️</div>
-            <p className="mt-3 text-[14px] text-ink-700">{error}</p>
-          </div>
-        ) : (
-          <UsersClient users={users} />
-        )}
-      </div>
-    </main>
+    <AdminPageContainer
+      title="Користувачі"
+      subTitle="PIN-коди, розблокування, активність"
+    >
+      {error ? (
+        <div className="card p-6 text-center">
+          <div className="text-3xl">⚠️</div>
+          <p className="mt-3 text-[14px] text-ink-700">{error}</p>
+        </div>
+      ) : (
+        <UsersClient users={users} />
+      )}
+    </AdminPageContainer>
   );
 }

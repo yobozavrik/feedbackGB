@@ -1,6 +1,6 @@
-import { Header } from "@/components/Header";
 import { getServerSupabase } from "@/lib/supabase";
 import { AuditClient } from "./audit-client";
+import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 
 export const dynamic = "force-dynamic";
 
@@ -40,21 +40,18 @@ async function fetchRows(): Promise<{ rows: AuditRow[]; error: string | null }> 
 export default async function AdminAuditPage() {
   const { rows, error } = await fetchRows();
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl bg-bg pb-24 pt-3">
-      <Header
-        subtitle="Журнал дій"
-        back={{ href: "/admin", label: "До адмін-панелі" }}
-      />
-      <div className="px-4">
-        {error ? (
-          <div className="card p-6 text-center">
-            <div className="text-3xl">⚠️</div>
-            <p className="mt-3 text-[14px] text-ink-700">{error}</p>
-          </div>
-        ) : (
-          <AuditClient rows={rows} />
-        )}
-      </div>
-    </main>
+    <AdminPageContainer
+      title="Журнал дій"
+      subTitle="Останні 500 подій авторизації, фідбеку та адмін-дій"
+    >
+      {error ? (
+        <div className="card p-6 text-center">
+          <div className="text-3xl">⚠️</div>
+          <p className="mt-3 text-[14px] text-ink-700">{error}</p>
+        </div>
+      ) : (
+        <AuditClient rows={rows} />
+      )}
+    </AdminPageContainer>
   );
 }
