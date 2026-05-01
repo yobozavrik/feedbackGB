@@ -1,0 +1,52 @@
+%% Sequence — створення фідбеку через Mini App.
+sequenceDiagram
+    autonumber
+    participant U as 👩 Продавчиня
+    participant TG as Telegram WebApp
+    participant FE as Mini App (React)
+    participant MW as middleware.ts
+    participant API as POST /api/feedback
+    participant SB as Supabase (feedbackgb)
+    participant ST as Supabase Storage<br/>feedback-photos
+    participant ERP as ERP views<br/>(v_stores · v_products)
+
+    U->>TG: Відкриває inline-кнопку
+    TG->>FE: Завантажує WebApp + initData
+    FE->>MW: GET /  (cookie fbgb_session)
+    alt без сесії
+        MW-->>FE: 302 /login
+        U->>FE: PIN
+        FE->>API: POST /api/auth/login
+        API->>SB: rpc verify_pin(uuid, pin)
+        SB-->>API: user row
+        API-->>FE: Set-Cookie fbgb_session
+    else з сесією
+        MW-->>FE: next()
+    end
+
+    U->>FE: Заповнює форму (категорія, товар, кількість, фото)
+    FE->>FE: Стискає фото до ≤1600 px JPEG → data:base64
+    FE->>API: POST /api/feedback {category, fields, photo_url, init_data}
+
+    API->>API: verifySession(cookie)
+    API->>API: Валідація payload + категорії<br/>(розмір, типи, required-поля)
+    API->>API: validateInitData(initData, BOT_TOKEN)
+    API->>API: Якщо seller — store_id з сесії<br/>(ігноруємо клієнтський)
+
+    alt photo_url є
+        API->>ST: upload(path, base64)
+        ST-->>API: ok (зберігаємо "sb:<path>")
+    end
+
+    API->>ERP: SELECT v_stores / v_products<br/>(name, unit для summary)
+    ERP-->>API: store_name, product_name, unit
+
+    API->>API: buildSummary(payload, user, storeName)
+    API->>SB: rpc set_config('app.actor', uid)
+    API->>SB: INSERT feedback
+
+    SB-->>SB: Trigger feedback_set_updated_at
+    SB-->>SB: Trigger audit_feedback → AUDIT_LOG (feedback.insert)
+    SB-->>API: ok
+    API-->>FE: 200 {ok:true, persisted:true}
+    FE->>U: /thanks

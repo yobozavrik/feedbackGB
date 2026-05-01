@@ -1,0 +1,42 @@
+%% Sequence — клік по 📷 у звіті.
+%% Лінк у Telegram має формат /api/r/photo/<feedback_id>;
+%% Supabase JWT не світиться у hover, лінк не тухне через 7 днів.
+sequenceDiagram
+    autonumber
+    participant U as 👤 Учасник звітного чату
+    participant TG as Telegram клієнт
+    participant API as GET /api/r/photo/[id]
+    participant RL as rateLimit (60/min/IP)
+    participant SB as Supabase
+    participant ST as Supabase Storage
+    participant GD as Google Drive
+
+    U->>TG: Тап по 📷 у звіті
+    TG->>API: GET https://<host>/api/r/photo/<uuid>
+    API->>API: UUID v4 валідація
+    API->>RL: rateLimit("photo-redirect:<ip>")
+    alt rate-limited
+        API-->>TG: 429 rate_limited
+    end
+
+    API->>SB: SELECT id, photo_url FROM feedback WHERE id=?
+    alt not found / no photo
+        API-->>TG: 404 not_found
+    end
+
+    alt mode=drive
+        API->>SB: SELECT drive_file_id FROM photo_mirror
+        alt drive_file_id є
+            API-->>TG: 302 https://drive.google.com/file/d/<id>/view
+        else
+            Note right of API: fallback на supabase signed URL
+        end
+    end
+
+    alt mode=supabase (default) або fallback
+        API->>ST: createSignedUrl(path, 600s)
+        ST-->>API: signed URL (свіжий, ~10хв)
+        API-->>TG: 302 <signed URL>
+    end
+
+    TG->>U: Відкриває фото
