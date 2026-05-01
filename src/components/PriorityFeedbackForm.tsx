@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Category } from "@/lib/categories";
+import { track } from "@/lib/analytics";
 import type { ProductRow } from "@/app/api/products/route";
 import type { FeedbackPayload } from "@/lib/types";
 import { useTelegram } from "./TelegramProvider";
@@ -61,6 +62,9 @@ export function PriorityFeedbackForm({ category }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const formStartedRef = useRef(false);
+  const submittedRef = useRef(false);
+
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => r.json())
@@ -71,6 +75,36 @@ export function PriorityFeedbackForm({ category }: Props) {
       .catch(() => {})
       .finally(() => setMeReady(true));
   }, []);
+
+  // Fire `feedback_form_started` once, the first time the seller does
+  // anything that's a real intent signal (picking a product, typing a name,
+  // typing a comment). This is the top of our drop-off funnel.
+  useEffect(() => {
+    if (formStartedRef.current) return;
+    if (product || freeName.trim() || comment.trim()) {
+      formStartedRef.current = true;
+      track("feedback_form_started", { category: category.id });
+    }
+  }, [product, freeName, comment, category.id]);
+
+  // Detect abandonment: page-leave / unmount without submitting after the
+  // form was started. Helps spot "opened, almost finished, gave up" cases.
+  useEffect(() => {
+    function flushAbandon() {
+      if (!formStartedRef.current || submittedRef.current) return;
+      track("feedback_form_abandon", {
+        category: category.id,
+        had_product: !!product,
+        had_photo: !!photo,
+        had_comment: !!comment.trim(),
+      });
+    }
+    window.addEventListener("beforeunload", flushAbandon);
+    return () => {
+      window.removeEventListener("beforeunload", flushAbandon);
+      flushAbandon();
+    };
+  }, [category.id, product, photo, comment]);
 
   if (!meReady) {
     return (
@@ -91,6 +125,11 @@ export function PriorityFeedbackForm({ category }: Props) {
     setFreeName("");
     setPickerOpen(false);
     webApp?.HapticFeedback?.impactOccurred("light");
+    track("feedback_product_picked", {
+      category: category.id,
+      product_id: p.id,
+      has_unit: !!p.unit,
+    });
   }
 
   function clearProduct() {
@@ -121,6 +160,14 @@ export function PriorityFeedbackForm({ category }: Props) {
       webApp?.HapticFeedback?.notificationOccurred("error");
       return;
     }
+    track("feedback_submit_click", {
+      category: category.id,
+      has_product: !!product,
+      used_free_name: useFreeName,
+      quantity,
+      has_photo: !!photo,
+      has_comment: !!comment.trim(),
+    });
     setConfirmOpen(true);
   }
 
@@ -158,10 +205,16 @@ export function PriorityFeedbackForm({ category }: Props) {
         const text = await res.text().catch(() => "");
         throw new Error(text || `HTTP ${res.status}`);
       }
+      submittedRef.current = true;
+      track("feedback_submit_success", { category: category.id });
       webApp?.HapticFeedback?.notificationOccurred("success");
       router.push(`/thanks?cat=${category.id}`);
     } catch (err) {
       console.error(err);
+      track("feedback_submit_failure", {
+        category: category.id,
+        error: err instanceof Error ? err.message.slice(0, 200) : "unknown",
+      });
       setError(
         err instanceof Error
           ? err.message

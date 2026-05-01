@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { FeedRow } from "./page";
+import { track } from "@/lib/analytics";
 
 type Period = "all" | "today" | "week" | "month";
 
@@ -108,6 +109,7 @@ export function AdminClient({ rows, stores, categories }: Props) {
           >
             <a
               href="/admin/users"
+              onClick={() => track("admin_users_open")}
               className="pill bg-ink-900 px-3 py-1.5 text-[12px] font-medium text-bg"
             >
               Відкрити
@@ -120,6 +122,7 @@ export function AdminClient({ rows, stores, categories }: Props) {
           >
             <a
               href="/admin/audit"
+              onClick={() => track("admin_audit_open")}
               className="pill bg-ink-900 px-3 py-1.5 text-[12px] font-medium text-bg"
             >
               Відкрити
@@ -133,12 +136,14 @@ export function AdminClient({ rows, stores, categories }: Props) {
             <div className="flex flex-wrap gap-1.5">
               <a
                 href="/api/feedback?format=json"
+                onClick={() => track("admin_export_click", { format: "json" })}
                 className="pill bg-elev2 px-3 py-1.5 text-[12px] font-medium text-ink-900"
               >
                 JSON
               </a>
               <a
                 href="/api/feedback?format=csv"
+                onClick={() => track("admin_export_click", { format: "csv" })}
                 className="pill bg-elev2 px-3 py-1.5 text-[12px] font-medium text-ink-900"
               >
                 CSV
@@ -392,6 +397,7 @@ function SendReportNowButton() {
 
   const handleClick = async () => {
     if (status === "sending") return;
+    track("admin_send_report_click");
     if (
       !confirm("Надіслати щоденний звіт у Telegram-групу прямо зараз?")
     ) {
@@ -455,6 +461,7 @@ function MirrorToDriveNowButton() {
 
   const handleClick = async () => {
     if (status === "sending") return;
+    track("admin_mirror_drive_click");
     if (!confirm("Скопіювати нові фото у Google Drive зараз?")) return;
     setStatus("sending");
     setMessage(null);
