@@ -1,7 +1,7 @@
-import { Header } from "@/components/Header";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { CATEGORIES } from "@/lib/categories";
 import { AdminClient } from "./admin-client";
+import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 
 export const dynamic = "force-dynamic";
 
@@ -81,9 +81,10 @@ export default async function AdminPage() {
   ).sort();
 
   return (
-    <main>
-      <Header subtitle="Стрічка фідбеку" />
-
+    <AdminPageContainer
+      title="Огляд"
+      subTitle="Стрічка фідбеку та швидкі дії адміністратора"
+    >
       {!isSupabaseConfigured() ? (
         <div className="card mb-4 p-5 text-[14px] leading-relaxed text-ink-700">
           <p className="font-medium text-ink-900">Supabase не підключено</p>
@@ -113,6 +114,6 @@ export default async function AdminPage() {
           tint: c.tint,
         }))}
       />
-    </main>
+    </AdminPageContainer>
   );
 }
