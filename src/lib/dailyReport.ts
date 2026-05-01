@@ -6,8 +6,14 @@ export const KYIV_TZ = "Europe/Kyiv";
 export const REPORT_HOUR_KYIV = 21;
 
 // Photos in the report are pulled from a private Supabase Storage bucket via
-// short-lived signed URLs. Telegram needs ~minutes to fetch; an hour is plenty.
+// short-lived signed URLs. The bot's own sendPhoto fetch needs ~minutes; an
+// hour is plenty for that. Click-through links surfaced in the report use
+// SIGNED_URL_TTL_FOR_REPORT (longer-lived, see PhotoLinkBuilder).
 const PHOTO_SIGNED_URL_TTL_SEC = 60 * 60;
+// TTL for click-through links shown in the report itself. Capped to ~7 days
+// because Supabase rejects longer durations and because the report is
+// scrollable in the chat for that long anyway.
+const PHOTO_REPORT_LINK_TTL_SEC = 7 * 24 * 60 * 60;
 // Telegram caption ceiling is 1024 chars; leave headroom.
 const TELEGRAM_CAPTION_MAX = 1000;
 // Скільки днів історії підтягуємо для дельти, повторів і топ-авторів.
@@ -59,6 +65,11 @@ export type ReportResult =
  *
  * Звіт побудовано як "heatmap + сигнали": тепер тягнемо ще й 7-денний контекст,
  * щоб порахувати дельту, повтори браку, дублі по магазинах та топ-авторів.
+ *
+ * Фото в звіті клікабельні — посилання будує PhotoLinkBuilder, який
+ * обирається за env REPORT_PHOTO_LINK_MODE (supabase|drive|telegram). Для
+ * supergroup-mode фото відправляються ПЕРШИМИ, щоб спіймати message_id
+ * і побудувати t.me deep-links; для решти послідовність звичайна.
  */
 export async function buildAndSendDailyReport(): Promise<ReportResult> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -95,18 +106,49 @@ export async function buildAndSendDailyReport(): Promise<ReportResult> {
     (r) => kyivDateString(new Date(r.created_at)) === todayKyiv,
   );
 
-  // Окремо застряглі — це рядки до сьогодні зі статусом new, яким > 3 днів.
-  // Тягнемо "стародавніх" застряглих окремо (шукаємо ті, що зайшли раніше за
-  // 7-денне вікно, але досі new). Для MVP поки достатньо того, що в `allRows`.
+  const builder = pickPhotoLinkBuilder();
 
-  const text = formatReport({
-    todayRows,
-    historyRows: allRows,
-    todayKyiv,
-  });
   try {
-    await sendTelegramHtml(botToken, chatId, text);
-    await sendPhotosForRows(supabase, botToken, chatId, todayRows);
+    if (builder.requiresPhotosFirst) {
+      // t.me deep-link mode: спочатку фото (збираємо message_ids), потім текст.
+      const photoMessageIds = await sendPhotosForRows(
+        supabase,
+        botToken,
+        chatId,
+        todayRows,
+        { collectMessageIds: true },
+      );
+      const photoLinks = await builder.build({
+        supabase,
+        botToken,
+        chatId,
+        todayRows,
+        photoMessageIds,
+      });
+      const text = formatReport({
+        todayRows,
+        historyRows: allRows,
+        todayKyiv,
+        photoLinks,
+      });
+      await sendTelegramHtml(botToken, chatId, text);
+    } else {
+      // Supabase / Drive mode: будуємо посилання без фото, потім текст, потім фото.
+      const photoLinks = await builder.build({
+        supabase,
+        botToken,
+        chatId,
+        todayRows,
+      });
+      const text = formatReport({
+        todayRows,
+        historyRows: allRows,
+        todayKyiv,
+        photoLinks,
+      });
+      await sendTelegramHtml(botToken, chatId, text);
+      await sendPhotosForRows(supabase, botToken, chatId, todayRows);
+    }
   } catch (e) {
     console.error("daily-report telegram error", e);
     return { ok: false, error: "telegram_send_failed", status: 502 };
@@ -115,12 +157,153 @@ export async function buildAndSendDailyReport(): Promise<ReportResult> {
   return { ok: true, sent: true, total: todayRows.length, kyiv_date: todayKyiv };
 }
 
+// =============================================================================
+//                       PHOTO LINK BUILDERS (варіанти A/B/C)
+// =============================================================================
+
+/** Map feedback_id → click-through URL для 📷 в звіті. */
+export type PhotoLinkMap = Map<string, string>;
+
+interface PhotoLinkBuilderContext {
+  supabase: Supabase;
+  botToken: string;
+  chatId: string;
+  todayRows: FeedRow[];
+  /** Заповнюється лише для builder.requiresPhotosFirst=true (Telegram mode). */
+  photoMessageIds?: Map<string, number>;
+}
+
+interface PhotoLinkBuilder {
+  /** Якщо true — фото відправляються ДО тексту, щоб зібрати message_ids. */
+  readonly requiresPhotosFirst: boolean;
+  build(ctx: PhotoLinkBuilderContext): Promise<PhotoLinkMap>;
+}
+
+/**
+ * Active mode (default): generate Supabase signed URLs with up-to-7d TTL.
+ * Pros: works in any group, no extra infra. Cons: links expire after a week.
+ */
+class SupabaseSignedUrlBuilder implements PhotoLinkBuilder {
+  readonly requiresPhotosFirst = false;
+  async build(ctx: PhotoLinkBuilderContext): Promise<PhotoLinkMap> {
+    const out: PhotoLinkMap = new Map();
+    for (const r of ctx.todayRows) {
+      if (!r.photo_url) continue;
+      if (r.photo_url.startsWith("sb:")) {
+        const path = r.photo_url.slice(3);
+        const { data } = await ctx.supabase.storage
+          .from("feedback-photos")
+          .createSignedUrl(path, PHOTO_REPORT_LINK_TTL_SEC);
+        if (data?.signedUrl) out.set(r.id, data.signedUrl);
+        continue;
+      }
+      // Legacy public URL — повертаємо як є.
+      const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+      if (
+        projectUrl &&
+        r.photo_url.startsWith(
+          `${projectUrl}/storage/v1/object/public/feedback-photos/`,
+        )
+      ) {
+        out.set(r.id, r.photo_url);
+      }
+    }
+    return out;
+  }
+}
+
+/**
+ * Drive mode: використовує photo_mirror.drive_file_id (попередньо заповнюється
+ * mirrorPendingPhotos). Вимагає, щоб папка GOOGLE_DRIVE_FOLDER_ID була
+ * розшарена на всіх, хто клікатиме лінк.
+ */
+class DriveLinkBuilder implements PhotoLinkBuilder {
+  readonly requiresPhotosFirst = false;
+  async build(ctx: PhotoLinkBuilderContext): Promise<PhotoLinkMap> {
+    const out: PhotoLinkMap = new Map();
+    const ids = ctx.todayRows.filter((r) => r.photo_url).map((r) => r.id);
+    if (ids.length === 0) return out;
+
+    // Синхронно джеркаємо фото на Drive, щоб drive_file_id був гарантовано
+    // заповнений до моменту розсилки. Швоввий import — щоб не додавати
+    // top-level залежності на driveMirror, якщо режим неактивний.
+    try {
+      const { mirrorPendingPhotos } = await import("@/lib/driveMirror");
+      await mirrorPendingPhotos();
+    } catch (e) {
+      console.warn("drive mirror pre-step failed", e);
+    }
+
+    const { data } = await ctx.supabase
+      .from("photo_mirror")
+      .select("feedback_id, drive_file_id")
+      .in("feedback_id", ids)
+      .not("drive_file_id", "is", null);
+    for (const m of (data ?? []) as Array<{
+      feedback_id: string;
+      drive_file_id: string;
+    }>) {
+      out.set(
+        m.feedback_id,
+        `https://drive.google.com/file/d/${m.drive_file_id}/view`,
+      );
+    }
+    return out;
+  }
+}
+
+/**
+ * Telegram supergroup deep-link mode: лінк `t.me/c/<chat>/<msg>` веде на
+ * фото-повідомлення в тому ж чаті (не виходячи з Telegram). Працює ТІЛЬКИ для
+ * supergroups (chat_id починається з -100). Для базових груп повертає порожню
+ * мапу (формат t.me/c там не працює).
+ */
+class TelegramDeepLinkBuilder implements PhotoLinkBuilder {
+  readonly requiresPhotosFirst = true;
+  async build(ctx: PhotoLinkBuilderContext): Promise<PhotoLinkMap> {
+    const out: PhotoLinkMap = new Map();
+    if (!ctx.photoMessageIds) return out;
+    const chatStr = String(ctx.chatId);
+    if (!chatStr.startsWith("-100")) {
+      console.warn(
+        "telegram deep-link mode requires supergroup (chat_id starts with -100); falling back to plain emoji",
+      );
+      return out;
+    }
+    const internalId = chatStr.slice(4);
+    for (const [feedbackId, msgId] of ctx.photoMessageIds) {
+      out.set(feedbackId, `https://t.me/c/${internalId}/${msgId}`);
+    }
+    return out;
+  }
+}
+
+function pickPhotoLinkBuilder(): PhotoLinkBuilder {
+  const mode = (process.env.REPORT_PHOTO_LINK_MODE ?? "supabase").toLowerCase();
+  switch (mode) {
+    case "drive":
+      return new DriveLinkBuilder();
+    case "telegram":
+      return new TelegramDeepLinkBuilder();
+    case "supabase":
+    default:
+      return new SupabaseSignedUrlBuilder();
+  }
+}
+
+interface SendPhotosOptions {
+  /** Якщо true — повертає Map<feedback_id, message_id> для t.me deep-links. */
+  collectMessageIds?: boolean;
+}
+
 async function sendPhotosForRows(
   supabase: Supabase,
   botToken: string,
   chatId: string,
   rows: FeedRow[],
-): Promise<void> {
+  options: SendPhotosOptions = {},
+): Promise<Map<string, number>> {
+  const messageIds = new Map<string, number>();
   for (const r of rows) {
     if (!r.photo_url) continue;
     const url = await resolvePhotoUrl(supabase, r.photo_url);
@@ -130,12 +313,16 @@ async function sendPhotosForRows(
       caption = `${caption.slice(0, TELEGRAM_CAPTION_MAX - 1)}…`;
     }
     try {
-      await sendTelegramPhoto(botToken, chatId, url, caption);
+      const msgId = await sendTelegramPhoto(botToken, chatId, url, caption);
+      if (options.collectMessageIds && msgId != null) {
+        messageIds.set(r.id, msgId);
+      }
     } catch (e) {
       // Per-row failure shouldn't poison the whole report; log and continue.
       console.error("daily-report sendPhoto failed", { id: r.id, e });
     }
   }
+  return messageIds;
 }
 
 async function resolvePhotoUrl(
@@ -215,6 +402,11 @@ interface FormatReportInput {
   todayRows: FeedRow[];
   historyRows: FeedRow[]; // включає todayRows
   todayKyiv: string;
+  /**
+   * Опціональна мапа feedback_id → click-through URL для 📷 в звіті.
+   * Якщо відсутня або порожня — 📷 рендериться як раніше (без лінка).
+   */
+  photoLinks?: PhotoLinkMap;
 }
 
 /**
@@ -231,11 +423,12 @@ interface FormatReportInput {
  */
 export function formatReport(input: FormatReportInput): string {
   const { todayRows, historyRows, todayKyiv } = input;
+  const photoLinks: PhotoLinkMap = input.photoLinks ?? new Map();
   const dateLabel = formatHumanDateUk(todayKyiv);
 
   const blocks: string[] = [];
 
-  blocks.push(formatHeader(todayRows, historyRows, dateLabel));
+  blocks.push(formatHeader(todayRows, historyRows, dateLabel, photoLinks));
 
   if (todayRows.length === 0) {
     const stuckBlock = formatStuck(historyRows, todayKyiv);
@@ -261,7 +454,7 @@ export function formatReport(input: FormatReportInput): string {
   const authorsBlock = formatTopAuthors(historyRows);
   if (authorsBlock) blocks.push(authorsBlock);
 
-  blocks.push(formatDetails(todayRows));
+  blocks.push(formatDetails(todayRows, photoLinks));
 
   return blocks.join("\n\n");
 }
@@ -270,6 +463,7 @@ function formatHeader(
   today: FeedRow[],
   history: FeedRow[],
   dateLabel: string,
+  photoLinks: PhotoLinkMap,
 ): string {
   const stores = new Set(today.map((r) => r.store_name).filter(Boolean));
   const photos = today.filter((r) => r.photo_url).length;
@@ -280,7 +474,15 @@ function formatHeader(
     `${today.length} ${plural(today.length, "фідбек", "фідбеки", "фідбеків")}`,
     `${stores.size} ${plural(stores.size, "магазин", "магазини", "магазинів")}`,
   ];
-  if (photos > 0) fragments.push(`${photos} 📷`);
+  if (photos > 0) {
+    // Якщо рівно одне фото і є лінк — робимо лічильник клікабельним.
+    if (photos === 1 && photoLinks.size === 1) {
+      const url = photoLinks.values().next().value as string;
+      fragments.push(`${photos} ${linkifyEmoji("📷", url)}`);
+    } else {
+      fragments.push(`${photos} 📷`);
+    }
+  }
 
   // Дельта vs середнє за попередні 7 днів (без сьогодні, щоб порівняння
   // було чесним — інакше ділимо на самих себе).
@@ -537,7 +739,7 @@ function formatTopAuthors(history: FeedRow[]): string {
 // ДЕТАЛІ ПО КАТЕГОРІЯХ
 // -----------------------------------------------------------------------------
 
-function formatDetails(rows: FeedRow[]): string {
+function formatDetails(rows: FeedRow[], photoLinks: PhotoLinkMap): string {
   const groups = new Map<string, FeedRow[]>();
   for (const r of rows) {
     const list = groups.get(r.category) ?? [];
@@ -563,7 +765,7 @@ function formatDetails(rows: FeedRow[]): string {
     lines.push(`${emoji} <b>${escapeHtml(title)}</b> (${groupRows.length})`);
     const limit = 8;
     for (const r of groupRows.slice(0, limit)) {
-      lines.push(`• ${formatRowLine(r)}`);
+      lines.push(`• ${formatRowLine(r, photoLinks)}`);
     }
     if (groupRows.length > limit) {
       lines.push(`• …+${groupRows.length - limit}`);
@@ -574,7 +776,7 @@ function formatDetails(rows: FeedRow[]): string {
   if (otherKeys.length > 0) {
     const otherRows: FeedRow[] = [];
     for (const k of otherKeys) otherRows.push(...(groups.get(k) ?? []));
-    sections.push(formatOtherBlock(otherRows));
+    sections.push(formatOtherBlock(otherRows, photoLinks));
   }
   return sections.join("\n\n");
 }
@@ -583,7 +785,7 @@ function formatDetails(rows: FeedRow[]): string {
  * Блок "Інше" — характерні для кожної категорії поля витягуємо з fields,
  * щоб однорядкове резюме було корисне (а не великий summary з всіма питаннями).
  */
-function formatOtherBlock(rows: FeedRow[]): string {
+function formatOtherBlock(rows: FeedRow[], photoLinks: PhotoLinkMap): string {
   const total = rows.length;
   const lines: string[] = [`📋 <b>Інше</b> (${total})`];
   const limit = 6;
@@ -591,7 +793,8 @@ function formatOtherBlock(rows: FeedRow[]): string {
     const emoji = r.category_emoji ?? catEmoji(r.category);
     const store = escapeHtml(r.store_name ?? "магазин не вказано");
     const subj = escapeHtml(extractOtherSubject(r));
-    lines.push(`• ${emoji} ${store} — ${subj}`);
+    const photoIcon = renderPhotoIcon(r, photoLinks);
+    lines.push(`• ${emoji} ${store} — ${subj}${photoIcon}`);
   }
   if (total > limit) lines.push(`• …+${total - limit}`);
   return lines.join("\n");
@@ -629,10 +832,10 @@ function extractOtherSubject(r: FeedRow): string {
   }
 }
 
-function formatRowLine(r: FeedRow): string {
+function formatRowLine(r: FeedRow, photoLinks: PhotoLinkMap): string {
   const store = escapeHtml(r.store_name ?? "магазин не вказано");
   const author = escapeHtml(r.user_full_name ?? "анонім");
-  const photo = r.photo_url ? " 📷" : "";
+  const photo = renderPhotoIcon(r, photoLinks);
 
   if (r.product_name) {
     const qty =
@@ -691,6 +894,34 @@ function escapeHtml(s: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+/** Escape a value to be safe inside an HTML attribute (e.g. href="..."). */
+function escapeAttr(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/** Wrap an emoji (or any text) in an `<a href="...">` so that clicks open URL. */
+function linkifyEmoji(emoji: string, url: string): string {
+  return `<a href="${escapeAttr(url)}">${emoji}</a>`;
+}
+
+/**
+ * Render the 📷 marker for a feedback row. Returns a leading-space-prefixed
+ * fragment (or empty string) so callers can append unconditionally:
+ *
+ *   ` 📷`              ← row has photo, no link available
+ *   ` <a href="...">📷</a>`  ← row has photo with click-through link
+ *   ``                  ← no photo
+ */
+function renderPhotoIcon(r: FeedRow, photoLinks: PhotoLinkMap): string {
+  if (!r.photo_url) return "";
+  const url = photoLinks.get(r.id);
+  return ` ${url ? linkifyEmoji("📷", url) : "📷"}`;
 }
 
 function catEmoji(id: string): string {
@@ -814,7 +1045,7 @@ async function sendTelegramPhoto(
   chatId: string,
   photoUrl: string,
   caption: string,
-): Promise<void> {
+): Promise<number | null> {
   const res = await fetch(
     `https://api.telegram.org/bot${botToken}/sendPhoto`,
     {
@@ -834,5 +1065,14 @@ async function sendTelegramPhoto(
       body: body.slice(0, 300),
     });
     throw new Error(`telegram_photo_failed_${res.status}`);
+  }
+  try {
+    const json = (await res.json()) as {
+      ok: boolean;
+      result?: { message_id?: number };
+    };
+    return json.result?.message_id ?? null;
+  } catch {
+    return null;
   }
 }
