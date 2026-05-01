@@ -85,6 +85,14 @@ body {
            border border-ink-300/40 bg-elev2 px-5 text-ink-900
            hover:bg-elev2/70 active:scale-[0.97] transition-all duration-200;
   }
+  .btn-step {
+    @apply inline-flex h-13 items-center justify-center rounded-2xl
+           bg-elev2 text-[24px] font-semibold text-ink-900
+           hover:bg-elev2/70 active:scale-[0.95]
+           disabled:opacity-40 disabled:pointer-events-none
+           transition-all duration-150 select-none;
+    width: 3.25rem;
+  }
   .grad-text {
     background-image: linear-gradient(
       90deg,
