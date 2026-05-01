@@ -157,6 +157,9 @@ export function AdminClient({ rows, stores, categories }: Props) {
         )}
       </div>
 
+      {/* Send-report-now button */}
+      <SendReportNowButton />
+
       {/* Empty state */}
       {filtered.length === 0 ? (
         <div className="card p-8 text-center">
@@ -305,4 +308,67 @@ function translateStatus(s: string): string {
     default:
       return s;
   }
+}
+
+function SendReportNowButton() {
+  const [status, setStatus] = useState<
+    "idle" | "sending" | "ok" | "error"
+  >("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  const handleClick = async () => {
+    if (status === "sending") return;
+    if (
+      !confirm("Надіслати щоденний звіт у Telegram-групу прямо зараз?")
+    ) {
+      return;
+    }
+    setStatus("sending");
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/send-report-now", {
+        method: "POST",
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        total?: number;
+      };
+      if (!res.ok) {
+        setStatus("error");
+        setMessage(data.error ?? `Помилка ${res.status}`);
+      } else {
+        setStatus("ok");
+        setMessage(
+          typeof data.total === "number"
+            ? `Надіслано (${data.total} рядків)`
+            : "Надіслано",
+        );
+      }
+    } catch (e) {
+      setStatus("error");
+      setMessage(e instanceof Error ? e.message : "Помилка мережі");
+    }
+  };
+
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={status === "sending"}
+        className="pill bg-ink-900 px-3 py-1.5 text-[12px] font-medium text-bg disabled:opacity-50"
+      >
+        {status === "sending" ? "Надсилаю..." : "📤 Надіслати звіт зараз"}
+      </button>
+      {message ? (
+        <span
+          className={`text-[12px] ${
+            status === "error" ? "text-rose-700" : "text-ink-500"
+          }`}
+        >
+          {message}
+        </span>
+      ) : null}
+    </div>
+  );
 }
