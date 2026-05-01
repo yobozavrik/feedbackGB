@@ -1,174 +1,52 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import {
+  KeyOutlined,
+  ToolOutlined,
+  MessageOutlined,
+  ApartmentOutlined,
+} from "@ant-design/icons";
+import { ProTable, type ProColumns } from "@ant-design/pro-components";
+import {
+  Space,
+  Tag,
+  Typography,
+  theme as antdTheme,
+} from "antd";
+import { useMemo } from "react";
 import type { AuditRow } from "./page";
 
-type SectionFilter = "all" | "auth" | "feedback" | "admin";
+const { Text, Paragraph } = Typography;
 
 interface Props {
   rows: AuditRow[];
 }
 
-export function AuditClient({ rows }: Props) {
-  const [section, setSection] = useState<SectionFilter>("all");
-  const [actorFilter, setActorFilter] = useState<string>("");
-
-  const actorOptions = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const r of rows) {
-      if (r.actor_user_id && r.actor_full_name) {
-        seen.set(r.actor_user_id, r.actor_full_name);
-      }
-    }
-    return Array.from(seen.entries()).sort((a, b) =>
-      a[1].localeCompare(b[1], "uk"),
-    );
-  }, [rows]);
-
-  const filtered = useMemo(() => {
-    return rows.filter((r) => {
-      if (section !== "all" && !r.action.startsWith(`${section}.`)) {
-        return false;
-      }
-      if (actorFilter && r.actor_user_id !== actorFilter) {
-        return false;
-      }
-      return true;
-    });
-  }, [rows, section, actorFilter]);
-
-  return (
-    <div>
-      <div className="mb-3 flex items-center justify-between gap-2 px-1">
-        <h1 className="font-display text-[22px] font-semibold text-ink-900">
-          Журнал дій
-        </h1>
-        <span className="pill bg-elev2 text-ink-700">{filtered.length}</span>
-      </div>
-
-      <p className="mb-4 px-1 text-[12px] text-ink-500">
-        Останні 500 подій: входи, фідбеки, адмін-дії. Видно хто зробив, коли,
-        з якого IP.
-      </p>
-
-      {/* Filters */}
-      <div className="mb-3 flex flex-wrap gap-2">
-        <div className="flex gap-1 rounded-full bg-elev2 p-1">
-          {(["all", "auth", "feedback", "admin"] as SectionFilter[]).map(
-            (s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setSection(s)}
-                className={`pill px-3 py-1 text-[12px] font-medium ${
-                  section === s
-                    ? "bg-ink-900 text-bg"
-                    : "bg-transparent text-ink-700"
-                }`}
-              >
-                {sectionLabel(s)}
-              </button>
-            ),
-          )}
-        </div>
-
-        {actorOptions.length > 0 ? (
-          <select
-            value={actorFilter}
-            onChange={(e) => setActorFilter(e.target.value)}
-            className="rounded-full bg-elev2 px-3 py-1.5 text-[12px] font-medium text-ink-900"
-          >
-            <option value="">Усі користувачі</option>
-            {actorOptions.map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </select>
-        ) : null}
-      </div>
-
-      {/* List */}
-      {filtered.length === 0 ? (
-        <div className="card p-8 text-center">
-          <div className="text-4xl">🌸</div>
-          <p className="mt-3 text-[14px] text-ink-700">
-            За цими фільтрами поки нічого нема.
-          </p>
-        </div>
-      ) : (
-        <ul className="space-y-2">
-          {filtered.map((r) => (
-            <AuditCard key={r.id} row={r} />
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function sectionLabel(s: SectionFilter): string {
-  switch (s) {
-    case "all":
-      return "Усе";
-    case "auth":
-      return "🔑 Вхід";
-    case "feedback":
-      return "📝 Фідбек";
-    case "admin":
-      return "🛠 Адмін";
-  }
-}
-
-function AuditCard({ row: r }: { row: AuditRow }) {
-  const failed = r.action === "auth.login.failure";
-  return (
-    <li
-      className={`card p-3 text-[13px] ${
-        failed ? "border border-rose-300/40 bg-rose-50/40" : ""
-      }`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="pill bg-elev2 text-[11px] text-ink-700">
-          {r.section}
-        </span>
-        <span className="text-[11px] font-medium text-ink-500">
-          {formatTime(r.occurred_at)}
-        </span>
-      </div>
-      <p className="mt-1.5 text-[14px] font-medium text-ink-900">
-        {r.action_title}
-      </p>
-      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-ink-500">
-        {r.actor_full_name ? (
-          <span>
-            <span aria-hidden>👤</span> {r.actor_full_name}
-            {r.actor_role === "admin" ? " (адмін)" : ""}
-          </span>
-        ) : r.actor_user_id ? (
-          <span className="font-mono">{r.actor_user_id.slice(0, 8)}…</span>
-        ) : (
-          <span>· anon</span>
-        )}
-        {r.target_full_name ? (
-          <span>
-            → <span aria-hidden>🎯</span> {r.target_full_name}
-          </span>
-        ) : null}
-        {r.ip ? (
-          <span className="font-mono">
-            <span aria-hidden>📡</span> {r.ip}
-          </span>
-        ) : null}
-      </div>
-      {r.meta && Object.keys(r.meta).length > 0 ? (
-        <pre className="mt-1.5 overflow-x-auto rounded-lg bg-elev2 px-2 py-1.5 text-[11px] leading-snug text-ink-700">
-          {JSON.stringify(r.meta, null, 0)}
-        </pre>
-      ) : null}
-    </li>
-  );
-}
+const SECTION_META: Record<
+  string,
+  { label: string; color: string; icon: React.ReactNode }
+> = {
+  auth: {
+    label: "Вхід",
+    color: "blue",
+    icon: <KeyOutlined />,
+  },
+  feedback: {
+    label: "Фідбек",
+    color: "purple",
+    icon: <MessageOutlined />,
+  },
+  admin: {
+    label: "Адмін",
+    color: "magenta",
+    icon: <ToolOutlined />,
+  },
+  system: {
+    label: "Система",
+    color: "default",
+    icon: <ApartmentOutlined />,
+  },
+};
 
 function formatTime(iso: string): string {
   const t = new Date(iso);
@@ -190,4 +68,265 @@ function formatTime(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+export function AuditClient({ rows }: Props) {
+  const { token } = antdTheme.useToken();
+
+  const sectionFilters = useMemo(() => {
+    const seen = new Set<string>();
+    for (const r of rows) seen.add(r.section);
+    return Array.from(seen)
+      .sort()
+      .map((s) => ({ text: SECTION_META[s]?.label ?? s, value: s }));
+  }, [rows]);
+
+  const actorFilters = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const r of rows) {
+      if (r.actor_user_id && r.actor_full_name) {
+        seen.set(r.actor_user_id, r.actor_full_name);
+      }
+    }
+    return Array.from(seen.entries())
+      .sort((a, b) => a[1].localeCompare(b[1], "uk"))
+      .map(([id, name]) => ({ text: name, value: id }));
+  }, [rows]);
+
+  const actionFilters = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const r of rows) {
+      if (!seen.has(r.action)) seen.set(r.action, r.action_title);
+    }
+    return Array.from(seen.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([action, title]) => ({ text: title, value: action }));
+  }, [rows]);
+
+  const columns: ProColumns<AuditRow>[] = useMemo(
+    () => [
+      {
+        title: "Час",
+        dataIndex: "occurred_at",
+        width: 130,
+        fixed: "left",
+        sorter: (a, b) =>
+          new Date(a.occurred_at).getTime() -
+          new Date(b.occurred_at).getTime(),
+        defaultSortOrder: "descend",
+        render: (_, row) => (
+          <Text style={{ fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
+            {formatTime(row.occurred_at)}
+          </Text>
+        ),
+      },
+      {
+        title: "Розділ",
+        dataIndex: "section",
+        width: 130,
+        filters: sectionFilters,
+        onFilter: (value, row) => row.section === value,
+        render: (_, row) => {
+          const meta = SECTION_META[row.section] ?? {
+            label: row.section,
+            color: "default",
+            icon: null,
+          };
+          return (
+            <Tag color={meta.color} icon={meta.icon} bordered={false}>
+              {meta.label}
+            </Tag>
+          );
+        },
+      },
+      {
+        title: "Дія",
+        dataIndex: "action_title",
+        ellipsis: true,
+        filters: actionFilters,
+        filterSearch: true,
+        onFilter: (value, row) => row.action === value,
+        render: (_, row) => {
+          const failed = row.action === "auth.login.failure";
+          return (
+            <Space size={6} wrap>
+              <Text
+                strong={failed}
+                style={{ color: failed ? token.colorError : undefined }}
+              >
+                {row.action_title}
+              </Text>
+              <Text
+                code
+                style={{
+                  fontSize: 11,
+                  color: token.colorTextTertiary,
+                }}
+              >
+                {row.action}
+              </Text>
+            </Space>
+          );
+        },
+      },
+      {
+        title: "Хто",
+        dataIndex: "actor_full_name",
+        width: 200,
+        ellipsis: true,
+        filters: actorFilters.length > 0 ? actorFilters : undefined,
+        filterSearch: true,
+        onFilter: (value, row) => row.actor_user_id === value,
+        render: (_, row) => {
+          if (row.actor_full_name) {
+            return (
+              <Space size={6}>
+                <Text>{row.actor_full_name}</Text>
+                {row.actor_role === "admin" ? (
+                  <Tag color="magenta" bordered={false}>
+                    адмін
+                  </Tag>
+                ) : null}
+              </Space>
+            );
+          }
+          if (row.actor_user_id) {
+            return (
+              <Text code style={{ fontSize: 11 }}>
+                {row.actor_user_id.slice(0, 8)}…
+              </Text>
+            );
+          }
+          return <Text type="secondary">anon</Text>;
+        },
+      },
+      {
+        title: "Кому",
+        dataIndex: "target_full_name",
+        width: 180,
+        ellipsis: true,
+        render: (_, row) =>
+          row.target_full_name ? (
+            <Text>{row.target_full_name}</Text>
+          ) : row.target_user_id ? (
+            <Text code style={{ fontSize: 11 }}>
+              {row.target_user_id.slice(0, 8)}…
+            </Text>
+          ) : (
+            <Text type="secondary">—</Text>
+          ),
+      },
+      {
+        title: "IP",
+        dataIndex: "ip",
+        width: 130,
+        render: (_, row) =>
+          row.ip ? (
+            <Text code style={{ fontSize: 11 }}>
+              {row.ip}
+            </Text>
+          ) : (
+            <Text type="secondary">—</Text>
+          ),
+      },
+    ],
+    [sectionFilters, actorFilters, actionFilters, token],
+  );
+
+  return (
+    <ProTable<AuditRow>
+      rowKey="id"
+      dataSource={rows}
+      columns={columns}
+      search={false}
+      options={{
+        density: true,
+        fullScreen: true,
+        reload: false,
+        setting: true,
+      }}
+      pagination={{
+        pageSize: 50,
+        showSizeChanger: true,
+        showTotal: (total) => `${total} подій`,
+      }}
+      scroll={{ x: 1100 }}
+      expandable={{
+        expandedRowRender: (row) => <AuditDetails row={row} />,
+        rowExpandable: (row) =>
+          (row.meta != null && Object.keys(row.meta).length > 0) ||
+          (row.diff != null && Object.keys(row.diff).length > 0) ||
+          row.user_agent != null,
+      }}
+      headerTitle={
+        <Space size={8}>
+          <Text strong>Останні події</Text>
+          <Tag color="magenta" bordered={false}>
+            {rows.length}
+          </Tag>
+        </Space>
+      }
+      toolBarRender={() => [
+        <Text key="hint" type="secondary" style={{ fontSize: 12 }}>
+          Останні 500 подій. Розгортай рядок щоб побачити meta і diff.
+        </Text>,
+      ]}
+    />
+  );
+}
+
+function AuditDetails({ row }: { row: AuditRow }) {
+  const { token } = antdTheme.useToken();
+  return (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      {row.user_agent ? (
+        <div>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            User-Agent:
+          </Text>{" "}
+          <Text style={{ fontSize: 12 }}>{row.user_agent}</Text>
+        </div>
+      ) : null}
+      {row.meta && Object.keys(row.meta).length > 0 ? (
+        <div>
+          <Text type="secondary" style={{ fontSize: 12, display: "block" }}>
+            meta:
+          </Text>
+          <Paragraph
+            style={{
+              margin: 0,
+              padding: 12,
+              background: token.colorFillTertiary,
+              borderRadius: 8,
+              fontSize: 12,
+              fontFamily: "monospace",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {JSON.stringify(row.meta, null, 2)}
+          </Paragraph>
+        </div>
+      ) : null}
+      {row.diff && Object.keys(row.diff).length > 0 ? (
+        <div>
+          <Text type="secondary" style={{ fontSize: 12, display: "block" }}>
+            diff:
+          </Text>
+          <Paragraph
+            style={{
+              margin: 0,
+              padding: 12,
+              background: token.colorFillTertiary,
+              borderRadius: 8,
+              fontSize: 12,
+              fontFamily: "monospace",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {JSON.stringify(row.diff, null, 2)}
+          </Paragraph>
+        </div>
+      ) : null}
+    </Space>
+  );
 }
