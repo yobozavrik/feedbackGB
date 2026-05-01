@@ -15,11 +15,12 @@ import type { ProLayoutProps } from "@ant-design/pro-components";
  * Активні розділи:
  *   /admin            — Огляд (KPI + heatmap + стрічка фідбеку ProTable)
  *   /admin/analytics  — Аналітика (графіки)
+ *   /admin/stores     — Магазини (список з метриками + Drawer-деталь)
  *   /admin/users      — Користувачі
  *   /admin/audit      — Журнал дій
  *   /admin/tools      — Інструменти (звіт / дзеркало / експорт)
  *
- * Disabled (coming-soon): Магазини і Налаштування.
+ * Disabled (coming-soon): Налаштування.
  */
 export const adminRoute: ProLayoutProps["route"] = {
   path: "/admin",
@@ -36,10 +37,8 @@ export const adminRoute: ProLayoutProps["route"] = {
     },
     {
       path: "/admin/stores",
-      name: "Магазини & товари",
+      name: "Магазини",
       icon: <ShopOutlined />,
-      disabled: true,
-      tooltip: "Каталог магазинів і товарів",
     },
     {
       path: "/admin/users",
@@ -76,4 +75,5 @@ export const adminBreadcrumbNames: Record<string, string> = {
   "/admin/audit": "Журнал",
   "/admin/tools": "Інструменти",
   "/admin/analytics": "Аналітика",
+  "/admin/stores": "Магазини",
 };
