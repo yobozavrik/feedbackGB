@@ -6,6 +6,7 @@ import {
   SESSION_MAX_AGE,
 } from "@/lib/session";
 import { clientIp, rateLimit } from "@/lib/rateLimit";
+import { logAudit, uaFromRequest } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -99,6 +100,13 @@ export async function POST(req: Request) {
   }
   const user = (data ?? null) as UserRow | null;
   if (!user || !user.id) {
+    await logAudit("auth.login.failure", {
+      targetUserId: userId,
+      targetType: "user",
+      ip,
+      userAgent: uaFromRequest(req),
+      meta: { ip_attempts_remaining: ipLimit.remaining },
+    });
     return NextResponse.json({ error: "Невірний PIN" }, { status: 401 });
   }
 
@@ -108,6 +116,14 @@ export async function POST(req: Request) {
     role: user.role,
     store_id: user.store_id ?? null,
     iat: Date.now(),
+  });
+
+  await logAudit("auth.login.success", {
+    actorUserId: user.id,
+    targetType: "session",
+    ip,
+    userAgent: uaFromRequest(req),
+    meta: { role: user.role, store_id: user.store_id },
   });
 
   const res = NextResponse.json({
