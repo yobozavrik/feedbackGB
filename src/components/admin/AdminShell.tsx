@@ -3,6 +3,7 @@
 import { LogoutOutlined, UserOutlined } from "@ant-design/icons";
 import { ProLayout } from "@ant-design/pro-components";
 import {
+  App,
   Avatar,
   Button,
   Dropdown,
@@ -147,7 +148,7 @@ export function AdminShell({ children, user }: AdminShellProps) {
         )
       }
     >
-      {children}
+      <App>{children}</App>
     </ProLayout>
   );
 }
