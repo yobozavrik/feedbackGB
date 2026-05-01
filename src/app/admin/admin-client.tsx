@@ -114,6 +114,18 @@ export function AdminClient({ rows, stores, categories }: Props) {
             </a>
           </ActionCard>
           <ActionCard
+            emoji="🔍"
+            title="Журнал дій"
+            description="Усі входи, фідбеки, адмін-дії: хто, коли, з якого IP. Останні 500 подій."
+          >
+            <a
+              href="/admin/audit"
+              className="pill bg-ink-900 px-3 py-1.5 text-[12px] font-medium text-bg"
+            >
+              Відкрити
+            </a>
+          </ActionCard>
+          <ActionCard
             emoji="📥"
             title="Експорт фідбеків"
             description="Завантажити поточну стрічку у вигляді JSON або CSV для роботи в Excel/Google Sheets."
