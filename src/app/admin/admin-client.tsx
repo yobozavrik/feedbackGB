@@ -157,8 +157,11 @@ export function AdminClient({ rows, stores, categories }: Props) {
         )}
       </div>
 
-      {/* Send-report-now button */}
-      <SendReportNowButton />
+      {/* Admin action buttons */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <SendReportNowButton />
+        <MirrorToDriveNowButton />
+      </div>
 
       {/* Empty state */}
       {filtered.length === 0 ? (
@@ -351,7 +354,7 @@ function SendReportNowButton() {
   };
 
   return (
-    <div className="mb-3 flex items-center gap-2">
+    <div className="flex items-center gap-2">
       <button
         type="button"
         onClick={handleClick}
@@ -359,6 +362,69 @@ function SendReportNowButton() {
         className="pill bg-ink-900 px-3 py-1.5 text-[12px] font-medium text-bg disabled:opacity-50"
       >
         {status === "sending" ? "Надсилаю..." : "📤 Надіслати звіт зараз"}
+      </button>
+      {message ? (
+        <span
+          className={`text-[12px] ${
+            status === "error" ? "text-rose-700" : "text-ink-500"
+          }`}
+        >
+          {message}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function MirrorToDriveNowButton() {
+  const [status, setStatus] = useState<
+    "idle" | "sending" | "ok" | "error"
+  >("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  const handleClick = async () => {
+    if (status === "sending") return;
+    if (!confirm("Скопіювати нові фото у Google Drive зараз?")) return;
+    setStatus("sending");
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/mirror-to-drive-now", {
+        method: "POST",
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        mirrored?: number;
+        failed?: number;
+        skipped?: number;
+      };
+      if (!res.ok) {
+        setStatus("error");
+        setMessage(data.error ?? `Помилка ${res.status}`);
+      } else {
+        setStatus("ok");
+        const m = data.mirrored ?? 0;
+        const f = data.failed ?? 0;
+        setMessage(
+          f > 0
+            ? `Скопійовано ${m}, помилок ${f}`
+            : `Скопійовано ${m}`,
+        );
+      }
+    } catch (e) {
+      setStatus("error");
+      setMessage(e instanceof Error ? e.message : "Помилка мережі");
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={status === "sending"}
+        className="pill bg-ink-900 px-3 py-1.5 text-[12px] font-medium text-bg disabled:opacity-50"
+      >
+        {status === "sending" ? "Копіюю..." : "📦 Дзеркало у Drive"}
       </button>
       {message ? (
         <span
