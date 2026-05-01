@@ -66,8 +66,6 @@ export const adminRoute: ProLayoutProps["route"] = {
       path: "/admin/tools",
       name: "Інструменти",
       icon: <ToolOutlined />,
-      disabled: true,
-      tooltip: "Звіт, дзеркало фото, експорт",
     },
     {
       path: "/admin/settings",
@@ -87,4 +85,5 @@ export const adminBreadcrumbNames: Record<string, string> = {
   "/admin": "Огляд",
   "/admin/users": "Користувачі",
   "/admin/audit": "Журнал",
+  "/admin/tools": "Інструменти",
 };
