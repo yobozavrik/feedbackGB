@@ -42,8 +42,6 @@ export const adminRoute: ProLayoutProps["route"] = {
       path: "/admin/analytics",
       name: "Аналітика",
       icon: <AreaChartOutlined />,
-      disabled: true,
-      tooltip: "Heatmap, сигнали, тренди — на черзі",
     },
     {
       path: "/admin/stores",
@@ -86,4 +84,5 @@ export const adminBreadcrumbNames: Record<string, string> = {
   "/admin/users": "Користувачі",
   "/admin/audit": "Журнал",
   "/admin/tools": "Інструменти",
+  "/admin/analytics": "Аналітика",
 };
