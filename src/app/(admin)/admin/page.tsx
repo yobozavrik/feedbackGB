@@ -2,8 +2,12 @@ import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { CATEGORIES } from "@/lib/categories";
 import { AdminClient } from "./admin-client";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
+import { DashboardKPI, type DashboardRow } from "@/components/admin/DashboardKPI";
+import { DashboardHeatmap } from "@/components/admin/DashboardHeatmap";
 
 export const dynamic = "force-dynamic";
+
+const DASHBOARD_WINDOW_DAYS = 30;
 
 export interface FeedRow {
   id: string;
@@ -51,6 +55,20 @@ async function fetchRows(): Promise<{ rows: FeedRow[]; error: string | null }> {
   return { rows, error: null };
 }
 
+async function fetchDashboardStats(): Promise<DashboardRow[]> {
+  const supabase = getServerSupabase();
+  if (!supabase) return [];
+  const since = new Date(
+    Date.now() - DASHBOARD_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const { data, error } = await supabase
+    .from("feedback_feed")
+    .select("created_at,category,category_title,store_name,status")
+    .gte("created_at", since);
+  if (error) return [];
+  return (data as DashboardRow[]) ?? [];
+}
+
 async function resolvePhotoUrl(
   supabase: NonNullable<ReturnType<typeof getServerSupabase>>,
   raw: string | null,
@@ -75,7 +93,10 @@ async function resolvePhotoUrl(
 }
 
 export default async function AdminPage() {
-  const { rows, error } = await fetchRows();
+  const [{ rows, error }, statsRows] = await Promise.all([
+    fetchRows(),
+    fetchDashboardStats(),
+  ]);
   const stores = Array.from(
     new Set(rows.map((r) => r.store_name).filter((x): x is string => Boolean(x))),
   ).sort();
@@ -103,6 +124,9 @@ export default async function AdminPage() {
           Помилка: {error}
         </div>
       ) : null}
+
+      <DashboardKPI rows={statsRows} />
+      <DashboardHeatmap rows={statsRows} days={14} />
 
       <AdminClient
         rows={rows}
