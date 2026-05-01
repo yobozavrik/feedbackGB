@@ -20,6 +20,8 @@ interface Props {
 
 const TINT_BG: Record<string, string> = {
   missing: "bg-cat-missing/40",
+  overstock: "bg-cat-overstock/40",
+  defect: "bg-cat-defect/40",
   supply: "bg-cat-supply/40",
   idea: "bg-cat-idea/40",
   spotted: "bg-cat-spotted/40",

@@ -66,6 +66,13 @@ npm run dev
    PIN-и в репо **не зберігаються**. Якщо ти оновлюєш стару інсталяцію —
    спочатку застосуй `supabase/002_security_hardening.sql`, він скине всі
    наявні pin_hash і закриє анонімний доступ до RPC-функцій.
+6. Для v1 priority flow ("Мало / Багато / Брак") застосуй
+   [`supabase/003_v1_priority_flow.sql`](supabase/003_v1_priority_flow.sql).
+   Він додає дві нові категорії (`overstock`, `defect`), колонки
+   `feedback.product_id` і `feedback.quantity`, а також вью
+   `feedbackgb.v_products` + `v_popular_products` над каталогом POS
+   (`categories.products`, `categories.categories`). Міграція
+   ідемпотентна — безпечна для повторного запуску.
 
 ### 2. Telegram бот
 
