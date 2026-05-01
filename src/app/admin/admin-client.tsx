@@ -175,7 +175,14 @@ export function AdminClient({ rows, stores, categories }: Props) {
         </ul>
       )}
 
-      <div className="mt-6 flex justify-center gap-3 text-[12px] text-ink-500">
+      <div className="mt-6 flex flex-wrap justify-center gap-3 text-[12px] text-ink-500">
+        <a
+          href="/admin/users"
+          className="underline-offset-2 hover:underline"
+        >
+          Користувачі та PIN
+        </a>
+        <span>·</span>
         <a
           href="/api/feedback?format=json"
           className="underline-offset-2 hover:underline"
