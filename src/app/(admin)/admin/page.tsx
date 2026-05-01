@@ -64,7 +64,8 @@ async function fetchDashboardStats(): Promise<DashboardRow[]> {
   const { data, error } = await supabase
     .from("feedback_feed")
     .select("created_at,category,category_title,store_name,status")
-    .gte("created_at", since);
+    .gte("created_at", since)
+    .limit(5000);
   if (error) return [];
   return (data as DashboardRow[]) ?? [];
 }

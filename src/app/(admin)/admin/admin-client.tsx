@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import type { FeedRow } from "./page";
-import { track } from "@/lib/analytics";
 
 type Period = "all" | "today" | "week" | "month";
 
@@ -79,80 +78,6 @@ export function AdminClient({ rows, stores, categories }: Props) {
 
   return (
     <div>
-      {/* Admin actions hero */}
-      <section className="mb-5">
-        <h1 className="mb-2 px-1 font-display text-[22px] font-semibold text-ink-900">
-          Адмін-панель
-        </h1>
-        <p className="mb-3 px-1 text-[12px] text-ink-500">
-          Дії адміна. Натисни кнопку у потрібній картці.
-        </p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <ActionCard
-            emoji="📤"
-            title="Надіслати звіт у Telegram"
-            description="Зібрати всі сьогоднішні фідбеки і надіслати у групу зараз — не чекаючи 21:30."
-          >
-            <SendReportNowButton />
-          </ActionCard>
-          <ActionCard
-            emoji="📦"
-            title="Дзеркалити фото у Drive"
-            description="Скопіювати нові фото з Supabase у папку Google Drive (резервна копія)."
-          >
-            <MirrorToDriveNowButton />
-          </ActionCard>
-          <ActionCard
-            emoji="👥"
-            title="Користувачі та PIN"
-            description="Перевидати PIN продавчиням, розблокувати акаунт після 10 невдалих спроб."
-          >
-            <a
-              href="/admin/users"
-              onClick={() => track("admin_users_open")}
-              className="pill bg-ink-900 px-3 py-1.5 text-[12px] font-medium text-bg"
-            >
-              Відкрити
-            </a>
-          </ActionCard>
-          <ActionCard
-            emoji="🔍"
-            title="Журнал дій"
-            description="Усі входи, фідбеки, адмін-дії: хто, коли, з якого IP. Останні 500 подій."
-          >
-            <a
-              href="/admin/audit"
-              onClick={() => track("admin_audit_open")}
-              className="pill bg-ink-900 px-3 py-1.5 text-[12px] font-medium text-bg"
-            >
-              Відкрити
-            </a>
-          </ActionCard>
-          <ActionCard
-            emoji="📥"
-            title="Експорт фідбеків"
-            description="Завантажити поточну стрічку у вигляді JSON або CSV для роботи в Excel/Google Sheets."
-          >
-            <div className="flex flex-wrap gap-1.5">
-              <a
-                href="/api/feedback?format=json"
-                onClick={() => track("admin_export_click", { format: "json" })}
-                className="pill bg-elev2 px-3 py-1.5 text-[12px] font-medium text-ink-900"
-              >
-                JSON
-              </a>
-              <a
-                href="/api/feedback?format=csv"
-                onClick={() => track("admin_export_click", { format: "csv" })}
-                className="pill bg-elev2 px-3 py-1.5 text-[12px] font-medium text-ink-900"
-              >
-                CSV
-              </a>
-            </div>
-          </ActionCard>
-        </div>
-      </section>
-
       {/* Feed header */}
       <div className="mb-3 flex items-center justify-between gap-2 px-1">
         <h2 className="font-display text-[18px] font-semibold text-ink-900">
@@ -250,35 +175,6 @@ export function AdminClient({ rows, stores, categories }: Props) {
         </ul>
       )}
 
-    </div>
-  );
-}
-
-function ActionCard({
-  emoji,
-  title,
-  description,
-  children,
-}: {
-  emoji: string;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="card flex flex-col gap-2 p-3">
-      <div className="flex items-start gap-2">
-        <span className="text-[22px] leading-none" aria-hidden>
-          {emoji}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-[14px] font-semibold text-ink-900">{title}</h3>
-          <p className="mt-0.5 text-[12px] leading-snug text-ink-500">
-            {description}
-          </p>
-        </div>
-      </div>
-      <div className="mt-1">{children}</div>
     </div>
   );
 }
@@ -389,130 +285,4 @@ function translateStatus(s: string): string {
   }
 }
 
-function SendReportNowButton() {
-  const [status, setStatus] = useState<
-    "idle" | "sending" | "ok" | "error"
-  >("idle");
-  const [message, setMessage] = useState<string | null>(null);
 
-  const handleClick = async () => {
-    if (status === "sending") return;
-    track("admin_send_report_click");
-    if (
-      !confirm("Надіслати щоденний звіт у Telegram-групу прямо зараз?")
-    ) {
-      return;
-    }
-    setStatus("sending");
-    setMessage(null);
-    try {
-      const res = await fetch("/api/admin/send-report-now", {
-        method: "POST",
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        total?: number;
-      };
-      if (!res.ok) {
-        setStatus("error");
-        setMessage(data.error ?? `Помилка ${res.status}`);
-      } else {
-        setStatus("ok");
-        setMessage(
-          typeof data.total === "number"
-            ? `Надіслано (${data.total} рядків)`
-            : "Надіслано",
-        );
-      }
-    } catch (e) {
-      setStatus("error");
-      setMessage(e instanceof Error ? e.message : "Помилка мережі");
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={status === "sending"}
-        className="pill bg-ink-900 px-3 py-1.5 text-[12px] font-medium text-bg disabled:opacity-50"
-      >
-        {status === "sending" ? "Надсилаю..." : "📤 Надіслати звіт зараз"}
-      </button>
-      {message ? (
-        <span
-          className={`text-[12px] ${
-            status === "error" ? "text-rose-700" : "text-ink-500"
-          }`}
-        >
-          {message}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function MirrorToDriveNowButton() {
-  const [status, setStatus] = useState<
-    "idle" | "sending" | "ok" | "error"
-  >("idle");
-  const [message, setMessage] = useState<string | null>(null);
-
-  const handleClick = async () => {
-    if (status === "sending") return;
-    track("admin_mirror_drive_click");
-    if (!confirm("Скопіювати нові фото у Google Drive зараз?")) return;
-    setStatus("sending");
-    setMessage(null);
-    try {
-      const res = await fetch("/api/admin/mirror-to-drive-now", {
-        method: "POST",
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        mirrored?: number;
-        failed?: number;
-        skipped?: number;
-      };
-      if (!res.ok) {
-        setStatus("error");
-        setMessage(data.error ?? `Помилка ${res.status}`);
-      } else {
-        setStatus("ok");
-        const m = data.mirrored ?? 0;
-        const f = data.failed ?? 0;
-        setMessage(
-          f > 0
-            ? `Скопійовано ${m}, помилок ${f}`
-            : `Скопійовано ${m}`,
-        );
-      }
-    } catch (e) {
-      setStatus("error");
-      setMessage(e instanceof Error ? e.message : "Помилка мережі");
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={status === "sending"}
-        className="pill bg-ink-900 px-3 py-1.5 text-[12px] font-medium text-bg disabled:opacity-50"
-      >
-        {status === "sending" ? "Копіюю..." : "📦 Дзеркало у Drive"}
-      </button>
-      {message ? (
-        <span
-          className={`text-[12px] ${
-            status === "error" ? "text-rose-700" : "text-ink-500"
-          }`}
-        >
-          {message}
-        </span>
-      ) : null}
-    </div>
-  );
-}
