@@ -11,6 +11,7 @@
 | [`DATA_MODEL.md`](./DATA_MODEL.md) | "Хочу побачити, що в БД". Опис таблиць, view-ів, RPC-функцій, тригерів, індексів схеми `feedbackgb`. ER-діаграма. |
 | [`api/openapi.yaml`](./api/openapi.yaml) | "Хочу contract API". OpenAPI 3.0.3 для всіх 16 ендпоінтів. Як переглянути — у [`api/README.md`](./api/README.md). |
 | [`RUNBOOK.md`](./RUNBOOK.md) | "Хочу запустити / задеплоїти / полагодити". Setup Supabase, Telegram, Drive, Vercel; типові інциденти; ротація секретів. |
+| [`ADMIN_REDESIGN.md`](./ADMIN_REDESIGN.md) | "Як виглядатиме нова адмінка". Пропозиція редизайну `/admin/*` у стилі Ant Design Pro — навігація, sidebar, сторінки, зв'язок з Supabase, поетапний план PR-ів. Бекенд-логіка не змінюється. |
 
 ## Mermaid-діаграми
 
