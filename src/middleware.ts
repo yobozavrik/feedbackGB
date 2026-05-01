@@ -36,6 +36,7 @@ export async function middleware(req: NextRequest) {
   // Admin-only surfaces.
   const isAdminRoute =
     pathname.startsWith("/admin") ||
+    pathname.startsWith("/api/admin") ||
     (pathname.startsWith("/api/feedback") && req.method !== "POST");
   if (isAdminRoute && sess.role !== "admin") {
     if (pathname.startsWith("/api/")) {

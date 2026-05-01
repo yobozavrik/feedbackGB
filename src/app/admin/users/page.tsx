@@ -1,0 +1,93 @@
+import { Header } from "@/components/Header";
+import { getServerSupabase } from "@/lib/supabase";
+import { UsersClient } from "./users-client";
+
+export const dynamic = "force-dynamic";
+
+export interface AdminUser {
+  id: string;
+  full_name: string;
+  role: "seller" | "admin";
+  store_id: number | null;
+  store_name: string | null;
+  is_active: boolean;
+  has_pin: boolean;
+  failed_attempts: number;
+  locked_until: string | null;
+  last_login: string | null;
+}
+
+async function fetchData(): Promise<{
+  users: AdminUser[];
+  error: string | null;
+}> {
+  const supabase = getServerSupabase();
+  if (!supabase) {
+    return { users: [], error: "Supabase ще не налаштовано" };
+  }
+
+  const [{ data: userRows, error: userErr }, { data: storeRows }] =
+    await Promise.all([
+      supabase
+        .from("users")
+        .select(
+          "id, full_name, role, store_id, is_active, pin_hash, failed_attempts, locked_until, last_login",
+        )
+        .order("full_name", { ascending: true }),
+      supabase.from("v_stores").select("id, name"),
+    ]);
+
+  if (userErr) return { users: [], error: userErr.message };
+
+  const storeMap = new Map<number, string>();
+  for (const s of (storeRows ?? []) as Array<{ id: number; name: string }>) {
+    storeMap.set(s.id, s.name);
+  }
+
+  const rows = (userRows ?? []) as Array<{
+    id: string;
+    full_name: string;
+    role: "seller" | "admin";
+    store_id: number | null;
+    is_active: boolean;
+    pin_hash: string | null;
+    failed_attempts: number | null;
+    locked_until: string | null;
+    last_login: string | null;
+  }>;
+
+  const users: AdminUser[] = rows.map((u) => ({
+    id: u.id,
+    full_name: u.full_name,
+    role: u.role,
+    store_id: u.store_id,
+    store_name: u.store_id != null ? storeMap.get(u.store_id) ?? null : null,
+    is_active: u.is_active,
+    has_pin: u.pin_hash != null,
+    failed_attempts: u.failed_attempts ?? 0,
+    locked_until: u.locked_until,
+    last_login: u.last_login,
+  }));
+
+  return { users, error: null };
+}
+
+export default async function AdminUsersPage() {
+  const { users, error } = await fetchData();
+
+  return (
+    <main className="mx-auto min-h-screen w-full max-w-md bg-bg pb-24 pt-3">
+      <Header subtitle="Користувачі та PIN-коди" />
+      <div className="px-4">
+        {error ? (
+          <div className="card p-6 text-center">
+            <div className="text-3xl">⚠️</div>
+            <p className="mt-3 text-[14px] text-ink-700">{error}</p>
+          </div>
+        ) : (
+          <UsersClient users={users} />
+        )}
+      </div>
+    </main>
+  );
+}
