@@ -7,6 +7,7 @@ import {
   getSecondaryCategories,
   type Category,
 } from "@/lib/categories";
+import { track } from "@/lib/analytics";
 
 /**
  * v1 priority layout: 3 big stacked cards for the most-frequent situations
@@ -54,6 +55,7 @@ function PriorityCard({ c, idx }: { c: Category; idx: number }) {
   return (
     <Link
       href={`/feedback/${c.id}`}
+      onClick={() => track("home_category_open", { category: c.id, section: "priority" })}
       className="group relative flex h-[120px] animate-fade-up items-center overflow-hidden rounded-3xl bg-elev p-5 shadow-soft transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99]"
       style={{ animationDelay: `${idx * 60}ms` }}
     >
@@ -80,6 +82,7 @@ function SecondaryCard({ c }: { c: Category }) {
   return (
     <Link
       href={`/feedback/${c.id}`}
+      onClick={() => track("home_category_open", { category: c.id, section: "secondary" })}
       className="relative flex h-[100px] flex-col overflow-hidden rounded-2xl bg-elev p-3 shadow-soft transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
     >
       <div className={`absolute -bottom-8 -right-8 h-24 w-24 rounded-full ${c.gradient} blur-md`} />
