@@ -1,0 +1,97 @@
+%% Entity-Relationship Diagram — реальна схема feedbackgb.* у Supabase.
+%% Зовнішні таблиці categories.spots / categories.products НЕ створюються
+%% цим репо; ми лише посилаємось на них (read-only через VIEW і FK).
+erDiagram
+    USERS ||--o{ FEEDBACK : "автор (user_id)"
+    USERS ||--o{ FEEDBACK : "вирішив (resolved_by)"
+    SPOTS ||--o{ FEEDBACK : "store_id (FK у ERP)"
+    SPOTS ||--o{ USERS    : "store_id (для seller)"
+    CATEGORIES ||--o{ FEEDBACK : "category"
+    PRODUCTS  ||--o{ FEEDBACK  : "product_id (FK у ERP)"
+    FEEDBACK ||--o| PHOTO_MIRROR : "1:1 (тільки якщо є фото)"
+    FEEDBACK ||--o{ AUDIT_LOG    : "feedback_id"
+    USERS    ||--o{ AUDIT_LOG    : "actor_user_id"
+
+    USERS {
+        uuid     id PK
+        text     full_name
+        text     pin_hash "bcrypt; NULL поки адмін не задасть"
+        text     role "seller | admin"
+        int      store_id FK "categories.spots.spot_id"
+        bool     is_active
+        int      failed_attempts
+        timestamptz locked_until
+        timestamptz last_login
+        timestamptz created_at
+    }
+
+    CATEGORIES {
+        text  id PK "missing_item, overstock, defect, ..."
+        text  emoji
+        text  title
+        text  short
+        smallint sort_order
+    }
+
+    FEEDBACK {
+        uuid id PK
+        timestamptz created_at
+        timestamptz updated_at
+        text  category FK
+        int   store_id FK "categories.spots.spot_id"
+        text  store_label "fallback коли store_id NULL"
+        uuid  user_id FK
+        bigint product_id FK "categories.products.id"
+        numeric quantity
+        jsonb fields
+        text  photo_url "sb:<path> або data: fallback"
+        bigint tg_user_id
+        text  tg_username
+        text  tg_display_name
+        bool  tg_verified
+        text  summary
+        vector embedding "1536-dim"
+        text  status "new | in_progress | resolved | rejected"
+        timestamptz resolved_at
+        uuid  resolved_by FK
+    }
+
+    PHOTO_MIRROR {
+        uuid feedback_id PK_FK
+        text drive_file_id
+        timestamptz mirrored_at
+        text error
+        int  attempts
+        timestamptz last_attempt
+    }
+
+    AUDIT_LOG {
+        bigserial id PK
+        timestamptz occurred_at
+        uuid feedback_id FK
+        text action "auth.* / feedback.* / admin.*"
+        text actor "uuid або service_role"
+        uuid actor_user_id FK
+        uuid target_user_id FK
+        text target_type
+        text ip
+        text user_agent
+        jsonb meta
+        jsonb diff
+    }
+
+    SPOTS {
+        int  spot_id PK "ERP-shared; категорії.spots"
+        text name
+        text address
+        bool is_deleted
+    }
+
+    PRODUCTS {
+        bigint id PK "ERP-shared; categories.products"
+        text   name
+        text   unit
+        text   barcode
+        text   photo
+        text   category_id FK
+    }

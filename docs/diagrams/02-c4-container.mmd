@@ -1,0 +1,33 @@
+%% C4 Level 2 — Containers
+%% Логічні контейнери всередині FeedbackGB та як вони з'єднані.
+flowchart TB
+    subgraph client["📱 Браузер / Telegram WebView"]
+        webapp["Next.js клієнт<br/>(React, Tailwind, Telegram WebApp SDK)"]
+    end
+
+    subgraph vercel["▲ Vercel"]
+        edge["middleware.ts<br/>(Edge runtime)<br/>· /login gate<br/>· /admin role check"]
+        api["API routes<br/>(Node.js runtime)<br/>· /api/feedback<br/>· /api/auth/*<br/>· /api/admin/*<br/>· /api/products*<br/>· /api/stores<br/>· /api/r/photo/[id]"]
+        cron["Vercel Cron<br/>· /api/cron/daily-report (18:30 і 19:30 UTC)<br/>· /api/cron/mirror-to-drive (on-demand)"]
+        lib["lib/*<br/>· session.ts (HMAC cookie)<br/>· supabase.ts (service_role клієнт)<br/>· dailyReport.ts<br/>· driveMirror.ts<br/>· googleDrive.ts<br/>· audit.ts<br/>· rateLimit.ts<br/>· categories.ts / summary.ts / telegram.ts"]
+    end
+
+    subgraph supabase["🗄 Supabase"]
+        pg["Postgres<br/>schema feedbackgb<br/>+ FK у categories.*"]
+        storage["Storage<br/>bucket feedback-photos (private)"]
+    end
+
+    subgraph external["Зовнішні API"]
+        tgapi["Telegram Bot API<br/>api.telegram.org"]
+        gdapi["Google Drive API<br/>googleapis.com/drive/v3"]
+    end
+
+    webapp -->|fetch /api/*| edge
+    edge -->|next()| api
+    edge -->|/login redirect| webapp
+    api --> lib
+    cron --> lib
+    lib -->|JSON RPC<br/>service_role| pg
+    lib -->|signed URL / upload / download| storage
+    lib -->|sendPhoto<br/>sendMessage| tgapi
+    lib -->|files.create / multipart| gdapi
