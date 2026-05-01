@@ -25,7 +25,7 @@ export interface ProductRow {
   last_used_at: string | null;
 }
 
-const MAX_LIMIT = 200;
+const MAX_LIMIT = 500;
 const DEFAULT_LIMIT = 60;
 const MAX_Q_LEN = 80;
 

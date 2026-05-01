@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Header } from "@/components/Header";
 import { FeedbackForm } from "@/components/FeedbackForm";
+import { PriorityFeedbackForm } from "@/components/PriorityFeedbackForm";
 import { CATEGORIES, getCategory } from "@/lib/categories";
 
 export function generateStaticParams() {
@@ -42,7 +43,11 @@ export default function FeedbackCategoryPage({
         </div>
       </section>
 
-      <FeedbackForm category={category} />
+      {category.requiresProduct ? (
+        <PriorityFeedbackForm category={category} />
+      ) : (
+        <FeedbackForm category={category} />
+      )}
     </main>
   );
 }
