@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Header } from "@/components/Header";
 import { FeedbackForm } from "@/components/FeedbackForm";
@@ -19,15 +18,10 @@ export default function FeedbackCategoryPage({
 
   return (
     <main>
-      <Header subtitle={category.short} />
-
-      {/* Back row */}
-      <Link
-        href="/"
-        className="mb-3 inline-flex h-9 items-center gap-1 px-1 text-[13px] text-ink-500 hover:text-ink-700"
-      >
-        ← Назад
-      </Link>
+      <Header
+        subtitle={category.short}
+        back={{ href: "/", label: "На головну" }}
+      />
 
       <section className={`relative mb-4 overflow-hidden rounded-3xl ${category.gradient} p-5`}>
         <div className="flex items-start gap-3">

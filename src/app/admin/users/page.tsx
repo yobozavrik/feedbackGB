@@ -77,7 +77,10 @@ export default async function AdminUsersPage() {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-md bg-bg pb-24 pt-3">
-      <Header subtitle="Користувачі та PIN-коди" />
+      <Header
+        subtitle="Користувачі та PIN-коди"
+        back={{ href: "/admin", label: "До адмін-панелі" }}
+      />
       <div className="px-4">
         {error ? (
           <div className="card p-6 text-center">
