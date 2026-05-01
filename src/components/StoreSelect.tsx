@@ -12,6 +12,8 @@ interface Store {
 interface Props {
   /** name of the hidden numeric input that carries store_id (or empty) */
   name?: string;
+  /** Optional callback fired when the user picks (or clears) a store. */
+  onChange?: (storeId: number | null, storeLabel: string) => void;
 }
 
 /**
@@ -20,7 +22,7 @@ interface Props {
  * Pulls /api/stores (server-cached, joined to ERP categories.spots) and
  * remembers the last picked store_id in localStorage.
  */
-export function StoreSelect({ name = "store_id" }: Props) {
+export function StoreSelect({ name = "store_id", onChange }: Props) {
   const [stores, setStores] = useState<Store[]>([]);
   const [storeId, setStoreId] = useState<number | null>(null);
   const [query, setQuery] = useState("");
@@ -52,6 +54,11 @@ export function StoreSelect({ name = "store_id" }: Props) {
     () => stores.find((s) => s.id === storeId) ?? null,
     [stores, storeId],
   );
+
+  useEffect(() => {
+    if (!onChange) return;
+    onChange(storeId, selected?.name ?? "");
+  }, [storeId, selected, onChange]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

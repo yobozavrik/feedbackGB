@@ -49,6 +49,7 @@ const config: Config = {
       },
       animation: {
         "fade-up": "fadeUp 0.35s cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "slide-up": "slideUp 0.28s cubic-bezier(0.2, 0.8, 0.2, 1)",
         pop: "pop 0.4s cubic-bezier(0.2, 1.6, 0.4, 1)",
         shake: "shake 0.22s ease-in-out",
         shimmer: "shimmer 1.4s linear infinite",
@@ -58,6 +59,10 @@ const config: Config = {
         fadeUp: {
           "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        slideUp: {
+          "0%": { transform: "translateY(100%)" },
+          "100%": { transform: "translateY(0)" },
         },
         pop: {
           "0%": { transform: "scale(0.5)", opacity: "0" },
