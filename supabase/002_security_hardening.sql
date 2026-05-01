@@ -40,12 +40,54 @@ begin
 end $$;
 
 -- Also drop default-privilege grants to anon/authenticated so future
--- functions created in this schema don't inherit them.
+-- functions/tables created in this schema don't inherit them.
 do $$
 begin
   if exists (select 1 from pg_roles where rolname = 'anon') then
     execute 'alter default privileges in schema feedbackgb revoke select on tables from anon, authenticated';
     execute 'alter default privileges in schema feedbackgb revoke execute on functions from anon, authenticated';
+  end if;
+end $$;
+
+-- 1b. Revoke SELECT/INSERT/UPDATE/DELETE from anon/authenticated on every
+-- existing table in feedbackgb (the default-privileges call above only
+-- affects FUTURE objects). Without this, anon-key clients can read raw
+-- feedback rows even though the API never exposes them.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on all tables    in schema feedbackgb from anon, authenticated';
+    execute 'revoke all on all sequences in schema feedbackgb from anon, authenticated';
+    execute 'revoke all on all functions in schema feedbackgb from anon, authenticated';
+  end if;
+end $$;
+
+-- 1c. Make sure service_role has the grants it needs on existing tables.
+-- alter default privileges only applies to future tables, so on a self-hosted
+-- install where feedbackgb.* tables predate the default-privilege call we'd
+-- otherwise hit 403 from PostgREST on insert.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    execute 'grant usage on schema feedbackgb to service_role';
+    execute 'grant select, insert, update, delete on all tables    in schema feedbackgb to service_role';
+    execute 'grant usage, select                  on all sequences in schema feedbackgb to service_role';
+  end if;
+end $$;
+
+-- 1d. service_role must bypass row-level security so the API (which uses the
+-- service_role JWT) can read/write rows regardless of RLS policies. On
+-- managed Supabase this is the default; on some self-hosted images the role
+-- is created without BYPASSRLS and inserts get a 403 from PostgREST.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    -- requires superuser; SQL Editor / migrations run as supabase_admin.
+    begin
+      execute 'alter role service_role bypassrls';
+    exception when insufficient_privilege then
+      raise notice 'cannot ALTER ROLE service_role BYPASSRLS — run as supabase_admin or postgres';
+    end;
   end if;
 end $$;
 
@@ -133,6 +175,10 @@ end $$;
 
 -- 5. Wipe all existing PINs so the committed 1234/1111/2222/3333 defaults stop
 --    granting access. Operator must re-provision PINs via set_user_pin.
+--    Older schemas had pin_hash NOT NULL; relax that first so the wipe
+--    doesn't fail the whole transaction.
+alter table feedbackgb.users alter column pin_hash drop not null;
+
 update feedbackgb.users
    set pin_hash = null,
        failed_attempts = 0,
