@@ -78,11 +78,69 @@ export function AdminClient({ rows, stores, categories }: Props) {
 
   return (
     <div>
-      {/* Count header */}
-      <div className="mb-3 flex items-center justify-between gap-2 px-1">
-        <h1 className="font-display text-[22px] font-semibold text-ink-900">
-          Стрічка
+      {/* Admin actions hero */}
+      <section className="mb-5">
+        <h1 className="mb-2 px-1 font-display text-[22px] font-semibold text-ink-900">
+          Адмін-панель
         </h1>
+        <p className="mb-3 px-1 text-[12px] text-ink-500">
+          Дії адміна. Натисни кнопку у потрібній картці.
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <ActionCard
+            emoji="📤"
+            title="Надіслати звіт у Telegram"
+            description="Зібрати всі сьогоднішні фідбеки і надіслати у групу зараз — не чекаючи 21:30."
+          >
+            <SendReportNowButton />
+          </ActionCard>
+          <ActionCard
+            emoji="📦"
+            title="Дзеркалити фото у Drive"
+            description="Скопіювати нові фото з Supabase у папку Google Drive (резервна копія)."
+          >
+            <MirrorToDriveNowButton />
+          </ActionCard>
+          <ActionCard
+            emoji="👥"
+            title="Користувачі та PIN"
+            description="Перевидати PIN продавчиням, розблокувати акаунт після 10 невдалих спроб."
+          >
+            <a
+              href="/admin/users"
+              className="pill bg-ink-900 px-3 py-1.5 text-[12px] font-medium text-bg"
+            >
+              Відкрити
+            </a>
+          </ActionCard>
+          <ActionCard
+            emoji="📥"
+            title="Експорт фідбеків"
+            description="Завантажити поточну стрічку у вигляді JSON або CSV для роботи в Excel/Google Sheets."
+          >
+            <div className="flex flex-wrap gap-1.5">
+              <a
+                href="/api/feedback?format=json"
+                className="pill bg-elev2 px-3 py-1.5 text-[12px] font-medium text-ink-900"
+              >
+                JSON
+              </a>
+              <a
+                href="/api/feedback?format=csv"
+                className="pill bg-elev2 px-3 py-1.5 text-[12px] font-medium text-ink-900"
+              >
+                CSV
+              </a>
+            </div>
+          </ActionCard>
+        </div>
+      </section>
+
+      {/* Feed header */}
+      <div className="mb-3 flex items-center justify-between gap-2 px-1">
+        <h2 className="font-display text-[18px] font-semibold text-ink-900">
+          Стрічка фідбеку
+        </h2>
         <span className="pill bg-elev2 text-ink-700">
           {newCount} нових за 7 днів
         </span>
@@ -157,12 +215,6 @@ export function AdminClient({ rows, stores, categories }: Props) {
         )}
       </div>
 
-      {/* Admin action buttons */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <SendReportNowButton />
-        <MirrorToDriveNowButton />
-      </div>
-
       {/* Empty state */}
       {filtered.length === 0 ? (
         <div className="card p-8 text-center">
@@ -181,28 +233,35 @@ export function AdminClient({ rows, stores, categories }: Props) {
         </ul>
       )}
 
-      <div className="mt-6 flex flex-wrap justify-center gap-3 text-[12px] text-ink-500">
-        <a
-          href="/admin/users"
-          className="underline-offset-2 hover:underline"
-        >
-          Користувачі та PIN
-        </a>
-        <span>·</span>
-        <a
-          href="/api/feedback?format=json"
-          className="underline-offset-2 hover:underline"
-        >
-          Експорт JSON
-        </a>
-        <span>·</span>
-        <a
-          href="/api/feedback?format=csv"
-          className="underline-offset-2 hover:underline"
-        >
-          Експорт CSV
-        </a>
+    </div>
+  );
+}
+
+function ActionCard({
+  emoji,
+  title,
+  description,
+  children,
+}: {
+  emoji: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="card flex flex-col gap-2 p-3">
+      <div className="flex items-start gap-2">
+        <span className="text-[22px] leading-none" aria-hidden>
+          {emoji}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[14px] font-semibold text-ink-900">{title}</h3>
+          <p className="mt-0.5 text-[12px] leading-snug text-ink-500">
+            {description}
+          </p>
+        </div>
       </div>
+      <div className="mt-1">{children}</div>
     </div>
   );
 }
