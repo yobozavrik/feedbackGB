@@ -14,6 +14,14 @@ export interface FeedbackPayload {
   store_id?: number | null;
   /** Free-form store label (used when store_id is null and user picked "Інший"). */
   store_label?: string | null;
+  /**
+   * v1 priority flow: FK to categories.products(id). Required for
+   * missing_item / overstock / defect (unless the seller types a name
+   * outside the POS catalog via `fields.item_name`).
+   */
+  product_id?: number | null;
+  /** v1 priority flow: numeric quantity (units of the product). */
+  quantity?: number | null;
   fields: Record<string, string | number | null>;
   photo_url?: string | null;
   /** Raw initData string from Telegram WebApp — server validates HMAC. */

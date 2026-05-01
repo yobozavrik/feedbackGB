@@ -7,6 +7,8 @@
 
 export type CategoryId =
   | "missing_item"
+  | "overstock"
+  | "defect"
   | "supply_problem"
   | "store_idea"
   | "spotted_elsewhere"
@@ -35,42 +37,118 @@ export interface Category {
   /** Tailwind text color class for accent. */
   accent: string;
   /** Short tint key (matches Tailwind cat-* color). */
-  tint: "missing" | "supply" | "idea" | "spotted" | "tech" | "voice";
+  tint:
+    | "missing"
+    | "overstock"
+    | "defect"
+    | "supply"
+    | "idea"
+    | "spotted"
+    | "tech"
+    | "voice";
+  /**
+   * v1 priority flow: this category captures a structured product
+   * reference (product_id from the POS catalog). The UI renders a
+   * product picker instead of a free-text input.
+   */
+  requiresProduct?: boolean;
+  /**
+   * v1 priority flow: this category captures a numeric quantity
+   * (scalar, stored on the feedback row). The UI renders a stepper.
+   */
+  requiresQuantity?: boolean;
+  /**
+   * Whether the 3 "priority" categories should be rendered as the
+   * primary big cards on the home screen. Non-primary categories are
+   * collapsed under "+ Інше" in the new v1 UI (PR B).
+   */
+  priority?: boolean;
   fields: CategoryField[];
 }
 
 export const CATEGORIES: Category[] = [
   {
     id: "missing_item",
-    emoji: "🛒",
-    title: "Не вистачає товару",
-    short: "Чого не вистачило сьогодні",
+    emoji: "📉",
+    title: "Мало товару",
+    short: "Питали — а немає на полиці",
     description:
-      "Зафіксуй позицію, якої не було на полиці, але яку питали клієнти або яка має бути.",
+      "Зафіксуй позицію з каталогу, якої не вистачає. Обери товар, вкажи скільки бракує, за бажанням додай фото полиці.",
     gradient: "bg-cat-missing/40",
     accent: "text-brand-600",
     tint: "missing",
+    requiresProduct: true,
+    requiresQuantity: true,
+    priority: true,
     fields: [
+      // item_name залишаємо opt-in на час переходу зі старої форми на нову.
+      // Нова форма (PR B) заповнює product_id + quantity напряму, а це поле
+      // використовується лише коли товару нема в POS-каталозі.
       {
         id: "item_name",
-        label: "Що саме не вистачає?",
-        placeholder: "Наприклад: булочка з маком, молоко 2.5%",
+        label: "Якщо товару нема в каталозі — назва",
+        placeholder: "Наприклад: новий сезонний напій",
         kind: "text",
-        required: true,
-      },
-      {
-        id: "how_often",
-        label: "Скільки разів сьогодні питали?",
-        placeholder: "Приблизно",
-        kind: "number",
       },
       {
         id: "comment",
-        label: "Коментар",
+        label: "Коментар (необов'язково)",
         placeholder: "Що клієнт казав, чим заміняли",
         kind: "textarea",
       },
       { id: "photo", label: "Фото порожньої полиці (необов'язково)", kind: "photo" },
+    ],
+  },
+  {
+    id: "overstock",
+    emoji: "📈",
+    title: "Багато товару",
+    short: "Залежався або зайвий запас",
+    description:
+      "Товар довго не продається, забиває полицю, накопичився. Обери позицію з каталогу і скільки одиниць зайвих.",
+    gradient: "bg-cat-overstock/40",
+    accent: "text-brand-600",
+    tint: "overstock",
+    requiresProduct: true,
+    requiresQuantity: true,
+    priority: true,
+    fields: [
+      {
+        id: "comment",
+        label: "Коментар (необов'язково)",
+        placeholder: "Скільки днів лежить, чи псується, що робити",
+        kind: "textarea",
+      },
+      { id: "photo", label: "Фото полиці (необов'язково)", kind: "photo" },
+    ],
+  },
+  {
+    id: "defect",
+    emoji: "💔",
+    title: "Брак товару",
+    short: "Пошкоджений, прострочений, битий",
+    description:
+      "Товар зіпсований, прострочений, пошкоджена упаковка, невідповідна якість. Обери позицію, вкажи кількість і додай фото — воно допомагає з поверненням постачальнику.",
+    gradient: "bg-cat-defect/40",
+    accent: "text-rose-500",
+    tint: "defect",
+    requiresProduct: true,
+    requiresQuantity: true,
+    priority: true,
+    fields: [
+      {
+        id: "defect_type",
+        label: "Що саме з ним не так?",
+        placeholder: "Прострочений / битий / зіпсований / упаковка",
+        kind: "text",
+      },
+      {
+        id: "comment",
+        label: "Деталі (необов'язково)",
+        placeholder: "Коли помітила, які ознаки, скільки партія",
+        kind: "textarea",
+      },
+      { id: "photo", label: "Фото браку (дуже бажано)", kind: "photo" },
     ],
   },
   {
@@ -225,4 +303,14 @@ export const CATEGORIES: Category[] = [
 
 export function getCategory(id: string): Category | undefined {
   return CATEGORIES.find((c) => c.id === id);
+}
+
+/** v1 priority categories rendered as big cards on the home screen. */
+export function getPriorityCategories(): Category[] {
+  return CATEGORIES.filter((c) => c.priority);
+}
+
+/** Non-priority categories — hidden under the "+ Інше" expander. */
+export function getSecondaryCategories(): Category[] {
+  return CATEGORIES.filter((c) => !c.priority);
 }
