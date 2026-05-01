@@ -47,6 +47,11 @@ begin
     execute 'grant usage on schema feedbackgb to service_role';
     execute 'alter default privileges in schema feedbackgb grant select, insert, update, delete on tables to service_role';
     execute 'alter default privileges in schema feedbackgb grant execute on functions to service_role';
+    -- Make sure anon/authenticated never accidentally inherit access to
+    -- feedbackgb objects (default-privileges defaults differ across PG
+    -- versions and self-hosted Supabase images).
+    execute 'alter default privileges in schema feedbackgb revoke select on tables from anon, authenticated';
+    execute 'alter default privileges in schema feedbackgb revoke execute on functions from anon, authenticated';
     -- service_role may need to FK-reference categories.spots / products
     -- and read the ERP product catalog used by the v1 priority flow.
     execute 'grant usage    on schema categories              to service_role';
@@ -54,6 +59,21 @@ begin
     execute 'grant references on table categories.products    to service_role';
     execute 'grant select   on categories.products            to service_role';
     execute 'grant select   on categories.categories          to service_role';
+  end if;
+end $$;
+
+-- service_role must bypass row-level security so the API can read/write
+-- regardless of RLS policies. Managed Supabase sets this by default; some
+-- self-hosted images create the role without BYPASSRLS, which surfaces as
+-- 403 from PostgREST on insert.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    begin
+      execute 'alter role service_role bypassrls';
+    exception when insufficient_privilege then
+      raise notice 'cannot ALTER ROLE service_role BYPASSRLS — run as supabase_admin or postgres';
+    end;
   end if;
 end $$;
 
