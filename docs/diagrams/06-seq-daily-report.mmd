@@ -1,0 +1,45 @@
+%% Sequence — щоденний звіт у Telegram.
+%% Vercel Cron шле 18:30 і 19:30 UTC (DST-агностично); handler сам перевіряє,
+%% що локальна година Києва == 21, інакше виходить рано.
+sequenceDiagram
+    autonumber
+    participant Cron as Vercel Cron
+    participant API as GET /api/cron/daily-report
+    participant DR as buildAndSendDailyReport()
+    participant SB as Supabase
+    participant ST as Supabase Storage
+    participant TG as Telegram Bot API
+    participant DM as mirrorPendingPhotos()
+
+    Cron->>API: GET (Authorization: Bearer CRON_SECRET)
+    API->>API: Перевірка bearer + x-vercel-cron
+    API->>API: getKyivClock() — якщо година != 21,<br/>повертаємо {skipped:true}
+    API->>DR: buildAndSendDailyReport()
+
+    DR->>SB: SELECT feedback_feed<br/>WHERE created_at >= now() - 8 днів
+    SB-->>DR: 7-day rows (для дельти, повторів,<br/>дублів, застряглих, топ-авторів)
+    DR->>DR: Фільтруємо todayKyiv, групуємо
+
+    DR->>DR: pickPhotoLinkBuilder()<br/>(supabase | drive | telegram)
+
+    alt builder.requiresPhotosFirst (telegram-mode)
+        DR->>SB: signed URL для кожного фото (TTL 60 хв)
+        DR->>TG: sendPhoto[] (збираємо message_ids)
+        DR->>DR: build photoLinks (t.me/c/<chat>/<msg>)
+        DR->>TG: sendMessage(text, parse_mode=HTML)
+    else supabase / drive mode
+        opt drive-mode
+            DR->>DM: mirrorPendingPhotos() (синхронно)
+            DM->>SB: SELECT photo_mirror WHERE NULL
+            DM->>ST: download(path)
+            DM->>TG: (drive-mode тільки) upload to Drive
+            DM->>SB: UPSERT photo_mirror
+        end
+        DR->>DR: build photoLinks → /api/r/photo/<id>
+        DR->>TG: sendMessage(text, parse_mode=HTML)
+        DR->>SB: signed URL для фото (TTL 60 хв)
+        DR->>TG: sendPhoto[] (без очікування message_ids)
+    end
+
+    DR-->>API: {ok, total, kyiv_date}
+    API-->>Cron: 200 JSON

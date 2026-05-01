@@ -1,0 +1,66 @@
+%% C4 Level 3 — Components
+%% Скомпоновано в шари Clean Architecture (детальніше у ARCHITECTURE.md).
+flowchart LR
+    subgraph fw["Frameworks & Drivers"]
+        next["Next.js App Router<br/>+ middleware.ts"]
+        nodecrypto["node:crypto · WebCrypto"]
+        sbsdk["@supabase/supabase-js"]
+        google["googleapis (Drive v3)"]
+    end
+
+    subgraph adapters["Interface Adapters (HTTP / Storage / Bot)"]
+        routesAuth["/api/auth/*"]
+        routesFeedback["/api/feedback"]
+        routesAdmin["/api/admin/*"]
+        routesCron["/api/cron/*"]
+        routesPub["/api/products*<br/>/api/stores<br/>/api/r/photo/[id]"]
+        clientPages["src/app/<br/>login, admin, feedback,<br/>thanks, page.tsx"]
+    end
+
+    subgraph usecases["Use Cases (lib/*)"]
+        ucFeedback["createFeedback<br/>(inline у /api/feedback)"]
+        ucReport["buildAndSendDailyReport"]
+        ucMirror["mirrorPendingPhotos"]
+        ucAuth["signSession · verifySession<br/>+ verify_pin RPC"]
+        ucAudit["logAudit"]
+        ucRedirect["resolveRedirectUrl<br/>(inline у /api/r/photo/[id])"]
+    end
+
+    subgraph entities["Entities & Domain (lib/*)"]
+        catDef["categories.ts<br/>(8 категорій + поля)"]
+        types["types.ts<br/>(FeedbackPayload,<br/>SessionPayload, ...)"]
+        summary["summary.ts<br/>(buildSummary)"]
+        telegramHmac["telegram.ts<br/>(validateInitData)"]
+    end
+
+    next --> routesAuth
+    next --> routesFeedback
+    next --> routesAdmin
+    next --> routesCron
+    next --> routesPub
+    next --> clientPages
+
+    routesAuth --> ucAuth
+    routesAuth --> ucAudit
+    routesFeedback --> ucFeedback
+    routesAdmin --> ucReport
+    routesAdmin --> ucMirror
+    routesAdmin --> ucAudit
+    routesCron --> ucReport
+    routesCron --> ucMirror
+    routesPub --> ucRedirect
+
+    ucFeedback --> summary
+    ucFeedback --> telegramHmac
+    ucFeedback --> catDef
+    ucFeedback --> ucAudit
+    ucReport --> catDef
+    ucReport --> types
+
+    ucAuth --> nodecrypto
+    ucFeedback --> sbsdk
+    ucReport --> sbsdk
+    ucMirror --> sbsdk
+    ucMirror --> google
+    ucAudit --> sbsdk
+    ucRedirect --> sbsdk
