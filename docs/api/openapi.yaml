@@ -1,0 +1,928 @@
+openapi: 3.0.3
+info:
+  title: FeedbackGB API
+  version: "1.0.0"
+  description: |
+    HTTP API для Telegram Mini App "FeedbackGB" — збір фідбеку від продавчинь.
+
+    Авторизація:
+
+    * **Cookie `fbgb_session`** — більшість ендпоінтів. HMAC-підписаний токен (формат
+      `base64url(JSON).base64url(hmac)`), TTL 14 днів. Видається `POST /api/auth/login`.
+    * **`Authorization: Bearer <CRON_SECRET>`** або заголовок `x-vercel-cron: 1` —
+      для `/api/cron/*` (Vercel Cron).
+    * **Без auth + UUID як capability** — `/api/r/photo/{id}` (rate-limited).
+
+    Помилки повертаються як `application/json` з тілом `{ "error": "<code>" }` і
+    відповідним HTTP-статусом.
+
+    Більш детальний опис системи — у [`../ARCHITECTURE.md`](../ARCHITECTURE.md);
+    схема БД — у [`../DATA_MODEL.md`](../DATA_MODEL.md).
+  contact:
+    name: yobozavrik
+    url: https://github.com/yobozavrik/feedbackGB
+servers:
+  - url: https://feedback-gb.vercel.app
+    description: Production
+  - url: http://localhost:3000
+    description: Local dev
+
+tags:
+  - name: auth
+    description: Логін, логаут, `me`, picker користувачів
+  - name: feedback
+    description: Створення фідбеку (sellers + admins) і список (admin only)
+  - name: admin
+    description: Адмінські операції — користувачі, ручний звіт, ручний бекап
+  - name: cron
+    description: Vercel Cron entry-points (bearer auth)
+  - name: catalog
+    description: Магазини й товари для UI
+  - name: redirects
+    description: Click-through на фото у звітах
+
+paths:
+  /api/auth/users:
+    get:
+      tags: [auth]
+      summary: Список активних користувачів для login picker-а
+      description: |
+        Повертає мінімальний набір полів (`id, full_name, role`) для UI-кнопок
+        `/login`. PIN-и ніколи не залишають сервер. Відповідає 60-секундним
+        ISR-кешем (`revalidate = 60`).
+      security: []
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LoginUser"
+              example:
+                users:
+                  - { id: "00000000-0000-0000-0000-000000000001", full_name: "Галя", role: "admin" }
+                  - { id: "00000000-0000-0000-0000-000000000002", full_name: "Оксана", role: "seller" }
+        "500":
+          $ref: "#/components/responses/DbError"
+
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Вхід за PIN-ом
+      security: []
+      description: |
+        Перевіряє PIN користувача через `feedbackgb.verify_pin(uuid, text)`.
+        При успіху встановлює httpOnly cookie `fbgb_session`.
+
+        Rate-limits:
+        * 10 спроб / 10 хв / IP
+        * 30 спроб / год / (IP + user_id)
+
+        DB-функція додатково блокує юзера на 1 годину після 10 невдалих спроб
+        підряд (`failed_attempts >= 10` → `locked_until = now() + 1h`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: ok
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: fbgb_session=...; HttpOnly; Secure; Path=/; Max-Age=1209600; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Невірний PIN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example: { error: "Невірний PIN" }
+        "423":
+          description: Тимчасове блокування після 10 невдалих спроб
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example: { error: "Акаунт тимчасово заблокований" }
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/DbError"
+
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: Вихід (інвалідує cookie)
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: ok
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: fbgb_session=; Max-Age=0; Path=/
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+
+  /api/auth/me:
+    get:
+      tags: [auth]
+      summary: Поточний користувач (з резолвом store_name для seller-а)
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: ok (user=null коли cookie немає або невалідне)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMeResponse"
+
+  /api/feedback:
+    post:
+      tags: [feedback]
+      summary: Створити фідбек
+      description: |
+        Створює новий рядок у `feedbackgb.feedback`. Додатково:
+        - валідує payload по правилах `categories.ts`
+        - HMAC-перевіряє `init_data` від Telegram WebApp і пише `tg_*` поля
+        - для `seller`-а ігнорує клієнтський `store_id` і використовує
+          той, що зашитий у сесії
+        - `photo_url` (data:base64) заливає у Supabase Storage, у БД зберігає
+          `sb:<path>` маркер
+        - перед INSERT-ом викликає `set_config('app.actor', sess.uid)`, щоб
+          DB audit-тригер знав справжнього автора
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackPayload"
+      responses:
+        "200":
+          description: ok (`persisted=false` коли Supabase не налаштований у dev)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackCreateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "413":
+          description: Тіло більше за 2 MB або фото більше 5 MB
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/DbError"
+    get:
+      tags: [feedback]
+      summary: Список фідбеку (admin)
+      description: |
+        Адмін-only. Повертає до 1000 свіжих рядків з `feedback_feed`.
+
+        Якщо `?format=csv` — віддає `text/csv` з полями
+        `created_at, category_title, store_name, tg_display_name,
+        tg_username, tg_verified, status, summary, photo_url`.
+        Клітинки, що починаються з `=`, `+`, `-`, `@`, екрануються
+        одинарною лапкою для захисту від CSV-injection.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FeedbackFeedRow"
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/DbError"
+        "503":
+          $ref: "#/components/responses/SupabaseNotConfigured"
+
+  /api/admin/users:
+    get:
+      tags: [admin]
+      summary: Список користувачів (з lock-станом)
+      description: |
+        Адмін-only. Повертає всіх (не тільки активних), включно з полями для
+        керування PIN-ами: `has_pin`, `failed_attempts`, `locked_until`,
+        `last_login`. **Ніколи не повертає `pin_hash`.**
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items: { $ref: "#/components/schemas/AdminUserRow" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/DbError"
+
+  /api/admin/users/{id}/pin:
+    post:
+      tags: [admin]
+      summary: Видати/скинути PIN користувачу
+      description: |
+        Адмін-only. Викликає `feedbackgb.set_user_pin(uuid, text)` (PIN ≥6 цифр),
+        яка bcrypt-хешує його і атомарно скидає `failed_attempts` та
+        `locked_until`. Audit `admin.user.pin_reset`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pin]
+              properties:
+                pin:
+                  type: string
+                  pattern: "^\\d{6,8}$"
+                  example: "123456"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/DbError"
+        "503":
+          $ref: "#/components/responses/SupabaseNotConfigured"
+
+  /api/admin/users/{id}/unlock:
+    post:
+      tags: [admin]
+      summary: Скинути lockout після 10 невдалих спроб
+      description: |
+        Адмін-only. `UPDATE feedbackgb.users SET failed_attempts=0,
+        locked_until=NULL WHERE id=:id`. PIN не змінюється. Audit
+        `admin.user.unlock`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/DbError"
+        "503":
+          $ref: "#/components/responses/SupabaseNotConfigured"
+
+  /api/admin/send-report-now:
+    post:
+      tags: [admin]
+      summary: Ручний пуск денного звіту в Telegram
+      description: |
+        Адмін-only. Викликає `buildAndSendDailyReport()` без де-дюпу часу.
+        Корисно для smoke-перевірки після деплою. Audit `admin.send_report`.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyReportResult"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/SupabaseNotConfigured"
+
+  /api/admin/mirror-to-drive-now:
+    post:
+      tags: [admin]
+      summary: Ручний пуск Drive-mirror для нерезервованих фото
+      description: |
+        Адмін-only. Викликає `mirrorPendingPhotos()`. Ідемпотентно — можна
+        спамити. Audit `admin.mirror_to_drive`.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MirrorResult" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/SupabaseNotConfigured"
+
+  /api/cron/daily-report:
+    get:
+      tags: [cron]
+      summary: Vercel Cron entry — щоденний звіт
+      description: |
+        Авторизація: `Authorization: Bearer $CRON_SECRET` АБО заголовок
+        `x-vercel-cron: 1` (Vercel ставить його автоматично).
+
+        Розклад у `vercel.json`: 18:30 UTC + 19:30 UTC (DST-агностично, де-дюп
+        у handler-і за `getKyivClock().hour === 21`). Якщо локальна година
+        Києва не 21 — повертає `{skipped:true, reason:"kyiv_hour=...,
+        expected=21"}`.
+      security:
+        - cronBearer: []
+        - vercelCronHeader: []
+      responses:
+        "200":
+          description: ok або skipped
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/DailyReportResult"
+                  - $ref: "#/components/schemas/SkippedResult"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "503":
+          description: cron secret не налаштований у production
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/cron/mirror-to-drive:
+    get:
+      tags: [cron]
+      summary: Vercel Cron entry (вручну) — Drive backup
+      description: |
+        Шарить `CRON_SECRET` з daily-report. Не зареєстрований у `vercel.json`
+        як cron — виконується або вручну (`curl`-ом, через адмінку), або
+        синхронно з `buildAndSendDailyReport` у drive-mode.
+      security:
+        - cronBearer: []
+        - vercelCronHeader: []
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MirrorResult" }
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /api/products:
+    get:
+      tags: [catalog]
+      summary: Список товарів для product picker-а
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: q
+          description: Substring match по `name` (case-insensitive, ≤80 символів)
+          schema: { type: string, maxLength: 80 }
+        - in: query
+          name: category_id
+          description: Фільтр по POS category_id
+          schema: { type: string, maxLength: 32 }
+        - in: query
+          name: popular_for_store
+          description: |
+            spot_id. Коли заданий — товари, популярні в цьому магазині за 7 днів,
+            виставляються нагору списку.
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500, default: 60 }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  products:
+                    type: array
+                    items: { $ref: "#/components/schemas/ProductRow" }
+        "500":
+          $ref: "#/components/responses/DbError"
+        "503":
+          $ref: "#/components/responses/SupabaseNotConfigured"
+
+  /api/products/categories:
+    get:
+      tags: [catalog]
+      summary: POS-категорії товарів (для accordion-у над product picker-ом)
+      description: |
+        Агрегує `feedbackgb.v_products` (нехованих категорій), повертає `id, name,
+        sort_order, product_count`. ISR-кеш 60 секунд.
+      security: []
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items: { $ref: "#/components/schemas/ProductCategoryRow" }
+        "500":
+          $ref: "#/components/responses/DbError"
+        "503":
+          $ref: "#/components/responses/SupabaseNotConfigured"
+
+  /api/stores:
+    get:
+      tags: [catalog]
+      summary: Магазини для UI
+      security: []
+      description: |
+        Бере `feedbackgb.v_stores` (підмап `categories.spots` без видалених).
+        Якщо Supabase не сконфігурований або падає — повертає вшитий fallback
+        список з полем `source: "fallback"`. ISR-кеш 60 секунд.
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stores:
+                    type: array
+                    items: { $ref: "#/components/schemas/StoreRow" }
+                  source:
+                    type: string
+                    enum: [db, fallback]
+
+  /api/r/photo/{id}:
+    get:
+      tags: [redirects]
+      summary: Редірект на фото фідбеку
+      security: []
+      description: |
+        Click-through ціль для `📷` у щоденному звіті. **Open** ендпоінт
+        (UUID = capability-token). Rate-limit: 60 req/min/IP.
+
+        Поведінка залежить від `REPORT_PHOTO_LINK_MODE`:
+        * `supabase` (default) — мінтить fresh signed URL (TTL 600 сек) і
+          302-редіректить на нього.
+        * `drive` — підтягує `photo_mirror.drive_file_id` і редіректить на
+          `https://drive.google.com/file/d/<id>/view`. Якщо мірорінг ще не
+          відбувся — fallback на supabase signed URL.
+        * Legacy public URL у `feedback.photo_url` (історичні рядки) —
+          редіректить напряму на нього.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: UUID фідбеку
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "302":
+          description: Редірект на фото
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+        "400":
+          description: Невалідний UUID або непідтримуваний `photo_url`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Фідбек не знайдено або у нього нема фото
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/SupabaseNotConfigured"
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: fbgb_session
+      description: |
+        HMAC-підписаний токен (формат `base64url(JSON).base64url(hmac)`),
+        TTL 14 днів. Підписаний `SESSION_SECRET`. Видається `POST /api/auth/login`.
+    cronBearer:
+      type: http
+      scheme: bearer
+      description: '`Authorization: Bearer $CRON_SECRET`'
+    vercelCronHeader:
+      type: apiKey
+      in: header
+      name: x-vercel-cron
+      description: "Альтернативно — спеціальний заголовок Vercel Cron (`x-vercel-cron: 1`)"
+
+  responses:
+    BadRequest:
+      description: Помилка валідації payload-у
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthenticated:
+      description: Немає або невалідне cookie / cron-bearer
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Сесія валідна, але роль не `admin`
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: Перевищено rate-limit
+      headers:
+        Retry-After:
+          schema: { type: integer, description: "секунд до спадання вікна" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    DbError:
+      description: Помилка БД
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    InternalError:
+      description: Будь-яка інша серверна помилка
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    SupabaseNotConfigured:
+      description: Бекенд не сконфігурований (відсутні env)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Машинний код помилки або людський рядок (українською для
+            user-facing помилок типу login)
+          example: "db_error"
+
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean, example: true }
+
+    CategoryId:
+      type: string
+      enum:
+        - missing_item
+        - overstock
+        - defect
+        - supply_problem
+        - store_idea
+        - spotted_elsewhere
+        - tech_issue
+        - customer_voice
+
+    Role:
+      type: string
+      enum: [seller, admin]
+
+    LoginUser:
+      type: object
+      required: [id, full_name, role]
+      properties:
+        id: { type: string, format: uuid }
+        full_name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+
+    LoginRequest:
+      type: object
+      required: [user_id, pin]
+      properties:
+        user_id: { type: string, format: uuid }
+        pin:
+          type: string
+          pattern: "^\\d{6,8}$"
+          example: "123456"
+
+    AuthMeResponse:
+      type: object
+      properties:
+        user:
+          nullable: true
+          type: object
+          properties:
+            uid: { type: string, format: uuid }
+            full_name: { type: string }
+            role: { $ref: "#/components/schemas/Role" }
+            store_id:
+              type: integer
+              nullable: true
+        store:
+          nullable: true
+          type: object
+          properties:
+            id: { type: integer }
+            name: { type: string }
+
+    FeedbackPayload:
+      type: object
+      required: [category]
+      properties:
+        category: { $ref: "#/components/schemas/CategoryId" }
+        store_id:
+          type: integer
+          nullable: true
+          description: Для `seller` ігнорується, береться зі сесії
+        store_label:
+          type: string
+          nullable: true
+          maxLength: 80
+          description: Fallback для `store_id=null` (наприклад, "Інший магазин")
+        product_id:
+          type: integer
+          nullable: true
+          description: FK на `categories.products.id`. Required для
+            `missing_item`/`overstock`/`defect`.
+        quantity:
+          type: number
+          nullable: true
+        fields:
+          type: object
+          description: |
+            Per-категорійні поля. До 40 ключів, кожне значення — string ≤4000
+            символів або number. Структура задана `categories.ts` (наприклад,
+            `customer_voice` має `quote`, `tech_issue` — `what_broken`).
+          additionalProperties:
+            oneOf:
+              - { type: string, maxLength: 4000 }
+              - { type: number }
+        photo_url:
+          type: string
+          nullable: true
+          description: |
+            Допустимі формати:
+            * `data:image/{jpeg|png|webp};base64,<...>` (≤5 MB після decode)
+            * Уже завантажений `sb:<storage-path>` (для retry)
+
+            Інші схеми (зокрема `https://...`, `javascript:...`) відкидаються.
+        init_data:
+          type: string
+          description: Telegram WebApp `initData` для HMAC-валідації
+
+    FeedbackCreateResponse:
+      type: object
+      properties:
+        ok: { type: boolean, example: true }
+        persisted:
+          type: boolean
+          description: |
+            `true` якщо рядок записано у Supabase. `false` коли env не
+            налаштовано (dev). Помилки від БД повертаються як 500.
+
+    FeedbackFeedRow:
+      type: object
+      description: Денормалізований рядок з view `feedbackgb.feedback_feed`.
+      properties:
+        id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        category: { $ref: "#/components/schemas/CategoryId" }
+        category_emoji: { type: string }
+        category_title: { type: string }
+        store_id:
+          type: integer
+          nullable: true
+        store_name:
+          type: string
+          nullable: true
+        store_address:
+          type: string
+          nullable: true
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+        user_full_name:
+          type: string
+          nullable: true
+        user_role:
+          $ref: "#/components/schemas/Role"
+        product_id:
+          type: integer
+          nullable: true
+        product_name:
+          type: string
+          nullable: true
+        product_unit:
+          type: string
+          nullable: true
+        quantity:
+          type: number
+          nullable: true
+        fields:
+          type: object
+          additionalProperties: true
+        photo_url:
+          type: string
+          nullable: true
+        tg_user_id:
+          type: integer
+          format: int64
+          nullable: true
+        tg_username:
+          type: string
+          nullable: true
+        tg_display_name:
+          type: string
+          nullable: true
+        tg_verified: { type: boolean }
+        summary: { type: string }
+        status:
+          type: string
+          enum: [new, in_progress, resolved, rejected]
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        resolved_by:
+          type: string
+          format: uuid
+          nullable: true
+
+    AdminUserRow:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        full_name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        store_id:
+          type: integer
+          nullable: true
+        is_active: { type: boolean }
+        has_pin:
+          type: boolean
+          description: "true якщо `pin_hash IS NOT NULL`"
+        failed_attempts: { type: integer }
+        locked_until:
+          type: string
+          format: date-time
+          nullable: true
+        last_login:
+          type: string
+          format: date-time
+          nullable: true
+
+    DailyReportResult:
+      type: object
+      properties:
+        ok: { type: boolean, example: true }
+        total:
+          type: integer
+          description: К-сть рядків, що увійшли в звіт за сьогодні (Київ)
+        kyiv_date:
+          type: string
+          example: "2026-05-01"
+        photo_links:
+          type: object
+          description: |
+            (Опц.) Мапа feedback_id → URL для дебагу режиму лінків.
+          additionalProperties: { type: string }
+
+    SkippedResult:
+      type: object
+      properties:
+        ok: { type: boolean, example: true }
+        skipped: { type: boolean, example: true }
+        reason: { type: string, example: "kyiv_hour=20, expected=21" }
+
+    MirrorResult:
+      type: object
+      properties:
+        ok: { type: boolean, example: true }
+        mirrored: { type: integer, description: "к-сть успішно змірорено цього виклику" }
+        failed: { type: integer, description: "к-сть помилок" }
+        skipped:
+          type: integer
+          description: "к-сть пропущено (вже змірорено або attempts ≥ 5)"
+
+    ProductRow:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        category_id: { type: string, nullable: true }
+        category_name: { type: string, nullable: true }
+        category_sort: { type: integer, nullable: true }
+        unit: { type: string, nullable: true }
+        barcode: { type: string, nullable: true }
+        photo:
+          type: string
+          nullable: true
+          description: |
+            Шлях у POS CDN; клієнт префіксує `NEXT_PUBLIC_POSTER_CDN_BASE_URL`.
+        cost: { type: number, nullable: true }
+        uses_7d:
+          type: integer
+          description: Кількість використань цього товару у магазині за 7 днів
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ProductCategoryRow:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        sort_order: { type: integer }
+        product_count: { type: integer }
+
+    StoreRow:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        address:
+          type: string
+          nullable: true
