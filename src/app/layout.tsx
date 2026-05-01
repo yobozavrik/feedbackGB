@@ -3,7 +3,6 @@ import { Inter, Manrope } from "next/font/google";
 import Script from "next/script";
 import { Suspense } from "react";
 import "@/styles/globals.css";
-import { TelegramProvider } from "@/components/TelegramProvider";
 import { PostHogProvider } from "@/components/PostHogProvider";
 
 const inter = Inter({
@@ -44,6 +43,12 @@ export default function RootLayout({
   return (
     <html lang="uk" className={`${inter.variable} ${manrope.variable}`}>
       <head>
+        {/* Telegram Mini App SDK. Next.js 14 forces `beforeInteractive` scripts
+            to live in the root layout — see
+            https://nextjs.org/docs/app/api-reference/components/script#beforeinteractive
+            The script is harmless on admin pages (small, no-op without
+            `window.Telegram.WebApp`), and TelegramProvider in (app)/ relies on
+            it being available as early as possible. */}
         <Script
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="beforeInteractive"
@@ -51,13 +56,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-dvh font-sans antialiased">
         <Suspense fallback={null}>
-          <PostHogProvider>
-            <TelegramProvider>
-              <div className="relative mx-auto flex min-h-dvh max-w-md flex-col px-4 pb-10 pt-5 sm:px-6">
-                {children}
-              </div>
-            </TelegramProvider>
-          </PostHogProvider>
+          <PostHogProvider>{children}</PostHogProvider>
         </Suspense>
       </body>
     </html>
