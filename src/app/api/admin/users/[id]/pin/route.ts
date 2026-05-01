@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
+import { ipFromRequest, logAudit, uaFromRequest } from "@/lib/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,6 +60,14 @@ export async function POST(
     console.error("set_user_pin rpc error", { code: error.code });
     return NextResponse.json({ error: "Помилка сервера" }, { status: 500 });
   }
+
+  await logAudit("admin.user.pin_reset", {
+    actorUserId: sess.uid,
+    targetUserId: userId,
+    targetType: "user",
+    ip: ipFromRequest(req),
+    userAgent: uaFromRequest(req),
+  });
 
   return NextResponse.json({ ok: true });
 }
