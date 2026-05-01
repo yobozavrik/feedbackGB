@@ -65,8 +65,11 @@ function fmtAbs(iso: string | null): string {
 }
 
 /**
- * Перетворити cron-вираз UTC на людський опис у Києві (EET=UTC+2, EEST=UTC+3).
- * Підтримує лише формат "M H * * *" (щодня) — рідші не очікуємо.
+ * Перетворити cron-вираз UTC на людський опис у Києві.
+ * EET = UTC+2 (зима), EEST = UTC+3 (літо), тому показуємо діапазон
+ * "HH:MM_winter–HH:MM_summer" — Vercel запускає щоденний звіт двома cron-ами,
+ * сервер сам обирає правильну DST-фазу.
+ * Підтримує лише формат "M H * * *" (щодня).
  */
 function describeCronUtc(expr: string): string {
   const parts = expr.split(" ").filter(Boolean);
@@ -81,10 +84,7 @@ function describeCronUtc(expr: string): string {
   const kyivSummer = (hour + 3) % 24;
   const fmt = (h2: number) =>
     `${String(h2).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  if (kyivWinter === kyivSummer) {
-    return `щодня ${fmt(kyivWinter)} (Київ) · ${utc}`;
-  }
-  return `щодня ${fmt(kyivWinter)}–${fmt(kyivSummer)} (Київ, DST-safe) · ${utc}`;
+  return `щодня ${fmt(kyivWinter)}–${fmt(kyivSummer)} (Київ, зима–літо) · ${utc}`;
 }
 
 interface Props {
