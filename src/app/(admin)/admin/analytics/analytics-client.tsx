@@ -54,7 +54,11 @@ export function AnalyticsClient({ rows, error }: Props) {
   const periodConfig = PERIOD_OPTIONS.find((p) => p.value === period)!;
 
   const filtered = useMemo(() => {
-    const cutoff = Date.now() - periodConfig.days * DAY_MS;
+    // Align cutoff with bucket loop: include items whose date is within the
+    // last `days` calendar days (today + (days - 1) previous days). Using
+    // `days - 1` here keeps stats.total in sync with what the trend charts
+    // actually plot.
+    const cutoff = Date.now() - (periodConfig.days - 1) * DAY_MS;
     return rows.filter((r) => new Date(r.created_at).getTime() >= cutoff);
   }, [rows, periodConfig.days]);
 
