@@ -111,6 +111,51 @@ grep -E '^(NEXT_PUBLIC_SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY|TELEGRAM_BOT_TOKEN
 
 Усі ідемпотентні, можна повторювати.
 
+### 3.1.1 Self-hosted Supabase: `pgrst.db_schemas` має містити `feedbackgb`
+
+Актуально, якщо ваш Supabase — self-hosted і на одному інстансі вже
+живе кілька проєктів зі своїми схемами (наприклад, `bakery1`, `pizza1`,
+`shveyka` тощо).
+
+PostgREST коннектиться до Postgres під роллю `authenticator` і бачить
+тільки ті схеми, що перелічені в її параметрі `pgrst.db_schemas`. Якщо
+`feedbackgb` у цьому списку немає — будь-який запит з Vercel
+(`/api/auth/users`, `/api/feedback`, …) повертає `500` з кодом
+`db_error`, навіть якщо у БД дані є і view-и працюють.
+
+Перевірка (виконати у Supabase Studio → SQL Editor):
+
+```sql
+select rolname, rolconfig
+  from pg_roles
+ where rolname = 'authenticator';
+```
+
+У відповіді шукай рядок `pgrst.db_schemas=...` — `feedbackgb` має бути
+у списку.
+
+Фікс — додати схему до існуючого списку (саме `set`, не `reset` — щоб не
+знести інші проекти), і попросити PostgREST перечитати конфіг:
+
+```sql
+alter role authenticator
+  set pgrst.db_schemas = 'public, ..., feedbackgb';   -- зберегти решту!
+
+notify pgrst, 'reload config';
+```
+
+Через ~5 секунд `/api/auth/users` має ожити. Перевірити можна так:
+
+```bash
+curl -s https://feedback-gb.vercel.app/api/auth/users | head -c 80
+# очікується: {"users":[{"id":"...","full_name":"..."
+```
+
+Знайти, як ця проблема могла зʼявитись: це поле перепрописується
+повністю при `alter role authenticator set pgrst.db_schemas = '...';`,
+тому додавання нового стороннього проєкту випадково "затирає"
+`feedbackgb`. Завжди робити `set` зі **всім** наявним списком.
+
 ### 3.2 Bucket для фото
 
 1. **Storage** → New bucket → `feedback-photos`, **private**.
@@ -434,7 +479,72 @@ select feedback_id, attempts, error
 - Якщо це Vercel Cron — перевір, що `CRON_SECRET` у Vercel ENV
   виставлений (Settings → Environment Variables).
 
-### 9.7 "Telegram preview все ще показує JWT"
+### 9.7 "Усе впало — `/api/auth/users` віддає 500 `db_error`"
+
+Це коренева перевірка для всіх "адмінка не вантажиться" / "логін не
+відкривається" симптомів. `/api/auth/users` — єдиний public-ендпоінт,
+що ходить у БД, тому він — лакмусовий папір.
+
+```bash
+curl -s https://feedback-gb.vercel.app/api/auth/users
+```
+
+Якщо відповідь `{"users":[],"error":"db_error"}` зі статусом `500` —
+далі за списком, у порядку ймовірності, від найдешевшого до
+найдорожчого:
+
+1. **Self-hosted: `pgrst.db_schemas` без `feedbackgb`** (див. **3.1.1**).
+   Перший підозрюваний на multi-project self-hosted Supabase. Лікується
+   одним SQL у Studio, без рестартів і деплоїв.
+2. **PostgREST контейнер впав / у crash-loop**:
+   ```bash
+   docker ps --format 'table {{.Names}}\t{{.Status}}' | grep supabase
+   docker logs --since 5m supabase-rest-<id> 2>&1 | tail -50
+   ```
+   Якщо краш-loop — `docker restart supabase-rest-<id>`. Якщо OOM —
+   підняти memory limit у `docker-compose.yml`.
+3. **Postgres засіпаний (statement_timeout)** — у логу PostgREST код
+   `57014: canceling statement due to statement timeout`. Переконатись:
+   ```sql
+   -- 1. чи висить щось довге
+   select pid, now() - xact_start as runtime, state, left(query, 120)
+     from pg_stat_activity
+    where state != 'idle' and now() - xact_start > interval '5 seconds';
+
+   -- 2. чи є lock-chain
+   select blocked.pid as blocked, blocking.pid as blocking, blocked.query
+     from pg_stat_activity blocked
+     join pg_stat_activity blocking
+       on blocking.pid = any(pg_blocking_pids(blocked.pid))
+    where blocked.wait_event_type = 'Lock';
+
+   -- 3. чи у конкретної ролі немає малого statement_timeout
+   select rolname, rolconfig
+     from pg_roles
+    where rolname in ('anon','authenticated','authenticator','service_role');
+   ```
+   Гасити висячий запит: `select pg_terminate_backend(<pid>);`. Підняти
+   `statement_timeout` для ролі: `alter role <name> set
+   statement_timeout = '8s';`.
+4. **`SUPABASE_SERVICE_ROLE_KEY` ротувався, але у Vercel ENV
+   старий**. Vercel → Settings → Environment Variables → `Edit` →
+   redeploy. Симптом — у логу PostgREST `JWSError`/`401`.
+5. **Schema drift** — `v_login_users` зламана/відсутня. Перевірити
+   напряму у Studio:
+   ```sql
+   set role service_role;
+   select count(*) from feedbackgb.v_login_users;
+   reset role;
+   ```
+   Якщо помилка `relation does not exist` — накатити міграції 3.1
+   повторно (всі ідемпотентні).
+6. **VPS лежить / диск повний** (для self-hosted): `df -h /` і
+   `systemctl status docker`.
+
+Перші три пункти покривають 90% інцидентів і всі лікуються без
+деплою.
+
+### 9.8 "Telegram preview все ще показує JWT"
 
 Перевірити:
 
