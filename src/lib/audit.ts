@@ -14,7 +14,8 @@ export type AuditAction =
   | "admin.user.pin_reset"
   | "admin.user.unlock"
   | "admin.send_report"
-  | "admin.mirror_to_drive";
+  | "admin.mirror_to_drive"
+  | "admin.feedback.note";
 
 interface AuditOptions {
   /** UUID of the user who performed the action (null for failed logins). */
