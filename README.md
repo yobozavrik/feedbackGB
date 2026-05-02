@@ -156,3 +156,32 @@ supabase/schema.sql          # БД + RLS
 | [`docs/FEATURES.md`](docs/FEATURES.md) | Каталог реалізованих фіч (Mini App / адмінка / lifecycle / SLA) і roadmap top-5. |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Setup Supabase / Telegram / Drive / Vercel, типові інциденти, ротація секретів. |
 | [`docs/diagrams/`](docs/diagrams/) | Mermaid-діаграми як окремі файли (рендеряться у GitHub нативно або у https://mermaid.live). |
+
+## Безпека комітів
+
+У репо налаштований [gitleaks](https://github.com/gitleaks/gitleaks) як
+pre-commit hook через [husky](https://typicode.github.io/husky/), щоб
+випадково не закомітити секрет (JWT, service-role key, bot token)
+або імʼя сусідньої схеми / приватного хоста (див.
+[`.gitleaks.toml`](.gitleaks.toml)).
+
+Один раз: встанови `gitleaks` бінарник:
+
+```bash
+# macOS
+brew install gitleaks
+# Debian/Ubuntu
+sudo apt install gitleaks
+# Інше — з релізів: https://github.com/gitleaks/gitleaks/releases
+```
+
+`npm install` далі сам поставить `husky` і активує hook (`prepare`-script).
+Спробувати вручну:
+
+```bash
+npm run scan:secrets   # повний скан історії
+```
+
+GitHub Actions додатково ганяє той самий gitleaks-конфіг на кожному PR
+([`.github/workflows/gitleaks.yml`](.github/workflows/gitleaks.yml)) як
+страховку, якщо хтось закомітив з `--no-verify`.
