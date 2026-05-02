@@ -40,8 +40,8 @@ tags = ["infra-leak", "supabase", "schema"]
 
 [[rules]]
 id = "feedbackgb-private-host"
-description = "Private self-hosted hostnames (Supabase, VPS, Coolify, etc.). Use placeholders like <your-prod-host> in docs."
-regex = '''(?i)\b(supabase\.dmytrotovstytskyi\.online|vmi[0-9]{6,}\.[a-z0-9.-]+)\b'''
+description = "Private self-hosted hostnames + concrete production deployment URL. Use placeholders like <your-prod-host> in docs."
+regex = '''(?i)\b(supabase\.dmytrotovstytskyi\.online|vmi[0-9]{6,}\.[a-z0-9.-]+|feedback-gb\.vercel\.app)\b'''
 tags = ["infra-leak", "hostname"]
 
 # ---------------------------------------------------------------------------
