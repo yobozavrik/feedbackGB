@@ -5,12 +5,14 @@ import {
   ArrowUpOutlined,
   AppstoreOutlined,
   AuditOutlined,
+  ClockCircleOutlined,
   ShopOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
 import { StatisticCard } from "@ant-design/pro-components";
 import { Tag, Typography, theme as antdTheme } from "antd";
 import { useMemo } from "react";
+import { HOUR_MS, OVERDUE_HOURS, ageMs, formatAge, isOpen } from "@/lib/sla";
 
 const { Text } = Typography;
 
@@ -76,6 +78,18 @@ export function DashboardKPI({ rows }: Props) {
 
     const todayCount = countSince(rows, now - DAY);
 
+    // SLA: open rows older than the overdue threshold. We don't compute it
+    // off `thisWeek` because a fidbek that's been "new" for 3 days is older
+    // than 7 — but it absolutely belongs in this card.
+    let overdueCount = 0;
+    let oldestOpenMs = 0;
+    for (const r of rows) {
+      if (!isOpen(r.status)) continue;
+      const a = ageMs(r.created_at, now);
+      if (a >= OVERDUE_HOURS * HOUR_MS) overdueCount += 1;
+      if (a > oldestOpenMs) oldestOpenMs = a;
+    }
+
     const storesThisWeek = new Set(
       thisWeek
         .map((r) => r.store_name)
@@ -107,6 +121,8 @@ export function DashboardKPI({ rows }: Props) {
       defectsThisWeek,
       defectsDelta,
       todayCount,
+      overdueCount,
+      oldestOpenMs,
       storesThisWeek,
       storesLastWeek,
       topCategory: topCategory
@@ -137,12 +153,39 @@ export function DashboardKPI({ rows }: Props) {
     );
   };
 
+  const overdueColor =
+    stats.overdueCount > 0 ? token.colorError : token.colorSuccess;
+  const overdueDescription =
+    stats.overdueCount > 0 ? (
+      <Text style={{ color: token.colorError, fontSize: 12, fontWeight: 500 }}>
+        найстаріший відкритий: {formatAge(stats.oldestOpenMs)}
+      </Text>
+    ) : (
+      <Text type="secondary" style={{ fontSize: 12 }}>
+        усе під контролем
+      </Text>
+    );
+
   return (
     <StatisticCard.Group
       direction="row"
       style={{ marginBottom: 16 }}
       colSpan={{ xs: 24, sm: 12, md: 12, lg: 6, xl: 6 }}
     >
+      <StatisticCard
+        statistic={{
+          title: `Прострочено (>${OVERDUE_HOURS} год)`,
+          value: stats.overdueCount,
+          valueStyle: { color: overdueColor },
+          icon: (
+            <ClockCircleOutlined
+              style={{ color: overdueColor, fontSize: 22 }}
+            />
+          ),
+          description: overdueDescription,
+          suffix: stats.overdueCount === 1 ? "запис" : "записів",
+        }}
+      />
       <StatisticCard
         statistic={{
           title: "За тиждень",

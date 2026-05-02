@@ -25,6 +25,13 @@ import {
 } from "antd";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
+import {
+  ageMs,
+  bucketFor,
+  formatAge,
+  isOpen,
+  type AgingBucket,
+} from "@/lib/sla";
 import type { AdminOption, FeedRow } from "./page";
 
 const { Text, Paragraph, Title } = Typography;
@@ -73,6 +80,13 @@ const STATUS_META: Record<Status, { text: string; color: string }> = {
   in_progress: { text: "В роботі", color: "gold" },
   resolved: { text: "Закрито", color: "default" },
   rejected: { text: "Відхилено", color: "purple" },
+};
+
+const AGING_TAG: Record<AgingBucket, string> = {
+  warm: "default",
+  stale: "gold",
+  overdue: "orange",
+  critical: "red",
 };
 
 function periodCutoff(p: Period): number {
@@ -200,7 +214,6 @@ export function AdminClient({
         sorter: (a, b) =>
           new Date(a.created_at).getTime() -
           new Date(b.created_at).getTime(),
-        defaultSortOrder: "descend",
         render: (_, row) => (
           <Text style={{ fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
             {formatRelative(row.created_at)}
@@ -304,6 +317,42 @@ export function AdminClient({
           return (
             <Tag color={meta.color} bordered={false}>
               {meta.text}
+            </Tag>
+          );
+        },
+      },
+      {
+        title: "Висить",
+        key: "aging",
+        width: 110,
+        defaultSortOrder: "descend",
+        sorter: (a, b) => {
+          // Closed rows always sink to the bottom regardless of sort direction;
+          // among open rows we compare age (висить довше → більше значення).
+          const aOpen = isOpen(a.status);
+          const bOpen = isOpen(b.status);
+          if (aOpen !== bOpen) return aOpen ? 1 : -1;
+          if (!aOpen) return 0;
+          return ageMs(a.created_at) - ageMs(b.created_at);
+        },
+        render: (_, row) => {
+          if (!isOpen(row.status)) {
+            return (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                —
+              </Text>
+            );
+          }
+          const ms = ageMs(row.created_at);
+          const bucket = bucketFor(ms);
+          const tagColor = AGING_TAG[bucket];
+          return (
+            <Tag
+              color={tagColor}
+              bordered={false}
+              style={{ fontVariantNumeric: "tabular-nums" }}
+            >
+              {formatAge(ms)}
             </Tag>
           );
         },
@@ -439,6 +488,10 @@ function FeedDrawer({
     setDraftStatus(isStatus(row.status) ? row.status : "new");
     setDraftAssignee(row.assigned_to);
     setComment("");
+  } else if (!row && draftKey !== null) {
+    // Скидаємо draftKey при закритті — щоб повторне відкриття того ж рядка
+    // підхопило свіжі серверні значення (а не залишилось зі stale draft-ом).
+    setDraftKey(null);
   }
 
   const handleSave = useCallback(async () => {
