@@ -10,21 +10,30 @@ import {
 } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
 import {
+  App,
   Button,
   Drawer,
   Image,
+  Input,
   Segmented,
+  Select,
   Space,
+  Switch,
   Tag,
   Typography,
   theme as antdTheme,
 } from "antd";
-import { useMemo, useState } from "react";
-import type { FeedRow } from "./page";
+import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useState } from "react";
+import type { AdminOption, FeedRow } from "./page";
 
 const { Text, Paragraph, Title } = Typography;
+const { TextArea } = Input;
 
 type Period = "all" | "today" | "week" | "month";
+type Status = "new" | "in_progress" | "resolved" | "rejected";
+
+const STATUSES: Status[] = ["new", "in_progress", "resolved", "rejected"];
 
 interface CategoryMeta {
   id: string;
@@ -37,6 +46,8 @@ interface Props {
   rows: FeedRow[];
   stores: string[];
   categories: CategoryMeta[];
+  admins: AdminOption[];
+  currentAdminId: string | null;
 }
 
 const PERIOD_LABELS: Record<Period, string> = {
@@ -57,14 +68,11 @@ const TINT_COLOR: Record<string, string> = {
   voice: "magenta",
 };
 
-const STATUS_META: Record<
-  string,
-  { text: string; color: string }
-> = {
+const STATUS_META: Record<Status, { text: string; color: string }> = {
   new: { text: "Нове", color: "green" },
   in_progress: { text: "В роботі", color: "gold" },
   resolved: { text: "Закрито", color: "default" },
-  duplicate: { text: "Дубль", color: "purple" },
+  rejected: { text: "Відхилено", color: "purple" },
 };
 
 function periodCutoff(p: Period): number {
@@ -104,16 +112,32 @@ function authorOf(r: FeedRow): string {
   );
 }
 
-export function AdminClient({ rows, stores, categories }: Props) {
+function isStatus(s: string): s is Status {
+  return (STATUSES as string[]).includes(s);
+}
+
+export function AdminClient({
+  rows,
+  stores,
+  categories,
+  admins,
+  currentAdminId,
+}: Props) {
   const { token } = antdTheme.useToken();
   const [period, setPeriod] = useState<Period>("all");
   const [active, setActive] = useState<FeedRow | null>(null);
+  const [myQueueOnly, setMyQueueOnly] = useState(false);
 
   const filteredByPeriod = useMemo(() => {
     const cutoff = periodCutoff(period);
-    if (cutoff === 0) return rows;
-    return rows.filter((r) => new Date(r.created_at).getTime() >= cutoff);
-  }, [rows, period]);
+    let out = cutoff === 0
+      ? rows
+      : rows.filter((r) => new Date(r.created_at).getTime() >= cutoff);
+    if (myQueueOnly && currentAdminId) {
+      out = out.filter((r) => r.assigned_to === currentAdminId);
+    }
+    return out;
+  }, [rows, period, myQueueOnly, currentAdminId]);
 
   const newLast7Days = useMemo(
     () =>
@@ -123,6 +147,14 @@ export function AdminClient({ rows, stores, categories }: Props) {
           Date.now() - 7 * 24 * 60 * 60 * 1000,
       ).length,
     [rows],
+  );
+
+  const myQueueCount = useMemo(
+    () =>
+      currentAdminId
+        ? rows.filter((r) => r.assigned_to === currentAdminId).length
+        : 0,
+    [rows, currentAdminId],
   );
 
   const storeFilters = useMemo(
@@ -137,11 +169,19 @@ export function AdminClient({ rows, stores, categories }: Props) {
 
   const statusFilters = useMemo(
     () =>
-      Object.entries(STATUS_META).map(([value, m]) => ({
-        text: m.text,
+      (Object.keys(STATUS_META) as Status[]).map((value) => ({
+        text: STATUS_META[value].text,
         value,
       })),
     [],
+  );
+
+  const adminFilters = useMemo(
+    () => [
+      { text: "— не призначено", value: "__none__" },
+      ...admins.map((a) => ({ text: a.full_name, value: a.id })),
+    ],
+    [admins],
   );
 
   const categoryById = useMemo(() => {
@@ -217,6 +257,33 @@ export function AdminClient({ rows, stores, categories }: Props) {
         },
       },
       {
+        title: "Призначено",
+        dataIndex: "assigned_to",
+        width: 150,
+        ellipsis: true,
+        filters: adminFilters,
+        onFilter: (value, row) => {
+          if (value === "__none__") return row.assigned_to == null;
+          return row.assigned_to === value;
+        },
+        render: (_, row) =>
+          row.assigned_full_name ? (
+            <Space size={4}>
+              <UserOutlined style={{ color: token.colorPrimary }} />
+              <Text style={{ fontSize: 13 }}>{row.assigned_full_name}</Text>
+              {row.assigned_to === currentAdminId ? (
+                <Tag color="magenta" bordered={false}>
+                  я
+                </Tag>
+              ) : null}
+            </Space>
+          ) : (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              —
+            </Text>
+          ),
+      },
+      {
         title: "Резюме",
         dataIndex: "summary",
         ellipsis: true,
@@ -231,10 +298,9 @@ export function AdminClient({ rows, stores, categories }: Props) {
         filters: statusFilters,
         onFilter: (value, row) => row.status === value,
         render: (_, row) => {
-          const meta = STATUS_META[row.status] ?? {
-            text: row.status,
-            color: "default",
-          };
+          const meta = isStatus(row.status)
+            ? STATUS_META[row.status]
+            : { text: row.status, color: "default" };
           return (
             <Tag color={meta.color} bordered={false}>
               {meta.text}
@@ -262,6 +328,8 @@ export function AdminClient({ rows, stores, categories }: Props) {
       categoryById,
       storeFilters,
       statusFilters,
+      adminFilters,
+      currentAdminId,
       token,
     ],
   );
@@ -284,7 +352,7 @@ export function AdminClient({ rows, stores, categories }: Props) {
           showSizeChanger: true,
           showTotal: (total) => `${total} записів`,
         }}
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1250 }}
         onRow={(row) => ({
           onClick: () => setActive(row),
           style: { cursor: "pointer" },
@@ -298,6 +366,19 @@ export function AdminClient({ rows, stores, categories }: Props) {
           </Space>
         }
         toolBarRender={() => [
+          currentAdminId ? (
+            <Space key="my-queue" size={6}>
+              <Switch
+                checked={myQueueOnly}
+                onChange={setMyQueueOnly}
+                size="small"
+              />
+              <Text style={{ fontSize: 13 }}>Моя черга</Text>
+              {myQueueCount > 0 ? (
+                <Tag bordered={false}>{myQueueCount}</Tag>
+              ) : null}
+            </Space>
+          ) : null,
           <Segmented<Period>
             key="period"
             value={period}
@@ -320,6 +401,8 @@ export function AdminClient({ rows, stores, categories }: Props) {
       <FeedDrawer
         row={active}
         category={active ? categoryById.get(active.category) ?? null : null}
+        admins={admins}
+        currentAdminId={currentAdminId}
         onClose={() => setActive(null)}
       />
     </>
@@ -329,29 +412,96 @@ export function AdminClient({ rows, stores, categories }: Props) {
 function FeedDrawer({
   row,
   category,
+  admins,
+  currentAdminId,
   onClose,
 }: {
   row: FeedRow | null;
   category: CategoryMeta | null;
+  admins: AdminOption[];
+  currentAdminId: string | null;
   onClose: () => void;
 }) {
   const { token } = antdTheme.useToken();
+  const { message } = App.useApp();
+  const router = useRouter();
+
+  // Драфт-стан керується ключем по id, щоб при перемиканні рядка все
+  // скинулось без явних effect-ів.
+  const [draftKey, setDraftKey] = useState<string | null>(null);
+  const [draftStatus, setDraftStatus] = useState<Status>("new");
+  const [draftAssignee, setDraftAssignee] = useState<string | null>(null);
+  const [comment, setComment] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  if (row && row.id !== draftKey) {
+    setDraftKey(row.id);
+    setDraftStatus(isStatus(row.status) ? row.status : "new");
+    setDraftAssignee(row.assigned_to);
+    setComment("");
+  }
+
+  const handleSave = useCallback(async () => {
+    if (!row) return;
+    const body: Record<string, unknown> = {};
+    if (draftStatus !== row.status) body.status = draftStatus;
+    if (draftAssignee !== row.assigned_to) body.assigned_to = draftAssignee;
+    const trimmed = comment.trim();
+    if (trimmed.length > 0) body.comment = trimmed;
+    if (Object.keys(body).length === 0) {
+      message.info("Немає змін для збереження.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/feedback/${row.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        message.error(data.error ?? `Помилка ${res.status}`);
+        return;
+      }
+      message.success("Збережено");
+      setComment("");
+      router.refresh();
+      onClose();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Помилка мережі");
+    } finally {
+      setSaving(false);
+    }
+  }, [row, draftStatus, draftAssignee, comment, message, router, onClose]);
+
   if (!row) {
     return <Drawer open={false} onClose={onClose} />;
   }
 
   const fieldEntries = row.fields ? Object.entries(row.fields) : [];
-  const meta = STATUS_META[row.status] ?? {
-    text: row.status,
-    color: "default",
-  };
+  const meta = isStatus(row.status)
+    ? STATUS_META[row.status]
+    : { text: row.status, color: "default" };
   const tintColor = category ? TINT_COLOR[category.tint] ?? "default" : "default";
+
+  const adminOptions = admins.map((a) => ({
+    label: a.id === currentAdminId ? `${a.full_name} (я)` : a.full_name,
+    value: a.id,
+  }));
+
+  const dirty =
+    draftStatus !== row.status ||
+    draftAssignee !== row.assigned_to ||
+    comment.trim().length > 0;
 
   return (
     <Drawer
       open
       onClose={onClose}
-      width={520}
+      width={560}
       title={
         <Space size={8} wrap>
           <Tag color={tintColor} bordered={false}>
@@ -393,6 +543,109 @@ function FeedDrawer({
             <Text type="secondary">{formatRelative(row.created_at)}</Text>
           </Space>
         </Space>
+
+        {/* === КЕРУВАННЯ === */}
+        <div
+          style={{
+            background: token.colorFillAlter,
+            border: `1px solid ${token.colorBorderSecondary}`,
+            borderRadius: token.borderRadiusLG,
+            padding: 12,
+          }}
+        >
+          <Title level={5} style={{ margin: 0, marginBottom: 8 }}>
+            Управління
+          </Title>
+          <Space direction="vertical" size={10} style={{ width: "100%" }}>
+            <div>
+              <Text
+                type="secondary"
+                style={{ fontSize: 11, textTransform: "uppercase" }}
+              >
+                Статус
+              </Text>
+              <div style={{ marginTop: 4 }}>
+                <Segmented<Status>
+                  value={draftStatus}
+                  onChange={(v) => setDraftStatus(v as Status)}
+                  options={STATUSES.map((s) => ({
+                    label: STATUS_META[s].text,
+                    value: s,
+                  }))}
+                />
+              </div>
+            </div>
+            <div>
+              <Text
+                type="secondary"
+                style={{ fontSize: 11, textTransform: "uppercase" }}
+              >
+                Призначено
+              </Text>
+              <div style={{ marginTop: 4 }}>
+                <Space size={6} wrap>
+                  <Select
+                    style={{ minWidth: 220 }}
+                    placeholder="— не призначено"
+                    value={draftAssignee ?? undefined}
+                    onChange={(v) => setDraftAssignee(v ?? null)}
+                    allowClear
+                    showSearch
+                    optionFilterProp="label"
+                    options={adminOptions}
+                  />
+                  {currentAdminId && draftAssignee !== currentAdminId ? (
+                    <Button
+                      size="small"
+                      onClick={() => setDraftAssignee(currentAdminId)}
+                    >
+                      На себе
+                    </Button>
+                  ) : null}
+                </Space>
+              </div>
+            </div>
+            <div>
+              <Text
+                type="secondary"
+                style={{ fontSize: 11, textTransform: "uppercase" }}
+              >
+                Коментар (опціонально)
+              </Text>
+              <TextArea
+                style={{ marginTop: 4 }}
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Що зробив / куди передав / коли очікувати… Запис потрапить у Журнал."
+                maxLength={500}
+                showCount
+                autoSize={{ minRows: 2, maxRows: 4 }}
+              />
+            </div>
+            <Space>
+              <Button
+                type="primary"
+                onClick={handleSave}
+                loading={saving}
+                disabled={!dirty}
+              >
+                Зберегти
+              </Button>
+              {dirty ? (
+                <Button
+                  onClick={() => {
+                    setDraftStatus(isStatus(row.status) ? row.status : "new");
+                    setDraftAssignee(row.assigned_to);
+                    setComment("");
+                  }}
+                  disabled={saving}
+                >
+                  Скинути
+                </Button>
+              ) : null}
+            </Space>
+          </Space>
+        </div>
 
         {fieldEntries.length > 0 ? (
           <div>
