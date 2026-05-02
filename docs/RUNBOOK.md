@@ -98,8 +98,7 @@ grep -E '^(NEXT_PUBLIC_SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY|TELEGRAM_BOT_TOKEN
 
 ### 3.1 Проєкт + схема
 
-1. Створи проект Supabase (ми хостимо self-hosted на
-   `https://supabase.dmytrotovstytskyi.online`, але work-flow ідентичний).
+1. Створи проект Supabase (Cloud або self-hosted — work-flow ідентичний).
 2. Зайди у **SQL Editor**.
 3. Виконай послідовно:
    - `supabase/schema.sql`
@@ -114,8 +113,7 @@ grep -E '^(NEXT_PUBLIC_SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY|TELEGRAM_BOT_TOKEN
 ### 3.1.1 Self-hosted Supabase: `pgrst.db_schemas` має містити `feedbackgb`
 
 Актуально, якщо ваш Supabase — self-hosted і на одному інстансі вже
-живе кілька проєктів зі своїми схемами (наприклад, `bakery1`, `pizza1`,
-`shveyka` тощо).
+живе кілька проєктів зі своїми схемами поруч із `feedbackgb`.
 
 PostgREST коннектиться до Postgres під роллю `authenticator` і бачить
 тільки ті схеми, що перелічені в її параметрі `pgrst.db_schemas`. Якщо
@@ -138,23 +136,31 @@ select rolname, rolconfig
 знести інші проекти), і попросити PostgREST перечитати конфіг:
 
 ```sql
+-- 1) подивитись поточне значення
+select rolconfig from pg_roles where rolname = 'authenticator';
+
+-- 2) ALTER ROLE з НОВИМ повним списком: усі попередні схеми + 'feedbackgb'.
+--    Зразок (підстав свої актуальні схеми зі step 1):
 alter role authenticator
-  set pgrst.db_schemas = 'public, ..., feedbackgb';   -- зберегти решту!
+  set pgrst.db_schemas = 'public, <other-schemas>, feedbackgb';
 
 notify pgrst, 'reload config';
 ```
 
-Через ~5 секунд `/api/auth/users` має ожити. Перевірити можна так:
+Через ~5 секунд `/api/auth/users` має ожити. Перевірити можна curl-ом
+по вашому prod-домену:
 
 ```bash
-curl -s https://feedback-gb.vercel.app/api/auth/users | head -c 80
+curl -s https://<your-prod-host>/api/auth/users | head -c 80
 # очікується: {"users":[{"id":"...","full_name":"..."
 ```
 
-Знайти, як ця проблема могла зʼявитись: це поле перепрописується
-повністю при `alter role authenticator set pgrst.db_schemas = '...';`,
-тому додавання нового стороннього проєкту випадково "затирає"
-`feedbackgb`. Завжди робити `set` зі **всім** наявним списком.
+Як ця проблема могла зʼявитись: значення `pgrst.db_schemas`
+перепрописується **повністю** при `alter role authenticator set
+pgrst.db_schemas = '...';`. Додавання нового стороннього проєкту до
+того ж Supabase (без копіювання попередніх схем у нову команду) тихо
+затирає `feedbackgb` з listу. Завжди робити `set` зі **всім** наявним
+списком.
 
 ### 3.2 Bucket для фото
 
@@ -486,7 +492,7 @@ select feedback_id, attempts, error
 що ходить у БД, тому він — лакмусовий папір.
 
 ```bash
-curl -s https://feedback-gb.vercel.app/api/auth/users
+curl -s https://<your-prod-host>/api/auth/users
 ```
 
 Якщо відповідь `{"users":[],"error":"db_error"}` зі статусом `500` —
