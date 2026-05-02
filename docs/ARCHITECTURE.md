@@ -20,8 +20,9 @@
 
 - [`DATA_MODEL.md`](./DATA_MODEL.md) — таблиці, view, RPC у Supabase.
 - [`RUNBOOK.md`](./RUNBOOK.md) — запуск, деплой, ротація секретів, типові інциденти.
-- [`api/openapi.yaml`](./api/openapi.yaml) — повна OpenAPI 3.1 специфікація `/api/*`.
+- [`api/openapi.yaml`](./api/openapi.yaml) — повна OpenAPI 3.0.3 специфікація `/api/*`.
 - [`api/README.md`](./api/README.md) — як підняти Swagger UI локально.
+- [`FEATURES.md`](./FEATURES.md) — каталог фіч + roadmap.
 
 ---
 
@@ -94,9 +95,9 @@ flowchart TB
 
     subgraph vercel["▲ Vercel"]
         edge["middleware.ts<br/>(Edge runtime)<br/>· /login gate<br/>· /admin role check"]
-        api["API routes<br/>(Node.js runtime)<br/>· /api/feedback<br/>· /api/auth/*<br/>· /api/admin/*<br/>· /api/products*<br/>· /api/stores<br/>· /api/r/photo/[id]"]
+        api["API routes<br/>(Node.js runtime)<br/>· /api/feedback (POST + GET)<br/>· /api/auth/*<br/>· /api/admin/*<br/>· /api/admin/feedback/[id] (PATCH)<br/>· /api/products*<br/>· /api/stores<br/>· /api/r/photo/[id]"]
         cron["Vercel Cron<br/>· /api/cron/daily-report (18:30 і 19:30 UTC)<br/>· /api/cron/mirror-to-drive (on-demand)"]
-        lib["lib/*<br/>· session.ts (HMAC cookie)<br/>· supabase.ts (service_role клієнт)<br/>· dailyReport.ts<br/>· driveMirror.ts<br/>· googleDrive.ts<br/>· audit.ts<br/>· rateLimit.ts<br/>· categories.ts / summary.ts / telegram.ts"]
+        lib["lib/*<br/>· session.ts (HMAC cookie)<br/>· supabase.ts (service_role клієнт)<br/>· dailyReport.ts<br/>· driveMirror.ts<br/>· googleDrive.ts<br/>· audit.ts<br/>· rateLimit.ts<br/>· sla.ts (aging buckets)<br/>· admin/menu.tsx · admin/theme.ts<br/>· categories.ts / summary.ts / telegram.ts"]
     end
 
     subgraph supabase["🗄 Supabase"]
@@ -130,7 +131,8 @@ flowchart TB
 | `src/app/api/**/route.ts` | **Node.js** (`export const runtime = "nodejs"`) | потрібні `node:crypto`, `@supabase/supabase-js` server-side, `googleapis`. |
 | Cron-ендпоінти `/api/cron/*` | Node.js | важкі (Drive upload, Supabase storage download, Telegram fetch). |
 | `/api/r/photo/[id]` | Node.js + `dynamic = "force-dynamic"` | редірект НЕ кешується; SignedURL мінтиться на кожен запит. |
-| Сторінки `src/app/(...)/page.tsx` | Server Components за замовчуванням | клієнтський JS — лише компоненти з `"use client"`. |
+| `src/app/(app)/**/page.tsx` (Mini App) | Server Components | клієнтський JS — лише компоненти з `"use client"`. Tailwind, без `antd`. |
+| `src/app/(admin)/**/page.tsx` | Server Components + `(admin)` route group | окремий `layout.tsx` робить boundary, де живуть `antd 5` + `@ant-design/pro-components` (ProLayout / ProTable / ProForm). Mini App не вантажить antd. |
 
 ### 2.2 Cron конфігурація
 
@@ -184,17 +186,20 @@ flowchart LR
         google["googleapis (Drive v3)"]
     end
 
-    subgraph adapters["Interface Adapters (HTTP / Storage / Bot)"]
+    subgraph adapters["Interface Adapters (HTTP / Storage / Bot / UI)"]
         routesAuth["/api/auth/*"]
         routesFeedback["/api/feedback"]
-        routesAdmin["/api/admin/*"]
+        routesAdmin["/api/admin/users/*<br/>/api/admin/send-report-now<br/>/api/admin/mirror-to-drive-now"]
+        routesLifecycle["/api/admin/feedback/[id] (PATCH)"]
         routesCron["/api/cron/*"]
         routesPub["/api/products*<br/>/api/stores<br/>/api/r/photo/[id]"]
-        clientPages["src/app/<br/>login, admin, feedback,<br/>thanks, page.tsx"]
+        miniApp["(app) Mini App<br/>login · feedback/[cat] · thanks"]
+        adminApp["(admin) AdminShell<br/>(ProLayout, sider menu)<br/>· Огляд (KPI + ProTable)<br/>· Аналітика (charts)<br/>· Магазини · Користувачі<br/>· Журнал · Інструменти<br/>· Налаштування"]
     end
 
     subgraph usecases["Use Cases (lib/*)"]
         ucFeedback["createFeedback<br/>(inline у /api/feedback)"]
+        ucLifecycle["updateFeedbackLifecycle<br/>(inline у /api/admin/feedback/[id])"]
         ucReport["buildAndSendDailyReport"]
         ucMirror["mirrorPendingPhotos"]
         ucAuth["signSession · verifySession<br/>+ verify_pin RPC"]
@@ -207,18 +212,23 @@ flowchart LR
         types["types.ts<br/>(FeedbackPayload,<br/>SessionPayload, ...)"]
         summary["summary.ts<br/>(buildSummary)"]
         telegramHmac["telegram.ts<br/>(validateInitData)"]
+        slaDom["sla.ts<br/>(AGING_HOURS, isOpen,<br/>ageMs, bucketFor, formatAge)"]
     end
 
     next --> routesAuth
     next --> routesFeedback
     next --> routesAdmin
+    next --> routesLifecycle
     next --> routesCron
     next --> routesPub
-    next --> clientPages
+    next --> miniApp
+    next --> adminApp
 
     routesAuth --> ucAuth
     routesAuth --> ucAudit
     routesFeedback --> ucFeedback
+    routesLifecycle --> ucLifecycle
+    routesLifecycle --> ucAudit
     routesAdmin --> ucReport
     routesAdmin --> ucMirror
     routesAdmin --> ucAudit
@@ -226,10 +236,14 @@ flowchart LR
     routesCron --> ucMirror
     routesPub --> ucRedirect
 
+    adminApp --> slaDom
+    adminApp --> catDef
+
     ucFeedback --> summary
     ucFeedback --> telegramHmac
     ucFeedback --> catDef
     ucFeedback --> ucAudit
+    ucLifecycle --> sbsdk
     ucReport --> catDef
     ucReport --> types
 
@@ -255,6 +269,7 @@ flowchart LR
 | `src/lib/session.ts` | `SessionPayload` тип + `signSession` / `verifySession` (стейтлес HMAC cookie). | майже — залежить від WebCrypto, але без I/O. |
 | `src/lib/summary.ts` | `buildSummary(payload, user, storeName)` → читабельний рядок для аналітики/AI. | ✅ |
 | `src/lib/telegram.ts` | `validateInitData(initData, botToken)` — HMAC валідація Telegram WebApp init-data. | ✅ |
+| `src/lib/sla.ts` | SLA / aging-домен: пороги (`AGING_HOURS = {warm:4, stale:24, overdue:72}`), функції `isOpen(status)`, `ageMs(createdAt)`, `bucketFor(ms)`, `formatAge(ms)` із укр-плюралізацією днів. Чисті функції, без I/O і без залежності від `Date.now` (приймають `now` параметром). Споживачі: `DashboardKPI` (картка «Прострочено»), `admin-client.tsx` (колонка «Висить» у ProTable). | ✅ |
 
 **Інваріант домену:** структура `feedback` повинна збігатися між
 `categories.ts`, `supabase/schema.sql:categories` (seed) і
@@ -270,6 +285,7 @@ flowchart LR
 | `signIn(userId, pin)` | inline у `src/app/api/auth/login/route.ts` | POST `/api/auth/login` | rate-limit → `verify_pin` RPC → `signSession` → cookie. Audit-log `auth.login.success/failure`. |
 | `signOut()` | inline у `src/app/api/auth/logout/route.ts` | POST `/api/auth/logout` | стирає cookie, audit-log `auth.logout`. |
 | `createFeedback(payload, session)` | inline у `src/app/api/feedback/route.ts` | POST `/api/feedback` | валідація → upload фото в Storage → resolve store/product із ERP → `buildSummary` → INSERT у `feedbackgb.feedback`. Audit пише тригер БД. |
+| `updateFeedbackLifecycle({status?, assigned_to?, comment?})` | inline у `src/app/api/admin/feedback/[id]/route.ts` | PATCH `/api/admin/feedback/[id]` | role-check → валідація enum-у статусу і assignee (admin + active) → set `app.actor` → UPDATE `feedback`. При переході у `resolved` — стампить `resolved_at/by`; назад — обнуляє. Якщо `comment` непорожній — пише `admin.feedback.note` у audit_log. Структурний diff (`feedback.status_change` / `feedback.assign`) пише тригер БД. |
 | `buildAndSendDailyReport()` | `src/lib/dailyReport.ts` (named export) | cron + `POST /api/admin/send-report-now` | тягне 8 днів історії → формує heatmap + сигнали → `pickPhotoLinkBuilder()` → надсилає `sendMessage(parse_mode=HTML)` + `sendPhoto[]`. |
 | `mirrorPendingPhotos()` | `src/lib/driveMirror.ts` (named export) | cron + admin-trigger + drive-mode звіту | вибирає фідбеки з `photo_url`, у яких в `photo_mirror` нема `mirrored_at`, скачує з Storage, заливає в Drive. Журналить помилки в `photo_mirror.error`. |
 | `resolveRedirectUrl(feedbackId, mode)` | inline у `src/app/api/r/photo/[id]/route.ts` | GET `/api/r/photo/:id` | UUID-валідація → rate-limit 60/хв/IP → SELECT `feedback` → mode-dispatch (supabase signed URL / drive deep-link / telegram t.me/c). |
@@ -320,9 +336,23 @@ Sending у Telegram (`sendMessage`, `sendPhoto`) — внутрішні helpers
 
 #### UI adapter
 
-`src/app/**` — App Router сторінки + `src/components/*` — React-компоненти.
-Domain-логіка в UI не дублюється; форма читає `categories.ts` і динамічно
-рендерить поля.
+`src/app/**` — App Router сторінки. Розділені на дві route-групи з
+окремими `layout.tsx`-ами, тому Mini App не вантажить antd, а адмінка
+не тягне Telegram WebApp SDK у роботу:
+
+| Group | Маршрути | Стек | Live |
+|---|---|---|---|
+| `(app)` | `/`, `/login`, `/feedback/[category]`, `/thanks` | React + TailwindCSS + `<Script src="telegram-web-app.js">` (`beforeInteractive`) у root | відкривається у Telegram WebView |
+| `(admin)` | `/admin`, `/admin/analytics`, `/admin/stores`, `/admin/users`, `/admin/audit`, `/admin/tools`, `/admin/settings` | antd 5 + `@ant-design/pro-components` (ProLayout, ProTable, ProForm, StatisticCard, Drawer) + `@ant-design/plots` для charts; brand-tokens у `src/lib/admin/theme.ts`; sidebar у `src/lib/admin/menu.tsx`; shell — `src/components/admin/AdminShell.tsx` | відкривається у браузері адміна |
+
+Domain-логіка в UI не дублюється:
+
+- Mini App-форма читає `categories.ts` і динамічно рендерить поля.
+- Адмін-таблиця і `DashboardKPI` тягнуть aging-логіку з `lib/sla.ts`,
+  щоб порогові значення (4 / 24 / 72 год) і кольори були єдині для KPI
+  і колонки «Висить».
+- Lifecycle-Drawer в адмінці робить `fetch("/api/admin/feedback/<id>",
+  {method:"PATCH"})` — UI ніколи не пише напряму у Supabase.
 
 ### 3.4 Шар 4 — Frameworks & Drivers
 
@@ -543,6 +573,52 @@ sequenceDiagram
 
 (Джерело: [`diagrams/08-seq-drive-mirror.mmd`](./diagrams/08-seq-drive-mirror.mmd).)
 
+### 4.5 Lifecycle-апдейт фідбеку (status / assignee / коментар)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Adm as 👤 Адмін
+    participant UI as AdminShell · Drawer
+    participant API as PATCH /api/admin/feedback/[id]
+    participant SB as Supabase (feedbackgb)
+    participant Trg as audit_feedback() trigger
+    participant AL as audit_log
+
+    Adm->>UI: Клік по рядку → Drawer
+    Adm->>UI: Segmented status / Select assignee /<br/>текст коментаря
+    UI->>API: PATCH {status?, assigned_to?, comment?}
+
+    API->>API: verifySession() → role === "admin"
+    API->>API: Валідація status enum + UUID assignee
+    alt assigned_to задано
+        API->>SB: SELECT users WHERE id=? AND role='admin' AND is_active
+        SB-->>API: row | null
+        Note right of API: null → 400 bad_assignee
+    end
+    API->>API: status === "resolved"<br/>→ stamp resolved_at + resolved_by<br/>else clear
+
+    API->>SB: rpc set_config('app.actor', sess.uid, true)
+    API->>SB: UPDATE feedback SET ...
+    SB->>Trg: AFTER UPDATE
+    Trg->>AL: INSERT row<br/>action ∈ {feedback.status_change,<br/>feedback.assign, feedback.update}<br/>diff = {field: [old, new], ...}
+
+    alt comment непорожній
+        API->>AL: INSERT admin.feedback.note<br/>meta = {comment, status?, assigned_to?}
+    end
+
+    API-->>UI: 200 {ok: true}
+    UI->>UI: refresh() — оновлює рядок ProTable<br/>SLA-aging пере-малюється з нових даних
+```
+
+(Джерело: [`diagrams/09-seq-feedback-lifecycle.mmd`](./diagrams/09-seq-feedback-lifecycle.mmd).)
+
+**Чому два рядки в `audit_log` на одну зміну (з коментарем).** Структурний
+diff пише тригер БД, він не знає про текстовий коментар адміна. Текст —
+це підпис до зміни, тому пишеться окремим рядком `admin.feedback.note`,
+що звʼязаний з `feedback_id`. У UI `/admin/audit` обидва рядки видно
+поряд із сортуванням за `occurred_at`.
+
 ---
 
 ## 5. Не-функціональні вимоги
@@ -592,10 +668,12 @@ sequenceDiagram
 | Нова категорія фідбеку | 1) `src/lib/categories.ts` (entity) → 2) Seed у `supabase/schema.sql` `feedbackgb.categories` → 3) View `v_feedback_<id>` (опц., якщо потрібен per-category dashboard) | `customer_voice` була додана так: PR `003_v1_priority_flow.sql` + `005_per_category_views.sql` |
 | Нова бізнес-операція з кількома кроками | named export у `src/lib/<name>.ts` (use case), тонкий wrapper у `src/app/api/<group>/<name>/route.ts` | `mirrorPendingPhotos`, `buildAndSendDailyReport` |
 | Новий read-only ендпоінт під клієнт | `src/app/api/<scope>/route.ts`. Якщо це `SELECT` — краще створити VIEW у схемі `feedbackgb` + PostgREST-фільтри, ніж писати SQL у TS | `/api/products`, `/api/stores`, `/api/products/categories` |
-| Адмін-дія | `src/app/api/admin/<scope>/route.ts` + role-check + `logAudit("admin.<verb>", ...)` | `/api/admin/users/[id]/pin`, `/api/admin/users/[id]/unlock` |
+| Адмін-дія (одиничний рядок) | `src/app/api/admin/<scope>/route.ts` + role-check + `logAudit("admin.<verb>", ...)` | `/api/admin/users/[id]/pin`, `/api/admin/users/[id]/unlock` |
+| Lifecycle-зміна на feedback (status / assignee / нотатка) | вже є PATCH `src/app/api/admin/feedback/[id]/route.ts` — додавай нові поля сюди, не вигадуй ще один ендпоінт. БД-тригер сам напише `feedback.<verb>` у `audit_log`. | додати поле, наприклад `priority`: розширити `STATUSES`/новий enum + UI-компонент у Drawer |
 | Новий cron-handler | додати у `vercel.json` `crons` + ендпоінт `/api/cron/<name>` із bearer-перевіркою | `/api/cron/daily-report`, `/api/cron/mirror-to-drive` |
 | Нова інтеграція з зовнішнім API | `src/lib/<vendor>.ts` як Storage adapter, потім use case у `src/lib/<feature>.ts` | `googleDrive.ts` + `driveMirror.ts` |
-| Нова сторінка адмінки | `src/app/admin/<route>/page.tsx` (Server Component) + опційний `<route>-client.tsx` для інтерактивних шматків. Захист — middleware (auto). | `/admin/users`, `/admin/audit` |
+| Нова сторінка адмінки | `src/app/(admin)/admin/<route>/page.tsx` (Server Component, тягне дані з Supabase) + `<route>-client.tsx` (`"use client"`, antd / pro-components). Додати пункт у sidebar — `src/lib/admin/menu.tsx` + breadcrumb-name. Захист — middleware (auto). | `/admin/analytics`, `/admin/stores`, `/admin/settings` |
+| Новий aging-поріг або колір | `src/lib/sla.ts` — додати константу в `AGING_HOURS`, новий випадок у `bucketFor()`. Споживачі (`DashboardKPI`, `admin-client.tsx`) автоматично підхоплять. | KPI «Прострочено»: поріг `OVERDUE_HOURS`; колонка «Висить»: `AGING_TAG` мапа |
 | Подія для аудиту | додати літерал у `AuditAction` (`src/lib/audit.ts`) і викликати `logAudit("section.verb", ...)` | `auth.login.success`, `admin.send_report` |
 
 ### 6.1 Нова категорія — повний чек-лист
@@ -621,12 +699,14 @@ sequenceDiagram
 | Місце | Що змішано | Чому навмисно | Коли рефакторити |
 |---|---|---|---|
 | `src/app/api/feedback/route.ts` | Use case `createFeedback` живе як inline-функція в адаптері | На цьому розмірі окремий файл — оверкіл; route і use case 1:1 | Коли з'явиться другий вхід (наприклад, webhook бота) для того самого use case |
+| `src/app/api/admin/feedback/[id]/route.ts` | Use case `updateFeedbackLifecycle` теж inline; константа `STATUSES` дублюється з міграцією 007 (CHECK у БД) і з `FeedbackStatus` enum-ом у OpenAPI | Один callsite, swap-у нема. Дубль масиву явний і малий — компроміс кращий за shared module із cycle-залежністю | Коли з'явиться bulk-update (вибір кількох рядків у ProTable і одразу change status) — винести у `src/lib/feedback/lifecycle.ts` |
 | `src/lib/dailyReport.ts` (~1080 рядків) | Use case + telegram-adapter (`sendTelegramHtml`, `sendTelegramPhoto`) + форматер | Звіт — єдиний споживач Telegram-API; outflowing helpers | Коли з'явиться webhook бот (planned, патч `aiAgent.ts`/`telegramApi.ts` лежить поруч) |
 | `src/lib/supabase.ts` | `LooseClient = SupabaseClient<any, any, any>` | Немає codegen типів зі схеми `feedbackgb` | Додати `supabase gen types` у CI; замінити `any` на згенерований `Database` |
 | `src/middleware.ts` | Route-list зашитий у код (`/login`, `/api/auth/`, `/api/cron/`) | Маленький список, додавати один-два рази на квартал | Коли з'явиться 5+ публічних шляхів — винести у конфіг |
 | Photo path у Storage | плоский `YYYY-MM-DD/<uuid>.<ext>` | UI-вимога знайти "брак за травень" поки що відсутня | Окремий issue: per-category prefix `defect/2026-05/<uuid>.jpg` (див. розмову у попередніх PR) |
 | `feedback.photo_url` | Один photo на рядок | YAGNI на момент v1 | Коли продавчиня попросить кілька фото — окрема таблиця `feedback_photos` (skeleton у `ARCHITECTURE.md` старіший раунд) |
 | `sendTelegramHtml` fallback | character-split при `paragraph.length > 3800` може порвати HTML-теги | Майже неможлива умова з поточним форматом, але формально баг (Devin Review #16) | Окремий fix-PR: split по `\n` рядках, як останній resort — drop + warn |
+| SLA-aging — клієнтське | `bucketFor(ageMs(...))` рахується у браузері адміна на основі `Date.now()` | Без real-time push достатньо: ProTable перерахує при наступному рефреші | Коли додамо realtime-push (Feature #3 у [`FEATURES.md`](./FEATURES.md)) — winner буде серверне `now()`, тригер на staleness, або просто опитування `/api/admin/feedback?older_than=24h` |
 
 ---
 

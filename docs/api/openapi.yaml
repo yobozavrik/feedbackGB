@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: FeedbackGB API
-  version: "1.0.0"
+  version: "1.1.0"
   description: |
     HTTP API для Telegram Mini App "FeedbackGB" — збір фідбеку від продавчинь.
 
@@ -33,7 +33,9 @@ tags:
   - name: feedback
     description: Створення фідбеку (sellers + admins) і список (admin only)
   - name: admin
-    description: Адмінські операції — користувачі, ручний звіт, ручний бекап
+    description: |
+      Адмінські операції — користувачі (PIN reset / unlock), lifecycle
+      на фідбеку (PATCH), ручний звіт, ручний Drive-бекап.
   - name: cron
     description: Vercel Cron entry-points (bearer auth)
   - name: catalog
@@ -335,6 +337,90 @@ paths:
               schema: { $ref: "#/components/schemas/OkResponse" }
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/DbError"
+        "503":
+          $ref: "#/components/responses/SupabaseNotConfigured"
+
+  /api/admin/feedback/{id}:
+    patch:
+      tags: [admin]
+      summary: Lifecycle-апдейт фідбеку (статус / виконавець / коментар)
+      description: |
+        Адмін-only. Часткове оновлення `feedback`-рядка у трьох вимірах:
+
+        * `status` — будь-яке з `new` / `in_progress` / `resolved` / `rejected`.
+          Перехід у `resolved` автоматично виставляє `resolved_at = now()` і
+          `resolved_by = <session uid>`. Перехід з `resolved` назад — обнуляє
+          ці два поля, щоб журнал не вводив в оману.
+        * `assigned_to` — UUID іншого `admin`-користувача, або `null` щоб
+          скинути виконавця. Сервер додатково перевіряє, що `users.role =
+          'admin'` та `is_active = true`, інакше повертає `400 bad_assignee`.
+        * `comment` — необовʼязкова текстова нотатка (≤ 500 символів).
+          Зберігається у `audit_log` як окремий рядок з `action =
+          'admin.feedback.note'`, щоб у Журналі було видно "що адмін написав
+          при зміні статусу".
+
+        Принаймні одне з трьох має бути присутнім — інакше `400
+        nothing_to_update`.
+
+        Авдит-сторона. Зміна `feedback.status` / `feedback.assigned_to` —
+        пишеться **тригером БД** як `feedback.status_change` /
+        `feedback.assign` (із `diff` `[old, new]`). Цей хендлер сам пише
+        тільки опційний `admin.feedback.note`. Перед `UPDATE` встановлюється
+        `app.actor = <session uid>`, тому тригер атрибутує зміну поточному
+        адміну, а не `service_role`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: UUID фідбеку
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackPatchBody"
+            examples:
+              statusOnly:
+                summary: Тільки змінити статус
+                value: { status: "in_progress" }
+              assignOnly:
+                summary: Призначити виконавця
+                value: { assigned_to: "00000000-0000-0000-0000-000000000001" }
+              statusWithComment:
+                summary: Закрити з коментарем
+                value:
+                  status: "resolved"
+                  comment: "Замовили заміну, чекаємо постачання."
+              unassign:
+                summary: Скинути виконавця
+                value: { assigned_to: null }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "400":
+          description: |
+            Помилка валідації. Можливі коди:
+            * `bad_id` — невалідний UUID у path
+            * `bad_json` — не вдалося розпарсити body
+            * `bad_status` — статус поза enum-ом
+            * `bad_assignee` — `assigned_to` не UUID або не існуючий активний admin
+            * `comment_too_long` — `comment.length > 500`
+            * `nothing_to_update` — у body не передали жодного поля
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "403":
           $ref: "#/components/responses/Forbidden"
         "500":
@@ -760,9 +846,47 @@ components:
             `true` якщо рядок записано у Supabase. `false` коли env не
             налаштовано (dev). Помилки від БД повертаються як 500.
 
+    FeedbackStatus:
+      type: string
+      enum: [new, in_progress, resolved, rejected]
+      description: |
+        Lifecycle-стан фідбеку:
+        * `new` — щойно створено, ще не взяли в роботу
+        * `in_progress` — адмін призначив виконавця і працює
+        * `resolved` — успішно закрито (виставляє `resolved_at` + `resolved_by`)
+        * `rejected` — закрито без виконання (дубль / неактуально)
+
+    FeedbackPatchBody:
+      type: object
+      description: |
+        Часткове оновлення lifecycle-полів. Хоча б одне з трьох полів має
+        бути задане; інакше відповідь — `400 nothing_to_update`.
+      minProperties: 1
+      properties:
+        status:
+          $ref: "#/components/schemas/FeedbackStatus"
+        assigned_to:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            UUID адміна-виконавця, або `null` щоб скинути. Сервер
+            перевіряє, що цей user існує, має `role = 'admin'`, активний
+            (`is_active = true`).
+        comment:
+          type: string
+          maxLength: 500
+          nullable: true
+          description: |
+            Текстова нотатка адміна. Якщо непорожня — пишеться у
+            `audit_log` як окремий рядок з `action = 'admin.feedback.note'`.
+
     FeedbackFeedRow:
       type: object
-      description: Денормалізований рядок з view `feedbackgb.feedback_feed`.
+      description: |
+        Денормалізований рядок з view `feedbackgb.feedback_feed`. Поле
+        `assigned_to` / `assigned_full_name` зʼявилось у migration
+        `007_feedback_lifecycle.sql`.
       properties:
         id: { type: string, format: uuid }
         created_at: { type: string, format: date-time }
@@ -819,8 +943,7 @@ components:
         tg_verified: { type: boolean }
         summary: { type: string }
         status:
-          type: string
-          enum: [new, in_progress, resolved, rejected]
+          $ref: "#/components/schemas/FeedbackStatus"
         resolved_at:
           type: string
           format: date-time
@@ -829,6 +952,21 @@ components:
           type: string
           format: uuid
           nullable: true
+        assigned_to:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            FK на `users.id` (адмін-виконавець). Незалежно від
+            `resolved_by`: assigned_to — хто **зараз** працює, resolved_by
+            — хто **закрив** (виставляється тільки при переході у
+            `resolved`).
+        assigned_full_name:
+          type: string
+          nullable: true
+          description: |
+            Денормалізоване імʼя виконавця (`users.full_name`) — щоб не
+            робити окремий запит у UI.
 
     AdminUserRow:
       type: object

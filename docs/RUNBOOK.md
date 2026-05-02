@@ -107,7 +107,7 @@ grep -E '^(NEXT_PUBLIC_SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY|TELEGRAM_BOT_TOKEN
    - `supabase/004_photo_mirror.sql`
    - `supabase/005_per_category_views.sql`
    - `supabase/006_audit_log_full.sql`
-   - `supabase/007_telegram_link.sql` (якщо буде потрібно tg-link flow)
+   - `supabase/007_feedback_lifecycle.sql` (assigned_to + audit feedback.assign)
 
 Усі ідемпотентні, можна повторювати.
 

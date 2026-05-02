@@ -50,6 +50,7 @@ CI прохід: `Validation passed.` або просто warning-и без по
 | admin | `GET /api/admin/users` | cookie (admin) |
 | admin | `POST /api/admin/users/{id}/pin` | cookie (admin) |
 | admin | `POST /api/admin/users/{id}/unlock` | cookie (admin) |
+| admin | `PATCH /api/admin/feedback/{id}` | cookie (admin) — lifecycle (status / assignee / comment) |
 | admin | `POST /api/admin/send-report-now` | cookie (admin) |
 | admin | `POST /api/admin/mirror-to-drive-now` | cookie (admin) |
 | cron | `GET /api/cron/daily-report` | bearer `CRON_SECRET` або `x-vercel-cron: 1` |

@@ -1,0 +1,36 @@
+%% Sequence — lifecycle-апдейт фідбеку (PR #29 / migration 007).
+%% Адмін у Drawer змінює status / assignee / пише коментар → PATCH →
+%% UPDATE feedback → trigger пише структурний diff у audit_log.
+sequenceDiagram
+    autonumber
+    participant Adm as 👤 Адмін
+    participant UI as AdminShell · Drawer
+    participant API as PATCH /api/admin/feedback/[id]
+    participant SB as Supabase (feedbackgb)
+    participant Trg as audit_feedback() trigger
+    participant AL as audit_log
+
+    Adm->>UI: Клік по рядку → Drawer
+    Adm->>UI: Segmented status / Select assignee /<br/>текст коментаря
+    UI->>API: PATCH {status?, assigned_to?, comment?}
+
+    API->>API: verifySession() → role === "admin"
+    API->>API: Валідація status enum + UUID assignee
+    alt assigned_to задано
+        API->>SB: SELECT users WHERE id=? AND role='admin' AND is_active
+        SB-->>API: row | null
+        Note right of API: null → 400 bad_assignee
+    end
+    API->>API: status === "resolved"<br/>→ stamp resolved_at + resolved_by<br/>else clear
+
+    API->>SB: rpc set_config('app.actor', sess.uid, true)
+    API->>SB: UPDATE feedback SET ...
+    SB->>Trg: AFTER UPDATE
+    Trg->>AL: INSERT row<br/>action ∈ {feedback.status_change,<br/>feedback.assign, feedback.update}<br/>diff = {field: [old, new], ...}
+
+    alt comment непорожній
+        API->>AL: INSERT admin.feedback.note<br/>meta = {comment, status?, assigned_to?}
+    end
+
+    API-->>UI: 200 {ok: true}
+    UI->>UI: refresh() — оновлює рядок ProTable<br/>SLA-aging пере-малюється з нових даних

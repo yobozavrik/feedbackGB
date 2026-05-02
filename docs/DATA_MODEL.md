@@ -16,6 +16,7 @@
 ```mermaid
 erDiagram
     USERS ||--o{ FEEDBACK : "автор (user_id)"
+    USERS ||--o{ FEEDBACK : "виконавець (assigned_to)"
     USERS ||--o{ FEEDBACK : "вирішив (resolved_by)"
     SPOTS ||--o{ FEEDBACK : "store_id (FK у ERP)"
     SPOTS ||--o{ USERS    : "store_id (для seller)"
@@ -65,6 +66,7 @@ erDiagram
         text  status
         timestamptz resolved_at
         uuid  resolved_by FK
+        uuid  assigned_to FK
     }
     PHOTO_MIRROR {
         uuid feedback_id PK_FK
@@ -166,16 +168,19 @@ Seed зашитий у `schema.sql` із `on conflict (id) do update`, тобт�
 | `tg_*` | mixed | Telegram identity, заповнюється при валідній `initData` |
 | `summary` | text not null | людино-читабельний рядок (`buildSummary`), використовується аналітикою + trigram пошуком |
 | `embedding` | vector(1536) | OpenAI `text-embedding-3-small`; nullable, заповнюється або вручну, або фоновим процесом |
-| `status` | text | `new` / `in_progress` / `resolved` / `rejected` (CHECK) |
-| `resolved_at`, `resolved_by` | mixed | заповнюються при переході в `resolved`/`rejected` |
+| `status` | text | `new` / `in_progress` / `resolved` / `rejected` (CHECK). Перехід контролюється `PATCH /api/admin/feedback/{id}`. |
+| `resolved_at` | timestamptz | виставляється при переході у `resolved`; обнуляється при поверненні назад. |
+| `resolved_by` | uuid FK → `users.id` | хто перевів у `resolved`. |
+| `assigned_to` | uuid FK → `users.id` `on delete set null` | поточний адмін-виконавець (007). Не плутати з `resolved_by`: assigned_to — хто **зараз** працює, resolved_by — хто **закрив**. |
 
 Індекси:
 
 - `feedback_created_at_idx (created_at desc)` — основна сортувальна
 - `feedback_category_idx (category)` — фільтри за категорією
 - `feedback_store_idx (store_id)` — для звіту
-- `feedback_status_idx (status)` — для "застряглих"
+- `feedback_status_idx (status)` — для "застряглих" і aging-фільтрів
 - `feedback_user_idx (user_id)` — для топ-авторів і аудиту
+- `feedback_assigned_idx (assigned_to) where assigned_to is not null` — для "Моя черга" (007)
 - `feedback_product_idx (product_id) where product_id is not null` — повтори
 - `feedback_product_store_time_idx (store_id, product_id, created_at desc) where product_id is not null` — composite для дублів і повторів
 - `feedback_summary_trgm_idx using gin (summary gin_trgm_ops)` — full-text пошук
@@ -184,7 +189,11 @@ Seed зашитий у `schema.sql` із `on conflict (id) do update`, тобт�
 Тригери:
 
 - `feedback_set_updated_at` (BEFORE UPDATE) — туди-сюди `now()`.
-- `audit_feedback_*` (AFTER INSERT/UPDATE/DELETE) — пише у `audit_log` із діффом.
+- `audit_feedback_*` (AFTER INSERT/UPDATE/DELETE) — пише у `audit_log` з
+  семантичним `action`-кодом і `diff`-діффом. Розрізняє три типи зміни:
+  - `feedback.status_change` — коли зміна включає `status`.
+  - `feedback.assign` — коли зміна торкнулась тільки `assigned_to`.
+  - `feedback.update` — інші зміни (наприклад, `summary_changed`).
 
 ### `feedbackgb.photo_mirror` — стан резервного дзеркала
 
@@ -210,7 +219,7 @@ Seed зашитий у `schema.sql` із `on conflict (id) do update`, тобт�
 | `id` | bigserial PK | хронологічний індекс |
 | `occurred_at` | timestamptz | за замовчуванням `now()` |
 | `feedback_id` | uuid FK → `feedback.id` cascade | nullable; для feedback-related дій |
-| `action` | text | `auth.login.success` / `auth.login.failure` / `auth.logout` / `feedback.insert` / `feedback.update` / `feedback.status_change` / `feedback.delete` / `admin.user.pin_reset` / `admin.user.unlock` / `admin.send_report` / `admin.mirror_to_drive` |
+| `action` | text | `auth.login.success` / `auth.login.failure` / `auth.logout` / `feedback.insert` / `feedback.update` / `feedback.status_change` / `feedback.assign` / `feedback.delete` / `admin.user.pin_reset` / `admin.user.unlock` / `admin.send_report` / `admin.mirror_to_drive` / `admin.feedback.note` |
 | `actor` | text | або UUID, або рядок `service_role` |
 | `actor_user_id` | uuid FK → `users.id` set null | хто зробив (нульовий для cron/service_role) |
 | `target_user_id` | uuid FK → `users.id` set null | над ким (для admin actions, як-от `pin_reset`) |
@@ -297,7 +306,8 @@ group by 1, 2;
 - `category_emoji`, `category_title` — JOIN на `categories`
 - `store_name = coalesce(spots.name, store_label)` — fallback логіка
 - `store_address` — для деталізованих звітів
-- `user_full_name`, `user_role` — JOIN на `users`
+- `user_full_name`, `user_role` — JOIN на `users` (автор)
+- `assigned_full_name` — JOIN на `users` (виконавець; додано у `007_feedback_lifecycle.sql`)
 - `product_name`, `product_unit` — JOIN на `categories.products`
 
 Решта `view`-ів — на категорійні дашборди:
@@ -352,9 +362,19 @@ group by 1, 2;
 `request.jwt.claims->>'sub'`, або `service_role`. Записує:
 
 - INSERT → `feedback.insert` + повний `meta`.
-- UPDATE з reali-diff → `feedback.update` (або `feedback.status_change`,
-  якщо змінився `status`) + `diff` jsonb.
+- UPDATE з реальним diff-ом → один з трьох action-кодів:
+  - `feedback.status_change` — якщо у diff-і присутнє `status` (мають
+    пріоритет над іншими полями).
+  - `feedback.assign` — якщо `status` не змінився, але змінився
+    `assigned_to`.
+  - `feedback.update` — решта (наприклад, `summary_changed`).
+  Сам `diff` jsonb — `[old, new]` для кожного зміненого поля; для
+  `summary` пишемо тільки `summary_changed: true`, бо повний текст
+  зайвий у журналі.
 - DELETE → `feedback.delete`.
+
+Версія тригера, що розрізняє `feedback.assign`, прийшла з міграції
+`007_feedback_lifecycle.sql`.
 
 ### `refresh_stats()`
 
@@ -426,11 +446,12 @@ POS-каталог. Поля:
 | Файл | Що додає |
 |---|---|
 | `supabase/schema.sql` | base — таблиці `categories`, `users`, `feedback`, `audit_log`, тригери, RPC, `v_login_users`, `feedback_feed` |
+| `supabase/002_security_hardening.sql` | RLS-енейбл, ужорсточення політик, `verify_pin` як `SECURITY DEFINER` |
 | `supabase/003_v1_priority_flow.sql` | v1 product/quantity flow → `feedback.product_id`, `feedback.quantity`; розширює `feedback_feed`; додає `v_products`, `v_popular_products` |
 | `supabase/004_photo_mirror.sql` | таблиця `photo_mirror` (Drive backup state) |
 | `supabase/005_per_category_views.sql` | категорійні `v_feedback_*` view-и для admin UI |
 | `supabase/006_audit_log_full.sql` | розширення `audit_log` (actor_user_id, target_user_id, ip, user_agent, meta), `v_audit_log` |
-| `supabase/007_telegram_link.sql` | (заплановано) Telegram link/unlink flow для зв'язку tg_user_id ↔ user_id |
+| `supabase/007_feedback_lifecycle.sql` | `feedback.assigned_to` + `feedback_assigned_idx`; розширює `feedback_feed` (assigned_to, assigned_full_name); тригер `audit_feedback` починає писати `feedback.assign`. |
 
-Apply порядок: завжди `schema.sql` → 003 → 004 → 005 → 006 → 007. Усі
-ідемпотентні (`if not exists`, `or replace`, seed-and-update).
+Apply порядок: завжди `schema.sql` → 002 → 003 → 004 → 005 → 006 → 007.
+Усі ідемпотентні (`if not exists`, `or replace`, seed-and-update).
