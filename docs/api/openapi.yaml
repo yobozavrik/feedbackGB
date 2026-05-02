@@ -22,8 +22,12 @@ info:
     name: yobozavrik
     url: https://github.com/yobozavrik/feedbackGB
 servers:
-  - url: https://feedback-gb.vercel.app
+  - url: https://{prodHost}
     description: Production
+    variables:
+      prodHost:
+        default: your-prod-host
+        description: Hostname of your production deployment (e.g. Vercel project URL or custom domain).
   - url: http://localhost:3000
     description: Local dev
 
