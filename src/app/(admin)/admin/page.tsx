@@ -1,5 +1,7 @@
+import { cookies } from "next/headers";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { CATEGORIES } from "@/lib/categories";
+import { SESSION_COOKIE, verifySession } from "@/lib/session";
 import { AdminClient } from "./admin-client";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 import { DashboardKPI, type DashboardRow } from "@/components/admin/DashboardKPI";
@@ -27,6 +29,13 @@ export interface FeedRow {
   tg_verified: boolean;
   summary: string;
   status: string;
+  assigned_to: string | null;
+  assigned_full_name: string | null;
+}
+
+export interface AdminOption {
+  id: string;
+  full_name: string;
 }
 
 const SIGNED_URL_TTL = 60 * 10; // 10 minutes
@@ -93,10 +102,27 @@ async function resolvePhotoUrl(
   return null;
 }
 
+async function fetchAdmins(): Promise<AdminOption[]> {
+  const supabase = getServerSupabase();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, full_name")
+    .eq("role", "admin")
+    .eq("is_active", true)
+    .order("full_name", { ascending: true });
+  if (error) return [];
+  return (data as AdminOption[]) ?? [];
+}
+
 export default async function AdminPage() {
-  const [{ rows, error }, statsRows] = await Promise.all([
+  const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
+  const currentAdminId = sess?.uid ?? null;
+
+  const [{ rows, error }, statsRows, admins] = await Promise.all([
     fetchRows(),
     fetchDashboardStats(),
+    fetchAdmins(),
   ]);
   const stores = Array.from(
     new Set(rows.map((r) => r.store_name).filter((x): x is string => Boolean(x))),
@@ -132,6 +158,8 @@ export default async function AdminPage() {
       <AdminClient
         rows={rows}
         stores={stores}
+        admins={admins}
+        currentAdminId={currentAdminId}
         categories={CATEGORIES.map((c) => ({
           id: c.id,
           title: c.title,
