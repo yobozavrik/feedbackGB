@@ -9,9 +9,10 @@
 |---|---|
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | "Хочу зрозуміти, як це все працює". C4-діаграми (контекст / контейнери / компоненти), Clean Architecture mapping, ключові потоки, NFR, де додавати нові фічі, технічний борг. |
 | [`DATA_MODEL.md`](./DATA_MODEL.md) | "Хочу побачити, що в БД". Опис таблиць, view-ів, RPC-функцій, тригерів, індексів схеми `feedbackgb`. ER-діаграма. |
-| [`api/openapi.yaml`](./api/openapi.yaml) | "Хочу contract API". OpenAPI 3.0.3 для всіх 16 ендпоінтів. Як переглянути — у [`api/README.md`](./api/README.md). |
+| [`api/openapi.yaml`](./api/openapi.yaml) | "Хочу contract API". OpenAPI 3.0.3 для всіх ендпоінтів `/api/*`. Як переглянути — у [`api/README.md`](./api/README.md). |
+| [`FEATURES.md`](./FEATURES.md) | "Що зроблено і що далі". Каталог реалізованих фіч (Lifecycle, SLA, ProTable-редизайн адмінки) + roadmap top-5 з пріоритетами і кошторисом. |
 | [`RUNBOOK.md`](./RUNBOOK.md) | "Хочу запустити / задеплоїти / полагодити". Setup Supabase, Telegram, Drive, Vercel; типові інциденти; ротація секретів. |
-| [`ADMIN_REDESIGN.md`](./ADMIN_REDESIGN.md) | "Як виглядатиме нова адмінка". Пропозиція редизайну `/admin/*` у стилі Ant Design Pro — навігація, sidebar, сторінки, зв'язок з Supabase, поетапний план PR-ів. Бекенд-логіка не змінюється. |
+| [`ADMIN_REDESIGN.md`](./ADMIN_REDESIGN.md) | "Як виглядатиме нова адмінка". Пропозиція редизайну `/admin/*` у стилі Ant Design Pro — навігація, sidebar, сторінки, зв'язок з Supabase, поетапний план PR-ів. Реалізація — у PR #19…#28; стан фіксується у [`FEATURES.md`](./FEATURES.md). |
 
 ## Mermaid-діаграми
 
@@ -28,6 +29,7 @@
 | `06-seq-daily-report.mmd` | Sequence | Cron → buildAndSendDailyReport → Telegram |
 | `07-seq-photo-redirect.mmd` | Sequence | Click `📷` у звіті → `/api/r/photo/<id>` → 302 на signed URL |
 | `08-seq-drive-mirror.mmd` | Sequence | mirrorPendingPhotos → Storage download → Drive upload → photo_mirror UPSERT |
+| `09-seq-feedback-lifecycle.mmd` | Sequence | Drawer → PATCH `/api/admin/feedback/[id]` → UPDATE → trigger пише `feedback.status_change` / `feedback.assign` |
 
 Перегляд: вставити вміст у https://mermaid.live або відкрити у GitHub —
 рендерить нативно.

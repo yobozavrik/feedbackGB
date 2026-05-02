@@ -3,6 +3,7 @@
 %% цим репо; ми лише посилаємось на них (read-only через VIEW і FK).
 erDiagram
     USERS ||--o{ FEEDBACK : "автор (user_id)"
+    USERS ||--o{ FEEDBACK : "виконавець (assigned_to)"
     USERS ||--o{ FEEDBACK : "вирішив (resolved_by)"
     SPOTS ||--o{ FEEDBACK : "store_id (FK у ERP)"
     SPOTS ||--o{ USERS    : "store_id (для seller)"
@@ -54,6 +55,7 @@ erDiagram
         text  status "new | in_progress | resolved | rejected"
         timestamptz resolved_at
         uuid  resolved_by FK
+        uuid  assigned_to FK "адмін-виконавець; 007_feedback_lifecycle"
     }
 
     PHOTO_MIRROR {

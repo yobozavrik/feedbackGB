@@ -142,3 +142,17 @@ supabase/schema.sql          # БД + RLS
 Щоб додати нову категорію — допиши обʼєкт у
 [`src/lib/categories.ts`](src/lib/categories.ts). Грід на головній,
 динамічний роут і API підхопляться автоматично.
+
+## Документація
+
+Глибша документація живе у [`docs/`](docs/):
+
+| Документ | Що там |
+|---|---|
+| [`docs/README.md`](docs/README.md) | Індекс, mermaid-діаграми. |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | C4-діаграми (контекст / контейнери / компоненти), Clean Architecture mapping, ключові потоки, NFR, технічний борг. |
+| [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | ER-діаграма, таблиці, view, RPC, тригери, міграції. |
+| [`docs/api/openapi.yaml`](docs/api/openapi.yaml) | OpenAPI 3.0.3 для всіх ендпоінтів `/api/*` (preview через `npx @redocly/cli preview-docs`). |
+| [`docs/FEATURES.md`](docs/FEATURES.md) | Каталог реалізованих фіч (Mini App / адмінка / lifecycle / SLA) і roadmap top-5. |
+| [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Setup Supabase / Telegram / Drive / Vercel, типові інциденти, ротація секретів. |
+| [`docs/diagrams/`](docs/diagrams/) | Mermaid-діаграми як окремі файли (рендеряться у GitHub нативно або у https://mermaid.live). |
