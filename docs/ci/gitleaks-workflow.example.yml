@@ -1,3 +1,21 @@
+# GitHub Actions workflow that runs the same gitleaks scan on every PR
+# as a backstop, in case someone bypasses the local pre-commit hook
+# with `git commit --no-verify`.
+#
+# WHY THIS FILE LIVES HERE INSTEAD OF .github/workflows/:
+# Our git automation account currently does not have the `workflow`
+# OAuth scope, so it cannot push files into `.github/workflows/`. To
+# enable this CI check, copy this file manually:
+#
+#   mkdir -p .github/workflows
+#   cp docs/ci/gitleaks-workflow.example.yml .github/workflows/gitleaks.yml
+#   git add .github/workflows/gitleaks.yml
+#   git commit -m "ci: enable gitleaks scan on PRs"
+#   git push
+#
+# Or just create it via the GitHub web UI:
+# repo → Actions → New workflow → set up a workflow yourself → paste this.
+
 name: gitleaks
 
 on:
