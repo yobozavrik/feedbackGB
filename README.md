@@ -78,7 +78,7 @@ npm run dev
 
 1. У [@BotFather](https://t.me/BotFather): `/newbot` → отримай токен.
 2. `/newapp` → прив'яжи Mini App до бота, вкажи URL продакшн-деплою
-   (наприклад `https://feedback-gb.vercel.app`).
+   (наприклад `https://<your-prod-host>`).
 3. Поклади `TELEGRAM_BOT_TOKEN` у `.env.local` / Vercel env.
 4. У бота додай команду / кнопку, що відкриває Mini App. Найпростіше —
    inline-кнопка в груповому чаті:
@@ -86,7 +86,7 @@ npm run dev
    from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
    kb = InlineKeyboardMarkup([[
        InlineKeyboardButton("💖 Залишити фідбек",
-           web_app=WebAppInfo(url="https://feedback-gb.vercel.app"))
+           web_app=WebAppInfo(url="https://<your-prod-host>"))
    ]])
    ```
 
