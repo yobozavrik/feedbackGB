@@ -182,6 +182,9 @@ sudo apt install gitleaks
 npm run scan:secrets   # повний скан історії
 ```
 
-GitHub Actions додатково ганяє той самий gitleaks-конфіг на кожному PR
-([`.github/workflows/gitleaks.yml`](.github/workflows/gitleaks.yml)) як
-страховку, якщо хтось закомітив з `--no-verify`.
+Опційно: щоб ще й CI-страховка ганяла gitleaks на кожному PR (для випадків
+коли хтось закомітив з `--no-verify`), скопіюй
+[`docs/ci/gitleaks-workflow.example.yml`](docs/ci/gitleaks-workflow.example.yml)
+у `.github/workflows/gitleaks.yml`. Цей файл лежить як приклад, бо у Devin
+зараз немає `workflow` OAuth-scope, щоб писати у `.github/workflows/`
+напряму — копіюється вручну.
