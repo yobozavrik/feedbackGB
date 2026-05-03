@@ -1,15 +1,16 @@
 "use client";
 
 import {
-  KeyOutlined,
-  ToolOutlined,
-  MessageOutlined,
   ApartmentOutlined,
+  KeyOutlined,
+  MessageOutlined,
+  ToolOutlined,
 } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
 import {
   Space,
   Tag,
+  Tooltip,
   Typography,
   theme as antdTheme,
 } from "antd";
@@ -217,17 +218,10 @@ export function AuditClient({ rows }: Props) {
           ),
       },
       {
-        title: "IP",
+        title: "Звідки",
         dataIndex: "ip",
-        width: 130,
-        render: (_, row) =>
-          row.ip ? (
-            <Text code style={{ fontSize: 11 }}>
-              {row.ip}
-            </Text>
-          ) : (
-            <Text type="secondary">—</Text>
-          ),
+        width: 220,
+        render: (_, row) => <LocationCell row={row} />,
       },
     ],
     [sectionFilters, actorFilters, actionFilters, token],
@@ -272,6 +266,67 @@ export function AuditClient({ rows }: Props) {
         </Text>,
       ]}
     />
+  );
+}
+
+/** Convert ISO-2 country code to a 🇺🇦-style flag emoji. Falls back to the
+ *  raw code when the input isn't a valid 2-letter ASCII string. */
+function countryFlag(code: string | null | undefined): string {
+  if (!code || code.length !== 2) return "";
+  const A = 0x1f1e6;
+  const upper = code.toUpperCase();
+  const a = upper.charCodeAt(0);
+  const b = upper.charCodeAt(1);
+  if (a < 65 || a > 90 || b < 65 || b > 90) return "";
+  return String.fromCodePoint(A + (a - 65), A + (b - 65));
+}
+
+interface GeoIpMeta {
+  country?: string | null;
+  city?: string | null;
+  asn?: string | null;
+  isp?: string | null;
+}
+
+function readGeo(meta: AuditRow["meta"]): GeoIpMeta | null {
+  if (!meta || typeof meta !== "object") return null;
+  const raw = (meta as Record<string, unknown>).geoip;
+  if (!raw || typeof raw !== "object") return null;
+  return raw as GeoIpMeta;
+}
+
+function LocationCell({ row }: { row: AuditRow }) {
+  const geo = readGeo(row.meta);
+  if (!row.ip && !geo) {
+    return <Text type="secondary">—</Text>;
+  }
+  const flag = countryFlag(geo?.country ?? undefined);
+  const cityCountry = geo?.city
+    ? geo.country
+      ? `${geo.city}, ${geo.country}`
+      : geo.city
+    : (geo?.country ?? null);
+  const ispLine = [geo?.isp, geo?.asn].filter(Boolean).join(" · ");
+  return (
+    <Space direction="vertical" size={2} style={{ lineHeight: 1.2 }}>
+      <Space size={6} wrap>
+        {flag ? <span style={{ fontSize: 14 }}>{flag}</span> : null}
+        {cityCountry ? (
+          <Text style={{ fontSize: 12 }}>{cityCountry}</Text>
+        ) : (
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Невідомо
+          </Text>
+        )}
+      </Space>
+      {ispLine || row.ip ? (
+        <Tooltip title={row.ip ? `IP: ${row.ip}` : undefined}>
+          <Text type="secondary" style={{ fontSize: 11 }}>
+            {ispLine || row.ip}
+          </Text>
+        </Tooltip>
+      ) : null}
+    </Space>
   );
 }
 
