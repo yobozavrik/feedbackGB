@@ -144,9 +144,15 @@ export async function POST(req: Request) {
     },
   });
 
-  if (geo) {
-    // Persist last-login location for /admin/users. We skip the IP itself
-    // here because audit_log already records it per event.
+  // Persist last-login location for /admin/users only when ipinfo
+  // returned at least one usable field. `lookupIp` always returns an
+  // object (EMPTY when the provider is misconfigured / unreachable /
+  // returns non-2xx / when the IP is private), so we gate on `geoMeta`
+  // — which `geoipToAuditMeta` returns as `null` for the all-null case.
+  // Without this guard we'd silently wipe the previously stored geo on
+  // every login during a provider outage. The IP itself is still
+  // recorded in audit_log.ip per event, so we don't lose history.
+  if (geoMeta && geo) {
     const { error: upErr } = await supabase
       .from("users")
       .update({
