@@ -15,6 +15,10 @@ export interface AdminUser {
   failed_attempts: number;
   locked_until: string | null;
   last_login: string | null;
+  last_login_country: string | null;
+  last_login_city: string | null;
+  last_login_asn: string | null;
+  last_login_isp: string | null;
 }
 
 async function fetchData(): Promise<{
@@ -31,7 +35,7 @@ async function fetchData(): Promise<{
       supabase
         .from("users")
         .select(
-          "id, full_name, role, store_id, is_active, pin_hash, failed_attempts, locked_until, last_login",
+          "id, full_name, role, store_id, is_active, pin_hash, failed_attempts, locked_until, last_login, last_login_country, last_login_city, last_login_asn, last_login_isp",
         )
         .order("full_name", { ascending: true }),
       supabase.from("v_stores").select("id, name"),
@@ -54,6 +58,10 @@ async function fetchData(): Promise<{
     failed_attempts: number | null;
     locked_until: string | null;
     last_login: string | null;
+    last_login_country: string | null;
+    last_login_city: string | null;
+    last_login_asn: string | null;
+    last_login_isp: string | null;
   }>;
 
   const users: AdminUser[] = rows.map((u) => ({
@@ -67,6 +75,10 @@ async function fetchData(): Promise<{
     failed_attempts: u.failed_attempts ?? 0,
     locked_until: u.locked_until,
     last_login: u.last_login,
+    last_login_country: u.last_login_country,
+    last_login_city: u.last_login_city,
+    last_login_asn: u.last_login_asn,
+    last_login_isp: u.last_login_isp,
   }));
 
   return { users, error: null };

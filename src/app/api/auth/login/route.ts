@@ -7,6 +7,7 @@ import {
 } from "@/lib/session";
 import { clientIp, rateLimit } from "@/lib/rateLimit";
 import { logAudit, uaFromRequest } from "@/lib/audit";
+import { geoipToAuditMeta, lookupIp } from "@/lib/geoip";
 
 export const runtime = "nodejs";
 
@@ -100,12 +101,20 @@ export async function POST(req: Request) {
   }
   const user = (data ?? null) as UserRow | null;
   if (!user || !user.id) {
+    // Best-effort enrichment so failed-login audit entries also carry geo /
+    // VPN context when available. Bound to FETCH_TIMEOUT_MS so a slow
+    // provider can't block the 401 response by more than ~2s.
+    const geoFailure = await lookupIp(ip).catch(() => null);
+    const geoFailureMeta = geoFailure ? geoipToAuditMeta(geoFailure) : null;
     await logAudit("auth.login.failure", {
       targetUserId: userId,
       targetType: "user",
       ip,
       userAgent: uaFromRequest(req),
-      meta: { ip_attempts_remaining: ipLimit.remaining },
+      meta: {
+        ip_attempts_remaining: ipLimit.remaining,
+        ...(geoFailureMeta ? { geoip: geoFailureMeta } : {}),
+      },
     });
     return NextResponse.json({ error: "Невірний PIN" }, { status: 401 });
   }
@@ -118,13 +127,41 @@ export async function POST(req: Request) {
     iat: Date.now(),
   });
 
+  // Resolve geo/VPN info for both the audit log meta and the cached
+  // last_login_* columns on `users`. Failures here do NOT block login.
+  const geo = await lookupIp(ip).catch(() => null);
+  const geoMeta = geo ? geoipToAuditMeta(geo) : null;
+
   await logAudit("auth.login.success", {
     actorUserId: user.id,
     targetType: "session",
     ip,
     userAgent: uaFromRequest(req),
-    meta: { role: user.role, store_id: user.store_id },
+    meta: {
+      role: user.role,
+      store_id: user.store_id,
+      ...(geoMeta ? { geoip: geoMeta } : {}),
+    },
   });
+
+  if (geo) {
+    // Persist last-login location for /admin/users. We skip the IP itself
+    // here because audit_log already records it per event.
+    const { error: upErr } = await supabase
+      .from("users")
+      .update({
+        last_login_country: geo.country,
+        last_login_city: geo.city,
+        last_login_asn: geo.asn,
+        last_login_isp: geo.isp,
+      })
+      .eq("id", user.id);
+    if (upErr) {
+      console.error("[auth.login] last_login_* update failed", {
+        code: upErr.code,
+      });
+    }
+  }
 
   const res = NextResponse.json({
     ok: true,

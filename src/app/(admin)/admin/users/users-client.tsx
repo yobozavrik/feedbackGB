@@ -17,6 +17,7 @@ import {
   Popconfirm,
   Space,
   Tag,
+  Tooltip,
   Typography,
   theme as antdTheme,
 } from "antd";
@@ -232,7 +233,7 @@ export function UsersClient({ users }: Props) {
       {
         title: "Останній вхід",
         dataIndex: "last_login",
-        width: 200,
+        width: 220,
         sorter: (a, b) => {
           const ta = a.last_login ? new Date(a.last_login).getTime() : 0;
           const tb = b.last_login ? new Date(b.last_login).getTime() : 0;
@@ -240,7 +241,16 @@ export function UsersClient({ users }: Props) {
         },
         render: (_, row) =>
           row.last_login ? (
-            new Date(row.last_login).toLocaleString("uk-UA")
+            <Space
+              direction="vertical"
+              size={2}
+              style={{ lineHeight: 1.2 }}
+            >
+              <Text style={{ fontSize: 12 }}>
+                {new Date(row.last_login).toLocaleString("uk-UA")}
+              </Text>
+              <UserLastLocation row={row} />
+            </Space>
           ) : (
             <Text type="secondary">жодного</Text>
           ),
@@ -389,5 +399,45 @@ export function UsersClient({ users }: Props) {
         />
       </ModalForm>
     </>
+  );
+}
+
+function countryFlag(code: string | null | undefined): string {
+  if (!code || code.length !== 2) return "";
+  const A = 0x1f1e6;
+  const upper = code.toUpperCase();
+  const a = upper.charCodeAt(0);
+  const b = upper.charCodeAt(1);
+  if (a < 65 || a > 90 || b < 65 || b > 90) return "";
+  return String.fromCodePoint(A + (a - 65), A + (b - 65));
+}
+
+function UserLastLocation({ row }: { row: AdminUser }) {
+  if (
+    !row.last_login_country &&
+    !row.last_login_city &&
+    !row.last_login_isp &&
+    !row.last_login_asn
+  ) {
+    return null;
+  }
+  const flag = countryFlag(row.last_login_country);
+  const cityCountry = row.last_login_city
+    ? row.last_login_country
+      ? `${row.last_login_city}, ${row.last_login_country}`
+      : row.last_login_city
+    : (row.last_login_country ?? "");
+  const ispLine = [row.last_login_isp, row.last_login_asn]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <Tooltip title={ispLine || undefined}>
+      <Space size={4} style={{ fontSize: 11 }}>
+        {flag ? <span>{flag}</span> : null}
+        <Text type="secondary" style={{ fontSize: 11 }}>
+          {cityCountry || ispLine}
+        </Text>
+      </Space>
+    </Tooltip>
   );
 }
