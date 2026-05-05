@@ -73,6 +73,9 @@ describe("isPrivateOrLocal", () => {
     "192.169.0.1", // off-by-one from 192.168
     "100.63.0.1", // off-by-one from CGNAT
     "2001:4860:4860::8888", // Google public DNS
+    "192.0.43.10", // ICANN — globally routable, NOT in the 192.0.0/24 or 192.0.2/24 reserved blocks
+    "192.0.1.1", // routable, between IETF and TEST-NET-1
+    "192.0.100.1"
   ])("treats %s as public", (ip) => {
     expect(isPrivateOrLocal(ip)).toBe(false);
   });
