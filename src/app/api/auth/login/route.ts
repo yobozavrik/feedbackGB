@@ -7,7 +7,7 @@ import {
 } from "@/lib/session";
 import { clientIp, rateLimit } from "@/lib/rateLimit";
 import { logAudit, uaFromRequest } from "@/lib/audit";
-import { geoipToAuditMeta, lookupIp } from "@/lib/geoip";
+import { geoipToAuditMeta, geoipToUserUpdate, lookupIp } from "@/lib/geoip";
 
 export const runtime = "nodejs";
 
@@ -101,11 +101,13 @@ export async function POST(req: Request) {
   }
   const user = (data ?? null) as UserRow | null;
   if (!user || !user.id) {
-    // Best-effort enrichment so failed-login audit entries also carry geo /
-    // VPN context when available. Bound to FETCH_TIMEOUT_MS so a slow
-    // provider can't block the 401 response by more than ~2s.
-    const geoFailure = await lookupIp(ip).catch(() => null);
-    const geoFailureMeta = geoFailure ? geoipToAuditMeta(geoFailure) : null;
+    // Failed-login branch intentionally does NOT call lookupIp:
+    //   1. Wastes ipinfo quota during credential-stuffing attacks
+    //      (high-cardinality source IPs blow through the cache).
+    //   2. Adds avoidable latency to the 401 response path.
+    //   3. The audit_log already records `ip` per event, so geo can
+    //      always be back-filled later via a CRON join against
+    //      `users.last_login_*` or a re-lookup if needed.
     await logAudit("auth.login.failure", {
       targetUserId: userId,
       targetType: "user",
@@ -113,7 +115,6 @@ export async function POST(req: Request) {
       userAgent: uaFromRequest(req),
       meta: {
         ip_attempts_remaining: ipLimit.remaining,
-        ...(geoFailureMeta ? { geoip: geoFailureMeta } : {}),
       },
     });
     return NextResponse.json({ error: "Невірний PIN" }, { status: 401 });
@@ -127,8 +128,10 @@ export async function POST(req: Request) {
     iat: Date.now(),
   });
 
-  // Resolve geo/VPN info for both the audit log meta and the cached
-  // last_login_* columns on `users`. Failures here do NOT block login.
+  // Resolve geo info for the audit log meta. Bounded by FETCH_TIMEOUT_MS
+  // (~800ms) and never throws — failures degrade to "no geo" in the
+  // audit entry, login still succeeds. Subsequent same-IP logins hit
+  // the in-process cache so this is a one-API-call-per-day-per-IP cost.
   const geo = await lookupIp(ip).catch(() => null);
   const geoMeta = geo ? geoipToAuditMeta(geo) : null;
 
@@ -144,28 +147,26 @@ export async function POST(req: Request) {
     },
   });
 
-  // Persist last-login location for /admin/users only when ipinfo
-  // returned at least one usable field. `lookupIp` always returns an
-  // object (EMPTY when the provider is misconfigured / unreachable /
-  // returns non-2xx / when the IP is private), so we gate on `geoMeta`
-  // — which `geoipToAuditMeta` returns as `null` for the all-null case.
-  // Without this guard we'd silently wipe the previously stored geo on
-  // every login during a provider outage. The IP itself is still
-  // recorded in audit_log.ip per event, so we don't lose history.
-  if (geoMeta && geo) {
-    const { error: upErr } = await supabase
-      .from("users")
-      .update({
-        last_login_country: geo.country,
-        last_login_city: geo.city,
-        last_login_asn: geo.asn,
-        last_login_isp: geo.isp,
-      })
-      .eq("id", user.id);
-    if (upErr) {
-      console.error("[auth.login] last_login_* update failed", {
-        code: upErr.code,
-      });
+  // Persist last-login location for /admin/users with PER-FIELD overwrite
+  // protection: only update columns whose new value is non-null. Without
+  // this, a partial ipinfo response (e.g. country='UA' but city/asn/isp
+  // missing) would null out previously-stored richer data on the user
+  // row. PR #37 fixed this at row level (skip update entirely on full
+  // EMPTY); this fixes the same class of bug at column level.
+  if (geo) {
+    const updatePayload = geoipToUserUpdate(geo);
+    if (updatePayload) {
+      const { error: upErr } = await supabase
+        .from("users")
+        .update(updatePayload)
+        .eq("id", user.id);
+      if (upErr) {
+        console.error("[auth.login] last_login_* update failed", {
+          code: upErr.code,
+          message: upErr.message,
+          fields: Object.keys(updatePayload),
+        });
+      }
     }
   }
 
