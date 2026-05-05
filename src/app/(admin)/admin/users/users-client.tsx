@@ -22,7 +22,7 @@ import {
   theme as antdTheme,
 } from "antd";
 import { useCallback, useMemo, useState } from "react";
-import { countryFlag } from "@/lib/geoip";
+import { countryFlag, formatGeoLines } from "@/lib/geoip";
 import type { AdminUser } from "./page";
 
 const { Text } = Typography;
@@ -404,29 +404,20 @@ export function UsersClient({ users }: Props) {
 }
 
 function UserLastLocation({ row }: { row: AdminUser }) {
-  if (
-    !row.last_login_country &&
-    !row.last_login_city &&
-    !row.last_login_isp &&
-    !row.last_login_asn
-  ) {
-    return null;
-  }
+  const lines = formatGeoLines({
+    country: row.last_login_country,
+    city: row.last_login_city,
+    asn: row.last_login_asn,
+    isp: row.last_login_isp,
+  });
+  if (lines.empty) return null;
   const flag = countryFlag(row.last_login_country);
-  const cityCountry = row.last_login_city
-    ? row.last_login_country
-      ? `${row.last_login_city}, ${row.last_login_country}`
-      : row.last_login_city
-    : (row.last_login_country ?? "");
-  const ispLine = [row.last_login_isp, row.last_login_asn]
-    .filter(Boolean)
-    .join(" · ");
   return (
-    <Tooltip title={ispLine || undefined}>
+    <Tooltip title={lines.ispAsn || undefined}>
       <Space size={4} style={{ fontSize: 11 }}>
         {flag ? <span>{flag}</span> : null}
         <Text type="secondary" style={{ fontSize: 11 }}>
-          {cityCountry || ispLine}
+          {lines.cityCountry || lines.ispAsn}
         </Text>
       </Space>
     </Tooltip>
