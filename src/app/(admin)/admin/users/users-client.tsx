@@ -22,6 +22,7 @@ import {
   theme as antdTheme,
 } from "antd";
 import { useCallback, useMemo, useState } from "react";
+import { countryFlag } from "@/lib/geoip";
 import type { AdminUser } from "./page";
 
 const { Text } = Typography;
@@ -400,16 +401,6 @@ export function UsersClient({ users }: Props) {
       </ModalForm>
     </>
   );
-}
-
-function countryFlag(code: string | null | undefined): string {
-  if (!code || code.length !== 2) return "";
-  const A = 0x1f1e6;
-  const upper = code.toUpperCase();
-  const a = upper.charCodeAt(0);
-  const b = upper.charCodeAt(1);
-  if (a < 65 || a > 90 || b < 65 || b > 90) return "";
-  return String.fromCodePoint(A + (a - 65), A + (b - 65));
 }
 
 function UserLastLocation({ row }: { row: AdminUser }) {
