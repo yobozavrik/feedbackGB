@@ -106,7 +106,10 @@ export function isPrivateOrLocal(rawIp: string): boolean {
     if (a === 172 && b >= 16 && b <= 31) return true; // 172.16/12
     if (a === 192 && b === 168) return true; // 192.168/16
     if (a === 100 && b >= 64 && b <= 127) return true; // 100.64/10 CGNAT
-    if (a === 192 && b === 0) return true; // 192.0.0/24 + 192.0.2/24 TEST-NET-1
+    // 192.0.0.0/24 (IETF protocol assignments) + 192.0.2.0/24 (TEST-NET-1).
+    // Crucially NOT 192.0.0.0/16 — e.g. 192.0.43.10 is ICANN's globally
+    // routable space.
+    if (a === 192 && b === 0 && (parts[2] === 0 || parts[2] === 2)) return true;
     if (a === 192 && b === 88 && parts[2] === 99) return true; // 6to4 anycast
     if (a === 198 && (b === 18 || b === 19)) return true; // 198.18/15 benchmark
     if (a === 198 && b === 51 && parts[2] === 100) return true; // TEST-NET-2
