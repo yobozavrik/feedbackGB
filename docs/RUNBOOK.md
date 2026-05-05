@@ -578,8 +578,11 @@ curl -s https://<your-prod-host>/api/auth/users
    - `status: 5xx` — провайдер тимчасово лежить. Чекаємо, кеш помилок 5хв
      означає що ми спробуємо ще раз за 5хв.
 
-2. **`IPINFO_TOKEN` взагалі не виставлений** — `lookupIp` мовчки повертає
-   EMPTY. У `vercel env ls` має бути `IPINFO_TOKEN` для Production + Preview.
+2. **`IPINFO_TOKEN` взагалі не виставлений** — `lookupIp` повертає EMPTY,
+   а на першому виклику після старту процесу пишеться один warning у логах:
+   `[geoip] IPINFO_TOKEN unset — geo enrichment disabled`. У `vercel env ls`
+   має бути `IPINFO_TOKEN` для Production + Preview. Якщо warning є, а
+   значення в env є — перевір чи не закешувалась стара деплойка (Redeploy).
 
 3. **IP клієнта приватний/CGNAT** — у логах перевір `audit_log.ip` для
    проблемного запиту. Якщо це 10.x / 192.168.x / 100.64-127.x / loopback —

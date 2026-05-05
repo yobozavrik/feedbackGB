@@ -15,7 +15,7 @@ import {
   theme as antdTheme,
 } from "antd";
 import { useMemo } from "react";
-import { countryFlag } from "@/lib/geoip";
+import { countryFlag, formatGeoLines } from "@/lib/geoip";
 import type { AuditRow } from "./page";
 
 const { Text, Paragraph } = Typography;
@@ -290,12 +290,8 @@ function LocationCell({ row }: { row: AuditRow }) {
     return <Text type="secondary">—</Text>;
   }
   const flag = countryFlag(geo?.country ?? undefined);
-  const cityCountry = geo?.city
-    ? geo.country
-      ? `${geo.city}, ${geo.country}`
-      : geo.city
-    : (geo?.country ?? null);
-  const ispLine = [geo?.isp, geo?.asn].filter(Boolean).join(" · ");
+  const { cityCountry, ispAsn } = formatGeoLines(geo);
+  const secondary = ispAsn || row.ip;
   return (
     <Space direction="vertical" size={2} style={{ lineHeight: 1.2 }}>
       <Space size={6} wrap>
@@ -308,10 +304,10 @@ function LocationCell({ row }: { row: AuditRow }) {
           </Text>
         )}
       </Space>
-      {ispLine || row.ip ? (
+      {secondary ? (
         <Tooltip title={row.ip ? `IP: ${row.ip}` : undefined}>
           <Text type="secondary" style={{ fontSize: 11 }}>
-            {ispLine || row.ip}
+            {secondary}
           </Text>
         </Tooltip>
       ) : null}

@@ -135,7 +135,16 @@ export async function POST(req: Request) {
   const geo = await lookupIp(ip).catch(() => null);
   const geoMeta = geo ? geoipToAuditMeta(geo) : null;
 
-  await logAudit("auth.login.success", {
+  // Persist last-login location for /admin/users. Only columns whose
+  // new value is non-null are included, so a partial ipinfo response
+  // (e.g. country='UA' but no city/asn/isp) does not null out
+  // previously-stored richer data on the user row.
+  const updatePayload = geo ? geoipToUserUpdate(geo) : null;
+
+  // logAudit and the users.update are independent of each other and of
+  // the cookie write. Run them concurrently so the user pays the cost
+  // of the slower one, not the sum.
+  const auditPromise = logAudit("auth.login.success", {
     actorUserId: user.id,
     targetType: "session",
     ip,
@@ -146,29 +155,22 @@ export async function POST(req: Request) {
       ...(geoMeta ? { geoip: geoMeta } : {}),
     },
   });
-
-  // Persist last-login location for /admin/users with PER-FIELD overwrite
-  // protection: only update columns whose new value is non-null. Without
-  // this, a partial ipinfo response (e.g. country='UA' but city/asn/isp
-  // missing) would null out previously-stored richer data on the user
-  // row. PR #37 fixed this at row level (skip update entirely on full
-  // EMPTY); this fixes the same class of bug at column level.
-  if (geo) {
-    const updatePayload = geoipToUserUpdate(geo);
-    if (updatePayload) {
-      const { error: upErr } = await supabase
+  const updatePromise = updatePayload
+    ? supabase
         .from("users")
         .update(updatePayload)
-        .eq("id", user.id);
-      if (upErr) {
-        console.error("[auth.login] last_login_* update failed", {
-          code: upErr.code,
-          message: upErr.message,
-          fields: Object.keys(updatePayload),
-        });
-      }
-    }
-  }
+        .eq("id", user.id)
+        .then(({ error: upErr }) => {
+          if (upErr) {
+            console.error("[auth.login] last_login_* update failed", {
+              code: upErr.code,
+              message: upErr.message,
+              fields: Object.keys(updatePayload),
+            });
+          }
+        })
+    : Promise.resolve();
+  await Promise.all([auditPromise, updatePromise]);
 
   const res = NextResponse.json({
     ok: true,
