@@ -22,6 +22,7 @@ import {
   theme as antdTheme,
 } from "antd";
 import { useCallback, useMemo, useState } from "react";
+import { countryFlag, formatGeoLines } from "@/lib/geoip";
 import type { AdminUser } from "./page";
 
 const { Text } = Typography;
@@ -402,40 +403,21 @@ export function UsersClient({ users }: Props) {
   );
 }
 
-function countryFlag(code: string | null | undefined): string {
-  if (!code || code.length !== 2) return "";
-  const A = 0x1f1e6;
-  const upper = code.toUpperCase();
-  const a = upper.charCodeAt(0);
-  const b = upper.charCodeAt(1);
-  if (a < 65 || a > 90 || b < 65 || b > 90) return "";
-  return String.fromCodePoint(A + (a - 65), A + (b - 65));
-}
-
 function UserLastLocation({ row }: { row: AdminUser }) {
-  if (
-    !row.last_login_country &&
-    !row.last_login_city &&
-    !row.last_login_isp &&
-    !row.last_login_asn
-  ) {
-    return null;
-  }
+  const lines = formatGeoLines({
+    country: row.last_login_country,
+    city: row.last_login_city,
+    asn: row.last_login_asn,
+    isp: row.last_login_isp,
+  });
+  if (lines.empty) return null;
   const flag = countryFlag(row.last_login_country);
-  const cityCountry = row.last_login_city
-    ? row.last_login_country
-      ? `${row.last_login_city}, ${row.last_login_country}`
-      : row.last_login_city
-    : (row.last_login_country ?? "");
-  const ispLine = [row.last_login_isp, row.last_login_asn]
-    .filter(Boolean)
-    .join(" · ");
   return (
-    <Tooltip title={ispLine || undefined}>
+    <Tooltip title={lines.ispAsn || undefined}>
       <Space size={4} style={{ fontSize: 11 }}>
         {flag ? <span>{flag}</span> : null}
         <Text type="secondary" style={{ fontSize: 11 }}>
-          {cityCountry || ispLine}
+          {lines.cityCountry || lines.ispAsn}
         </Text>
       </Space>
     </Tooltip>
