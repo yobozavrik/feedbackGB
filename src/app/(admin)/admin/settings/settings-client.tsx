@@ -159,14 +159,25 @@ export function SettingsClient({ data }: Props) {
               {
                 title: "Роль",
                 dataIndex: "role",
-                render: (_, row) => (
-                  <Tag
-                    color={row.role === "admin" ? "magenta" : "default"}
-                    bordered={false}
-                  >
-                    {row.role === "admin" ? "Адмін" : "Продавчиня"}
-                  </Tag>
-                ),
+                render: (_, row) => {
+                  const color =
+                    row.role === "super_admin"
+                      ? "red"
+                      : row.role === "admin"
+                        ? "magenta"
+                        : "default";
+                  const label =
+                    row.role === "super_admin"
+                      ? "Супер-адмін"
+                      : row.role === "admin"
+                        ? "Адмін"
+                        : "Продавчиня";
+                  return (
+                    <Tag color={color} bordered={false}>
+                      {label}
+                    </Tag>
+                  );
+                },
               },
               {
                 title: "Магазин",

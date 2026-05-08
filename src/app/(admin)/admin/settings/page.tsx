@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getServerSupabase } from "@/lib/supabase";
-import { SESSION_COOKIE, verifySession } from "@/lib/session";
+import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 import { SettingsClient } from "./settings-client";
 
@@ -25,7 +25,7 @@ export interface SettingsData {
   profile: {
     uid: string;
     full_name: string;
-    role: "seller" | "admin";
+    role: "seller" | "admin" | "super_admin";
     store_id: number | null;
     store_name: string | null;
     has_pin: boolean;
@@ -108,7 +108,7 @@ function detectIntegrations(): IntegrationStatus[] {
 
 async function fetchData(): Promise<SettingsData> {
   const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
-  if (!sess || sess.role !== "admin") {
+  if (!sess || !isAdminTier(sess.role)) {
     redirect("/login?next=/admin/settings");
   }
 

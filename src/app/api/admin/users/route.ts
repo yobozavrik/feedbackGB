@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase";
-import { SESSION_COOKIE, verifySession } from "@/lib/session";
+import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 interface AdminUserRow {
   id: string;
   full_name: string;
-  role: "seller" | "admin";
+  role: "seller" | "admin" | "super_admin";
   store_id: number | null;
   is_active: boolean;
   has_pin: boolean;
@@ -27,7 +27,7 @@ interface AdminUserRow {
  */
 export async function GET() {
   const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
-  if (!sess || sess.role !== "admin") {
+  if (!sess || !isAdminTier(sess.role)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -51,7 +51,7 @@ export async function GET() {
   const rows = (data ?? []) as Array<{
     id: string;
     full_name: string;
-    role: "seller" | "admin";
+    role: "seller" | "admin" | "super_admin";
     store_id: number | null;
     is_active: boolean;
     pin_hash: string | null;
