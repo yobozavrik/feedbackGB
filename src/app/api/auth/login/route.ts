@@ -4,6 +4,7 @@ import {
   signSession,
   SESSION_COOKIE,
   SESSION_MAX_AGE,
+  type UserRole,
 } from "@/lib/session";
 import { clientIp, rateLimit } from "@/lib/rateLimit";
 import { logAudit, uaFromRequest } from "@/lib/audit";
@@ -14,23 +15,32 @@ export const runtime = "nodejs";
 interface UserRow {
   id: string;
   full_name: string;
-  role: "seller" | "admin";
+  role: UserRole;
   store_id: number | null;
+  display_label: string | null;
 }
 
-// Rate-limits:
-//   * 10 attempts / 10 minutes / IP (dumb-brute mitigation).
-//   * 30 attempts / hour / (IP, user_id) window on top of the DB-level
-//     lockout (verify_pin flips `locked_until` after 10 wrong PINs).
+// Rate-limit: 10 attempts / 10 minutes / IP.
+//
+// Per-user lockout still lives in the DB (`users.locked_until`, populated
+// after 10 wrong attempts via the legacy verify_pin path). The new
+// PIN-only login flow can't increment failed_attempts on a wrong PIN
+// because the wrong PIN doesn't identify a user — IP rate limit is the
+// primary defence here.
 const IP_WINDOW_MS = 10 * 60_000;
 const IP_LIMIT = 10;
-const USER_WINDOW_MS = 60 * 60_000;
-const USER_LIMIT = 30;
 
 /**
- * POST /api/auth/login   { user_id: "<uuid>", pin: "123456" }
- * Verifies PIN for the selected user via SQL function `feedbackgb.verify_pin(uuid, text)`.
- * On success sets an httpOnly session cookie and returns the user payload.
+ * POST /api/auth/login   { pin: "123456" }
+ *
+ * Accepts only a 6-digit PIN. Calls `feedbackgb.verify_pin_global(pin)`,
+ * which returns the matching active user row (or null if no/multiple
+ * matches). On success sets an httpOnly session cookie and returns the
+ * user payload.
+ *
+ * Backwards-compat note: the request body intentionally tolerates a
+ * stale `user_id` field (older clients still send it). The field is
+ * ignored — the PIN alone identifies the user.
  */
 export async function POST(req: Request) {
   const ip = clientIp(req);
@@ -48,38 +58,16 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { user_id?: string; pin?: string };
+  let body: { pin?: string };
   try {
-    body = (await req.json()) as { user_id?: string; pin?: string };
+    body = (await req.json()) as { pin?: string };
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   const pin = (body.pin ?? "").trim();
-  const userId = (body.user_id ?? "").trim();
-
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
-    return NextResponse.json(
-      { error: "Оберіть користувача." },
-      { status: 400 },
-    );
-  }
-  if (!/^\d{4,8}$/.test(pin)) {
-    return NextResponse.json({ error: "Невірний формат PIN" }, { status: 400 });
-  }
-
-  const userBucketKey = `login:user:${userId}:ip:${ip}`;
-  const userLimit = rateLimit(userBucketKey, USER_LIMIT, USER_WINDOW_MS);
-  if (!userLimit.ok) {
-    return NextResponse.json(
-      { error: "Забагато спроб для цього користувача, зачекай." },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(Math.ceil(userLimit.reset_ms / 1000)),
-        },
-      },
-    );
+  if (!/^\d{6}$/.test(pin)) {
+    return NextResponse.json({ error: "PIN має бути 6 цифр" }, { status: 400 });
   }
 
   const supabase = getServerSupabase();
@@ -90,13 +78,12 @@ export async function POST(req: Request) {
     );
   }
 
-  const { data, error } = await supabase.rpc("verify_pin", {
-    p_user_id: userId,
+  const { data, error } = await supabase.rpc("verify_pin_global", {
     p_pin: pin,
   });
   if (error) {
     // Never echo DB error text to the client.
-    console.error("verify_pin rpc error", { code: error.code });
+    console.error("verify_pin_global rpc error", { code: error.code });
     return NextResponse.json({ error: "Помилка сервера" }, { status: 500 });
   }
   const user = (data ?? null) as UserRow | null;
@@ -108,9 +95,11 @@ export async function POST(req: Request) {
     //   3. The audit_log already records `ip` per event, so geo can
     //      always be back-filled later via a CRON join against
     //      `users.last_login_*` or a re-lookup if needed.
+    //
+    // We can't tell which user the wrong PIN belonged to — log the
+    // attempt anonymously with the IP and remaining bucket count.
     await logAudit("auth.login.failure", {
-      targetUserId: userId,
-      targetType: "user",
+      targetType: "session",
       ip,
       userAgent: uaFromRequest(req),
       meta: {
@@ -120,9 +109,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Невірний PIN" }, { status: 401 });
   }
 
+  const displayName = user.display_label ?? user.full_name;
+
   const token = await signSession({
     uid: user.id,
-    full_name: user.full_name,
+    full_name: displayName,
     role: user.role,
     store_id: user.store_id ?? null,
     iat: Date.now(),
@@ -176,7 +167,7 @@ export async function POST(req: Request) {
     ok: true,
     user: {
       uid: user.id,
-      full_name: user.full_name,
+      full_name: displayName,
       role: user.role,
       store_id: user.store_id,
     },

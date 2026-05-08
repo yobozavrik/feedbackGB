@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export interface AdminUser {
   id: string;
   full_name: string;
-  role: "seller" | "admin";
+  role: "seller" | "admin" | "super_admin";
   store_id: number | null;
   store_name: string | null;
   is_active: boolean;
@@ -51,7 +51,7 @@ async function fetchData(): Promise<{
   const rows = (userRows ?? []) as Array<{
     id: string;
     full_name: string;
-    role: "seller" | "admin";
+    role: "seller" | "admin" | "super_admin";
     store_id: number | null;
     is_active: boolean;
     pin_hash: string | null;

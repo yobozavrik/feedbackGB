@@ -13,7 +13,7 @@ interface Props {
 
 interface SessionUser {
   full_name: string;
-  role: "seller" | "admin";
+  role: "seller" | "admin" | "super_admin";
   store_id: number | null;
 }
 
@@ -120,7 +120,9 @@ export function FeedbackForm({ category }: Props) {
           <span className="pill bg-elev2 text-ink-700">
             Від: <span className="font-medium text-ink-900">{me.full_name}</span>
           </span>
-          {me.role === "admin" ? (
+          {me.role === "super_admin" ? (
+            <span className="pill bg-brand-100 text-brand-700">супер-адмін</span>
+          ) : me.role === "admin" ? (
             <span className="pill bg-brand-50 text-brand-600">адмін</span>
           ) : null}
         </div>

@@ -149,24 +149,37 @@ export function UsersClient({ users }: Props) {
       {
         title: "Роль",
         dataIndex: "role",
-        width: 130,
+        width: 140,
         valueEnum: {
+          super_admin: { text: "Супер-адмін" },
           admin: { text: "Адмін" },
           seller: { text: "Продавчиня" },
         },
         filters: [
+          { text: "Супер-адмін", value: "super_admin" },
           { text: "Адмін", value: "admin" },
           { text: "Продавчиня", value: "seller" },
         ],
         onFilter: (value, row) => row.role === value,
-        render: (_, row) => (
-          <Tag
-            color={row.role === "admin" ? "magenta" : "default"}
-            bordered={false}
-          >
-            {row.role === "admin" ? "адмін" : "продавчиня"}
-          </Tag>
-        ),
+        render: (_, row) => {
+          const color =
+            row.role === "super_admin"
+              ? "red"
+              : row.role === "admin"
+                ? "magenta"
+                : "default";
+          const label =
+            row.role === "super_admin"
+              ? "супер-адмін"
+              : row.role === "admin"
+                ? "адмін"
+                : "продавчиня";
+          return (
+            <Tag color={color} bordered={false}>
+              {label}
+            </Tag>
+          );
+        },
       },
       {
         title: "Магазин",
