@@ -15,6 +15,7 @@ import {
   theme as antdTheme,
 } from "antd";
 import { useMemo } from "react";
+import { countryFlag, formatGeoLines } from "@/lib/geoip";
 import type { AuditRow } from "./page";
 
 const { Text, Paragraph } = Typography;
@@ -269,18 +270,6 @@ export function AuditClient({ rows }: Props) {
   );
 }
 
-/** Convert ISO-2 country code to a 🇺🇦-style flag emoji. Falls back to the
- *  raw code when the input isn't a valid 2-letter ASCII string. */
-function countryFlag(code: string | null | undefined): string {
-  if (!code || code.length !== 2) return "";
-  const A = 0x1f1e6;
-  const upper = code.toUpperCase();
-  const a = upper.charCodeAt(0);
-  const b = upper.charCodeAt(1);
-  if (a < 65 || a > 90 || b < 65 || b > 90) return "";
-  return String.fromCodePoint(A + (a - 65), A + (b - 65));
-}
-
 interface GeoIpMeta {
   country?: string | null;
   city?: string | null;
@@ -301,12 +290,8 @@ function LocationCell({ row }: { row: AuditRow }) {
     return <Text type="secondary">—</Text>;
   }
   const flag = countryFlag(geo?.country ?? undefined);
-  const cityCountry = geo?.city
-    ? geo.country
-      ? `${geo.city}, ${geo.country}`
-      : geo.city
-    : (geo?.country ?? null);
-  const ispLine = [geo?.isp, geo?.asn].filter(Boolean).join(" · ");
+  const { cityCountry, ispAsn } = formatGeoLines(geo);
+  const secondary = ispAsn || row.ip;
   return (
     <Space direction="vertical" size={2} style={{ lineHeight: 1.2 }}>
       <Space size={6} wrap>
@@ -315,14 +300,14 @@ function LocationCell({ row }: { row: AuditRow }) {
           <Text style={{ fontSize: 12 }}>{cityCountry}</Text>
         ) : (
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Невідомо
+            —
           </Text>
         )}
       </Space>
-      {ispLine || row.ip ? (
+      {secondary ? (
         <Tooltip title={row.ip ? `IP: ${row.ip}` : undefined}>
           <Text type="secondary" style={{ fontSize: 11 }}>
-            {ispLine || row.ip}
+            {secondary}
           </Text>
         </Tooltip>
       ) : null}

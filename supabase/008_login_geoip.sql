@@ -37,3 +37,13 @@ comment on column feedbackgb.users.last_login_isp     is 'ISP / org as reported 
 --       isp:     text
 --     }
 --   }
+--
+-- ROLLBACK (uncomment to drop all geo columns; existing audit_log rows
+-- with `meta.geoip` will retain that JSON regardless):
+--
+--   set search_path = feedbackgb, public;
+--   alter table feedbackgb.users
+--     drop column if exists last_login_country,
+--     drop column if exists last_login_city,
+--     drop column if exists last_login_asn,
+--     drop column if exists last_login_isp;
