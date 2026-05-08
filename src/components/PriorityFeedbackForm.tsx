@@ -19,7 +19,7 @@ interface Props {
 
 interface SessionUser {
   full_name: string;
-  role: "seller" | "admin";
+  role: "seller" | "admin" | "super_admin";
   store_id: number | null;
 }
 

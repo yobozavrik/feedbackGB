@@ -12,7 +12,7 @@ export interface AuditRow {
   action_title: string;
   actor_user_id: string | null;
   actor_full_name: string | null;
-  actor_role: "seller" | "admin" | null;
+  actor_role: "seller" | "admin" | "super_admin" | null;
   target_user_id: string | null;
   target_full_name: string | null;
   target_type: string | null;

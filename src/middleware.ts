@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, verifySession } from "@/lib/session";
+import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
 
 /**
  * Gate every page except auth/api/static behind a PIN.
@@ -41,7 +41,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/admin") ||
     pathname.startsWith("/api/admin") ||
     (pathname.startsWith("/api/feedback") && req.method !== "POST");
-  if (isAdminRoute && sess.role !== "admin") {
+  if (isAdminRoute && !isAdminTier(sess.role)) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }

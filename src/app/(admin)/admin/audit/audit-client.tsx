@@ -181,12 +181,18 @@ export function AuditClient({ rows }: Props) {
         onFilter: (value, row) => row.actor_user_id === value,
         render: (_, row) => {
           if (row.actor_full_name) {
+            const tag =
+              row.actor_role === "super_admin"
+                ? { color: "red", label: "супер-адмін" }
+                : row.actor_role === "admin"
+                  ? { color: "magenta", label: "адмін" }
+                  : null;
             return (
               <Space size={6}>
                 <Text>{row.actor_full_name}</Text>
-                {row.actor_role === "admin" ? (
-                  <Tag color="magenta" bordered={false}>
-                    адмін
+                {tag ? (
+                  <Tag color={tag.color} bordered={false}>
+                    {tag.label}
                   </Tag>
                 ) : null}
               </Space>

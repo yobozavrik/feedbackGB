@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Header } from "@/components/Header";
 import { CategoryGrid } from "@/components/CategoryGrid";
 import { LogoutButton } from "@/components/LogoutButton";
-import { SESSION_COOKIE, verifySession } from "@/lib/session";
+import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +36,7 @@ export default async function HomePage() {
           v1 • Галя Балувана
           {sess ? <LogoutButton /> : null}
         </span>
-        {sess?.role === "admin" ? (
+        {isAdminTier(sess?.role) ? (
           <Link
             href="/admin"
             className="rounded-full bg-brand-500 px-3 py-1 font-medium text-white shadow-soft transition-all hover:bg-brand-600 active:scale-95"

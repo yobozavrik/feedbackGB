@@ -14,15 +14,27 @@
  *     the two means a leaked DB key also forges user sessions.
  */
 
+export type UserRole = "seller" | "admin" | "super_admin";
+
 export interface SessionPayload {
   /** feedbackgb.users.id */
   uid: string;
   full_name: string;
-  role: "seller" | "admin";
+  role: UserRole;
   /** categories.spots.spot_id (null for admins or non-store users) */
   store_id: number | null;
   /** issued at, ms */
   iat: number;
+}
+
+/** True if `role` can access /admin/* (any admin tier). */
+export function isAdminTier(role: UserRole | undefined | null): boolean {
+  return role === "admin" || role === "super_admin";
+}
+
+/** True if `role` is the single super-admin (full mutation access). */
+export function isSuperAdmin(role: UserRole | undefined | null): boolean {
+  return role === "super_admin";
 }
 
 // Plain cookie name (no __Host- prefix so local http dev still works). In

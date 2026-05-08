@@ -26,8 +26,20 @@ interface AdminShellProps {
   children: React.ReactNode;
   user: {
     full_name: string;
-    role: "admin" | "seller";
+    role: "admin" | "seller" | "super_admin";
   };
+}
+
+function roleLabel(role: "admin" | "seller" | "super_admin"): string {
+  if (role === "super_admin") return "супер-адмін";
+  if (role === "admin") return "адмін";
+  return "продавчиня";
+}
+
+function roleColor(role: "admin" | "seller" | "super_admin"): string {
+  if (role === "super_admin") return "red";
+  if (role === "admin") return "magenta";
+  return "default";
 }
 
 export function AdminShell({ children, user }: AdminShellProps) {
@@ -125,9 +137,7 @@ export function AdminShell({ children, user }: AdminShellProps) {
               <Text strong style={{ fontSize: 13 }}>
                 {user.full_name}
               </Text>
-              <Tag color={user.role === "admin" ? "magenta" : "default"}>
-                {user.role === "admin" ? "адмін" : "продавчиня"}
-              </Tag>
+              <Tag color={roleColor(user.role)}>{roleLabel(user.role)}</Tag>
             </Space>
           </Dropdown>
         ),
