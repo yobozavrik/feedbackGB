@@ -4,10 +4,16 @@ import {
   KeyOutlined,
   ReloadOutlined,
   UnlockOutlined,
+  EditOutlined,
+  PlusOutlined,
+  StopOutlined,
+  CheckCircleOutlined,
 } from "@ant-design/icons";
 import {
   ModalForm,
   ProFormText,
+  ProFormSelect,
+  ProFormSwitch,
   ProTable,
   type ProColumns,
 } from "@ant-design/pro-components";
@@ -20,6 +26,7 @@ import {
   Tooltip,
   Typography,
   theme as antdTheme,
+  Form,
 } from "antd";
 import { useCallback, useMemo, useState } from "react";
 import { countryFlag, formatGeoLines } from "@/lib/geoip";
@@ -29,6 +36,9 @@ const { Text } = Typography;
 
 interface Props {
   users: AdminUser[];
+  stores: Array<{ id: number; name: string }>;
+  currentUserId: string;
+  currentUserRole: "admin" | "super_admin";
 }
 
 type RowState = "active" | "locked" | "inactive" | "no_pin";
@@ -52,9 +62,14 @@ const STATE_META: Record<
   no_pin: { text: "Без PIN", status: "Warning" },
 };
 
-export function UsersClient({ users }: Props) {
+export function UsersClient({ users, stores, currentUserId, currentUserRole }: Props) {
   const [list, setList] = useState<AdminUser[]>(users);
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
+  const [createForm] = Form.useForm();
+  const [editForm] = Form.useForm();
+
   const { token } = antdTheme.useToken();
   const { message } = App.useApp();
 
@@ -115,7 +130,83 @@ export function UsersClient({ users }: Props) {
     [resetTarget, message, updateUser],
   );
 
+  const handleCreateUser = useCallback(
+    async (values: any) => {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(values),
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        message.error(data.error ?? "Помилка при створенні");
+        return false;
+      }
+
+      const data = await res.json();
+      setList((prev) => [...prev, data.user].sort((a, b) => a.full_name.localeCompare(b.full_name, "uk")));
+      message.success(`Користувача ${values.full_name} успішно створено.`);
+      setCreateOpen(false);
+      createForm.resetFields();
+      return true;
+    },
+    [createForm, message],
+  );
+
+  const handleEditUser = useCallback(
+    async (values: any) => {
+      if (!editTarget) return false;
+      const res = await fetch(`/api/admin/users/${editTarget.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(values),
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        message.error(data.error ?? "Помилка при збереженні");
+        return false;
+      }
+
+      const data = await res.json();
+      updateUser(data.user);
+      message.success(`Зміни для ${data.user.full_name} збережено.`);
+      setEditTarget(null);
+      editForm.resetFields();
+      return true;
+    },
+    [editTarget, editForm, message, updateUser],
+  );
+
+  const handleToggleActive = useCallback(
+    async (u: AdminUser, makeActive: boolean) => {
+      const res = await fetch(`/api/admin/users/${u.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ is_active: makeActive }),
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        message.error(data.error ?? "Помилка при зміні статусу");
+        return;
+      }
+
+      const data = await res.json();
+      updateUser(data.user);
+      message.success(
+        `Користувача ${u.full_name} успішно ${makeActive ? "активовано" : "деактивовано"}.`,
+      );
+    },
+    [message, updateUser],
+  );
+
   const storeOptions = useMemo(() => {
+    return stores.map((s) => ({ label: s.name, value: s.id }));
+  }, [stores]);
+
+  const filterStoreOptions = useMemo(() => {
     const seen = new Map<string, { text: string; value: string }>();
     for (const u of list) {
       if (u.store_name && !seen.has(u.store_name)) {
@@ -130,21 +221,33 @@ export function UsersClient({ users }: Props) {
   const columns: ProColumns<AdminUser>[] = useMemo(
     () => [
       {
-        title: "Імʼя",
+        title: "Імʼя (ФІО)",
         dataIndex: "full_name",
         fixed: "left",
         ellipsis: true,
         sorter: (a, b) => a.full_name.localeCompare(b.full_name, "uk"),
         render: (_, row) => (
           <Space size={6} wrap>
-            <Text strong>{row.full_name}</Text>
-            {!row.has_pin ? (
+            <Text strong style={{ color: row.is_active ? undefined : token.colorTextDisabled }}>
+              {row.full_name}
+            </Text>
+            {!row.is_active ? (
+              <Tag color="default" bordered={false}>
+                неактивна
+              </Tag>
+            ) : !row.has_pin ? (
               <Tag color="orange" bordered={false}>
                 без PIN
               </Tag>
             ) : null}
           </Space>
         ),
+      },
+      {
+        title: "Отображуване ім'я",
+        dataIndex: "display_label",
+        ellipsis: true,
+        render: (_, row) => row.display_label ?? <Text type="secondary">—</Text>,
       },
       {
         title: "Роль",
@@ -185,7 +288,7 @@ export function UsersClient({ users }: Props) {
         title: "Магазин",
         dataIndex: "store_name",
         ellipsis: true,
-        filters: storeOptions.length > 0 ? storeOptions : undefined,
+        filters: filterStoreOptions.length > 0 ? filterStoreOptions : undefined,
         onFilter: (value, row) => row.store_name === value,
         render: (_, row) =>
           row.store_name ?? <Text type="secondary">—</Text>,
@@ -247,7 +350,7 @@ export function UsersClient({ users }: Props) {
       {
         title: "Останній вхід",
         dataIndex: "last_login",
-        width: 220,
+        width: 200,
         sorter: (a, b) => {
           const ta = a.last_login ? new Date(a.last_login).getTime() : 0;
           const tb = b.last_login ? new Date(b.last_login).getTime() : 0;
@@ -274,20 +377,47 @@ export function UsersClient({ users }: Props) {
         key: "actions",
         valueType: "option",
         fixed: "right",
-        width: 220,
+        width: 280,
         render: (_, row) => {
           const isLocked =
             row.locked_until != null &&
             new Date(row.locked_until) > new Date();
+
+          // RBAC: admin can only edit/manage sellers
+          const isEditable =
+            currentUserRole === "super_admin" ||
+            (currentUserRole === "admin" && row.role === "seller");
+
+          const isSelf = currentUserId === row.id;
+
           return [
+            <Button
+              key="edit"
+              size="small"
+              icon={<EditOutlined />}
+              disabled={!isEditable}
+              onClick={() => {
+                setEditTarget(row);
+                editForm.setFieldsValue({
+                  full_name: row.full_name,
+                  display_label: row.display_label,
+                  role: row.role,
+                  store_id: row.store_id,
+                  is_active: row.is_active,
+                });
+              }}
+            >
+              Редагувати
+            </Button>,
             <Button
               key="reset"
               size="small"
               type="primary"
+              disabled={!isEditable}
               icon={row.has_pin ? <ReloadOutlined /> : <KeyOutlined />}
               onClick={() => setResetTarget(row)}
             >
-              {row.has_pin ? "Перевидати PIN" : "Встановити PIN"}
+              {row.has_pin ? "PIN" : "+PIN"}
             </Button>,
             isLocked ? (
               <Popconfirm
@@ -296,18 +426,58 @@ export function UsersClient({ users }: Props) {
                 description={`Скинути лічильник помилок для ${row.full_name}.`}
                 okText="Так"
                 cancelText="Скасувати"
+                disabled={!isEditable}
                 onConfirm={() => handleUnlock(row)}
               >
-                <Button size="small" icon={<UnlockOutlined />}>
+                <Button size="small" icon={<UnlockOutlined />} disabled={!isEditable}>
                   Розблокувати
                 </Button>
               </Popconfirm>
-            ) : null,
+            ) : row.is_active ? (
+              <Popconfirm
+                key="deactivate"
+                title="Деактивувати акаунт?"
+                description={`Користувач ${row.full_name} більше не зможе увійти.`}
+                okText="Деактивувати"
+                cancelText="Скасувати"
+                okButtonProps={{ danger: true }}
+                disabled={!isEditable || isSelf}
+                onConfirm={() => handleToggleActive(row, false)}
+              >
+                <Button
+                  size="small"
+                  danger
+                  icon={<StopOutlined />}
+                  disabled={!isEditable || isSelf}
+                >
+                  Деактивувати
+                </Button>
+              </Popconfirm>
+            ) : (
+              <Popconfirm
+                key="activate"
+                title="Активувати акаунт?"
+                description={`Активувати доступ для ${row.full_name}.`}
+                okText="Активувати"
+                cancelText="Скасувати"
+                disabled={!isEditable}
+                onConfirm={() => handleToggleActive(row, true)}
+              >
+                <Button
+                  size="small"
+                  style={{ color: token.colorSuccess, borderColor: token.colorSuccess }}
+                  icon={<CheckCircleOutlined />}
+                  disabled={!isEditable}
+                >
+                  Активувати
+                </Button>
+              </Popconfirm>
+            ),
           ];
         },
       },
     ],
-    [storeOptions, token, handleUnlock],
+    [storeOptions, filterStoreOptions, token, handleUnlock, handleToggleActive, currentUserRole, currentUserId, editForm],
   );
 
   return (
@@ -328,12 +498,19 @@ export function UsersClient({ users }: Props) {
           showSizeChanger: true,
           showTotal: (total) => `${total} записів`,
         }}
-        scroll={{ x: 900 }}
+        scroll={{ x: 1000 }}
         toolBarRender={() => [
-          <Text key="hint" type="secondary" style={{ fontSize: 12 }}>
-            Перевидати PIN — 6–8 цифр. Розблокування скидає лічильник
-            невдалих спроб.
-          </Text>,
+          <Button
+            key="create"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              createForm.resetFields();
+              setCreateOpen(true);
+            }}
+          >
+            Створити користувача
+          </Button>,
         ]}
         headerTitle={
           <Space size={8}>
@@ -345,6 +522,152 @@ export function UsersClient({ users }: Props) {
         }
       />
 
+      {/* CREATE MODAL */}
+      <ModalForm
+        form={createForm}
+        open={createOpen}
+        title="Створити користувача"
+        onOpenChange={setCreateOpen}
+        modalProps={{
+          destroyOnClose: true,
+          okText: "Створити",
+          cancelText: "Скасувати",
+          maskClosable: false,
+        }}
+        onFinish={handleCreateUser}
+        width={480}
+      >
+        <ProFormText
+          name="full_name"
+          label="Імʼя (ФІО)"
+          placeholder="Наприклад: Ковальчук Роман"
+          rules={[
+            { required: true, message: "Введіть ФІО" },
+            { min: 2, message: "Мінімум 2 символи" },
+          ]}
+        />
+        <ProFormText
+          name="display_label"
+          label="Відображуване ім'я (для логіну/адмінки)"
+          placeholder="Наприклад: Магазин 18 — БУЛЬВАР"
+          rules={[
+            { required: true, message: "Введіть відображуване ім'я" },
+            { min: 2, message: "Мінімум 2 символи" },
+          ]}
+        />
+        <ProFormSelect
+          name="role"
+          label="Роль"
+          initialValue="seller"
+          valueEnum={
+            currentUserRole === "super_admin"
+              ? {
+                  seller: "Продавчиня",
+                  admin: "Адмін",
+                  super_admin: "Супер-адмін",
+                }
+              : {
+                  seller: "Продавчиня",
+                }
+          }
+          rules={[{ required: true, message: "Виберіть роль" }]}
+        />
+        <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.role !== currentValues.role}>
+          {({ getFieldValue }) => {
+            const role = getFieldValue("role");
+            if (role === "seller") {
+              return (
+                <ProFormSelect
+                  name="store_id"
+                  label="Магазин"
+                  options={storeOptions}
+                  placeholder="Виберіть магазин для продавчині"
+                  rules={[{ required: true, message: "Виберіть магазин" }]}
+                />
+              );
+            }
+            return null;
+          }}
+        </Form.Item>
+      </ModalForm>
+
+      {/* EDIT MODAL */}
+      <ModalForm
+        form={editForm}
+        open={editTarget != null}
+        title={`Редагувати користувача: ${editTarget?.full_name}`}
+        onOpenChange={(open) => {
+          if (!open) setEditTarget(null);
+        }}
+        modalProps={{
+          destroyOnClose: true,
+          okText: "Зберегти",
+          cancelText: "Скасувати",
+          maskClosable: false,
+        }}
+        onFinish={handleEditUser}
+        width={480}
+      >
+        <ProFormText
+          name="full_name"
+          label="Імʼя (ФІО)"
+          placeholder="Введіть ФІО"
+          rules={[
+            { required: true, message: "Введіть ФІО" },
+            { min: 2, message: "Мінімум 2 символи" },
+          ]}
+        />
+        <ProFormText
+          name="display_label"
+          label="Відображуване ім'я (для логіну/адмінки)"
+          placeholder="Введіть відображуване ім'я"
+          rules={[
+            { required: true, message: "Введіть відображуване ім'я" },
+            { min: 2, message: "Мінімум 2 символи" },
+          ]}
+        />
+        <ProFormSelect
+          name="role"
+          label="Роль"
+          valueEnum={
+            currentUserRole === "super_admin"
+              ? {
+                  seller: "Продавчиня",
+                  admin: "Адмін",
+                  super_admin: "Супер-адмін",
+                }
+              : {
+                  seller: "Продавчиня",
+                }
+          }
+          disabled={editTarget?.id === currentUserId} // Can't change own role
+          rules={[{ required: true, message: "Виберіть роль" }]}
+        />
+        <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.role !== currentValues.role}>
+          {({ getFieldValue }) => {
+            const role = getFieldValue("role");
+            if (role === "seller") {
+              return (
+                <ProFormSelect
+                  name="store_id"
+                  label="Магазин"
+                  options={storeOptions}
+                  placeholder="Виберіть магазин"
+                  rules={[{ required: true, message: "Виберіть магазин" }]}
+                />
+              );
+            }
+            return null;
+          }}
+        </Form.Item>
+        <ProFormSwitch
+          name="is_active"
+          label="Активний акаунт"
+          disabled={editTarget?.id === currentUserId} // Can't deactivate self
+        />
+      </ModalForm>
+
+      {/* RESET PIN MODAL */}
       <ModalForm
         open={resetTarget != null}
         title={
