@@ -6,6 +6,7 @@ import {
   CloudUploadOutlined,
   KeyOutlined,
   MinusCircleFilled,
+  NotificationOutlined,
   SendOutlined,
   ShopOutlined,
   TeamOutlined,
@@ -24,6 +25,7 @@ import {
   Col,
   Row,
   Space,
+  Switch,
   Tag,
   Tooltip,
   Typography,
@@ -35,7 +37,7 @@ import type { CronEntry, SettingsData } from "./page";
 
 const { Text, Paragraph } = Typography;
 
-const PIN_RE = /^\d{6,8}$/;
+const PIN_RE = /^\d{6}$/;
 
 function fmtRel(iso: string | null): string {
   if (!iso) return "—";
@@ -96,6 +98,41 @@ export function SettingsClient({ data }: Props) {
   const { message } = App.useApp();
   const [hasPin, setHasPin] = useState(data.profile.has_pin);
   const [pinModalOpen, setPinModalOpen] = useState(false);
+
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("fbgb_sound_enabled") !== "false";
+    }
+    return true;
+  });
+
+  const [pushEnabled, setPushEnabled] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("fbgb_push_enabled") === "true";
+    }
+    return false;
+  });
+
+  const handleToggleSound = useCallback((val: boolean) => {
+    setSoundEnabled(val);
+    localStorage.setItem("fbgb_sound_enabled", String(val));
+    message.success(val ? "Звукові сповіщення увімкнено" : "Звукові сповіщення вимкнено");
+  }, [message]);
+
+  const handleTogglePush = useCallback(async (val: boolean) => {
+    if (val && typeof window !== "undefined" && "Notification" in window) {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        message.error("Дозвіл на сповіщення відхилено");
+        setPushEnabled(false);
+        localStorage.setItem("fbgb_push_enabled", "false");
+        return;
+      }
+    }
+    setPushEnabled(val);
+    localStorage.setItem("fbgb_push_enabled", String(val));
+    message.success(val ? "Браузерні сповіщення увімкнено" : "Браузерні сповіщення вимкнено");
+  }, [message]);
 
   const handleSavePin = useCallback(
     async (values: { pin: string; confirm: string }) => {
@@ -236,7 +273,7 @@ export function SettingsClient({ data }: Props) {
             type="secondary"
             style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}
           >
-            PIN — 6–8 цифр. При зміні автоматично скидається лічильник
+            PIN — 6 цифр. При зміні автоматично скидається лічильник
             невдалих спроб і знімається lock. Подія потрапляє в{" "}
             <Link href="/admin/audit">Журнал</Link>.
           </Paragraph>
@@ -411,6 +448,45 @@ export function SettingsClient({ data }: Props) {
         </Card>
       </Col>
 
+      {/* === СПОВІЩЕННЯ === */}
+      <Col xs={24} lg={12}>
+        <Card
+          size="small"
+          title={
+            <Space size={8}>
+              <NotificationOutlined style={{ color: token.colorPrimary }} />
+              <Text strong>Звукові та Push-сповіщення (Realtime)</Text>
+            </Space>
+          }
+        >
+          <Space direction="vertical" size={12} style={{ width: "100%", paddingBlock: 4 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <Text strong style={{ fontSize: 13 }}>Звукові сигнали</Text>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    Програвати звуковий сигнал при надходженні нового браку
+                  </Text>
+                </div>
+              </div>
+              <Switch checked={soundEnabled} onChange={handleToggleSound} />
+            </div>
+            
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <Text strong style={{ fontSize: 13 }}>Браузерні сповіщення</Text>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    Показувати спливаючі повідомлення на робочому столі
+                  </Text>
+                </div>
+              </div>
+              <Switch checked={pushEnabled} onChange={handleTogglePush} />
+            </div>
+          </Space>
+        </Card>
+      </Col>
+
       <ModalForm<{ pin: string; confirm: string }>
         title={hasPin ? "Змінити PIN" : "Встановити PIN"}
         open={pinModalOpen}
@@ -428,18 +504,18 @@ export function SettingsClient({ data }: Props) {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message="PIN — 6–8 цифр. Він автоматично хешується bcrypt-ом і ніколи не зберігається у відкритому вигляді."
+          message="PIN — 6 цифр. Він автоматично хешується bcrypt-ом і ніколи не зберігається у відкритому вигляді."
         />
         <ProFormText.Password
           name="pin"
           label="Новий PIN"
-          placeholder="6–8 цифр"
-          fieldProps={{ inputMode: "numeric", maxLength: 8 }}
+          placeholder="6 цифр"
+          fieldProps={{ inputMode: "numeric", maxLength: 6 }}
           rules={[
             { required: true, message: "Введіть PIN" },
             {
               pattern: PIN_RE,
-              message: "PIN має бути 6–8 цифр",
+              message: "PIN має бути 6 цифр",
             },
           ]}
         />
@@ -447,12 +523,12 @@ export function SettingsClient({ data }: Props) {
           name="confirm"
           label="Підтвердити PIN"
           placeholder="Повторіть"
-          fieldProps={{ inputMode: "numeric", maxLength: 8 }}
+          fieldProps={{ inputMode: "numeric", maxLength: 6 }}
           rules={[
             { required: true, message: "Підтвердіть PIN" },
             {
               pattern: PIN_RE,
-              message: "PIN має бути 6–8 цифр",
+              message: "PIN має бути 6 цифр",
             },
           ]}
         />

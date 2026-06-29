@@ -41,7 +41,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="uk" className={`${inter.variable} ${manrope.variable}`}>
+    <html
+      lang="uk"
+      className={`${inter.variable} ${manrope.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         {/* Telegram Mini App SDK. Next.js 14 forces `beforeInteractive` scripts
             to live in the root layout — see

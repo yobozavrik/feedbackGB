@@ -3,8 +3,11 @@
 import {
   CalendarOutlined,
   CameraOutlined,
+  CommentOutlined,
   DownloadOutlined,
+  MessageOutlined,
   PictureOutlined,
+  SendOutlined,
   ShopOutlined,
   UserOutlined,
 } from "@ant-design/icons";
@@ -24,7 +27,7 @@ import {
   theme as antdTheme,
 } from "antd";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ageMs,
   bucketFor,
@@ -32,6 +35,7 @@ import {
   isOpen,
   type AgingBucket,
 } from "@/lib/sla";
+import { getClientSupabase } from "@/lib/supabase";
 import type { AdminOption, FeedRow } from "./page";
 
 const { Text, Paragraph, Title } = Typography;
@@ -130,6 +134,28 @@ function isStatus(s: string): s is Status {
   return (STATUSES as string[]).includes(s);
 }
 
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+    
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+  } catch (e) {
+    console.error("Audio playback failed", e);
+  }
+}
+
 export function AdminClient({
   rows,
   stores,
@@ -138,9 +164,63 @@ export function AdminClient({
   currentAdminId,
 }: Props) {
   const { token } = antdTheme.useToken();
+  const { notification } = App.useApp();
+  const router = useRouter();
   const [period, setPeriod] = useState<Period>("all");
   const [active, setActive] = useState<FeedRow | null>(null);
   const [myQueueOnly, setMyQueueOnly] = useState(false);
+
+  useEffect(() => {
+    const supabase = getClientSupabase();
+    if (!supabase) return;
+
+    const channel = supabase
+      .channel("admin_feedback_realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "feedbackgb",
+          table: "feedback",
+        },
+        async (payload) => {
+          // Trigger next.js server-side revalidation
+          router.refresh();
+
+          if (payload.eventType === "INSERT") {
+            const rowData = payload.new;
+            const categoryId = rowData.category_id;
+            const summary = rowData.summary || "Нове звернення";
+
+            const soundEnabled = localStorage.getItem("fbgb_sound_enabled") !== "false";
+            const pushEnabled = localStorage.getItem("fbgb_push_enabled") === "true";
+
+            if (categoryId === "defect" && soundEnabled) {
+              playNotificationSound();
+            }
+
+            notification.info({
+              message: "Нове звернення",
+              description: summary,
+              placement: "bottomRight",
+            });
+
+            if (pushEnabled && typeof window !== "undefined" && "Notification" in window) {
+              if (Notification.permission === "granted") {
+                new Notification("FeedbackGB: Нове звернення", {
+                  body: summary,
+                });
+              }
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [router, notification]);
 
   const filteredByPeriod = useMemo(() => {
     const cutoff = periodCutoff(period);
@@ -494,6 +574,58 @@ function FeedDrawer({
     setDraftKey(null);
   }
 
+  const [commentsList, setCommentsList] = useState<any[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [newCommentText, setNewCommentText] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+
+  const fetchComments = useCallback(async (feedbackId: string) => {
+    setLoadingComments(true);
+    try {
+      const res = await fetch(`/api/admin/feedback/${feedbackId}/comments`);
+      if (res.ok) {
+        const data = await res.json();
+        setCommentsList(data.comments ?? []);
+      }
+    } catch (e) {
+      console.error("Failed to load comments", e);
+    } finally {
+      setLoadingComments(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (row?.id) {
+      fetchComments(row.id);
+    } else {
+      setCommentsList([]);
+    }
+  }, [row?.id, fetchComments]);
+
+  const handleAddComment = useCallback(async () => {
+    if (!row || !newCommentText.trim()) return;
+    setSubmittingComment(true);
+    try {
+      const res = await fetch(`/api/admin/feedback/${row.id}/comments`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body: newCommentText }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        message.error(data.error ?? "Не вдалося додати коментар");
+        return;
+      }
+      message.success("Коментар додано");
+      setNewCommentText("");
+      fetchComments(row.id);
+    } catch (e) {
+      message.error("Помилка мережі");
+    } finally {
+      setSubmittingComment(false);
+    }
+  }, [row, newCommentText, fetchComments, message]);
+
   const handleSave = useCallback(async () => {
     if (!row) return;
     const body: Record<string, unknown> = {};
@@ -786,6 +918,94 @@ function FeedDrawer({
             </Space>
           </div>
         ) : null}
+
+        {/* === ОБГОВОРЕННЯ (КОМЕНТАРІ) === */}
+        <div
+          style={{
+            marginTop: 8,
+            borderTop: `1px solid ${token.colorBorderSecondary}`,
+            paddingTop: 16,
+          }}
+        >
+          <Title level={5} style={{ margin: 0, marginBottom: 12 }}>
+            <CommentOutlined style={{ marginRight: 6 }} /> Обговорення
+          </Title>
+
+          {/* Comments List */}
+          <div
+            style={{
+              maxHeight: 300,
+              overflowY: "auto",
+              marginBottom: 16,
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            {loadingComments ? (
+              <Text type="secondary" style={{ fontSize: 13 }}>Завантаження коментарів...</Text>
+            ) : commentsList.length === 0 ? (
+              <Text type="secondary" style={{ fontSize: 13, fontStyle: "italic" }}>
+                Коментарів ще немає. Ви можете написати повідомлення продавчині.
+              </Text>
+            ) : (
+              commentsList.map((c) => {
+                const isAdmin = c.author_role === "admin" || c.author_role === "super_admin";
+                return (
+                  <div
+                    key={c.id}
+                    style={{
+                      background: isAdmin ? token.colorFillAlter : "transparent",
+                      border: `1px solid ${token.colorBorderSecondary}`,
+                      borderRadius: token.borderRadius,
+                      padding: "8px 12px",
+                      maxWidth: "90%",
+                      alignSelf: isAdmin ? "flex-start" : "flex-end",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, marginBottom: 4 }}>
+                      <Space size={4}>
+                        <Text strong style={{ fontSize: 12 }}>{c.author_name}</Text>
+                        <Tag
+                          color={c.author_role === "super_admin" ? "red" : c.author_role === "admin" ? "magenta" : "default"}
+                          bordered={false}
+                          style={{ fontSize: 10, lineHeight: "14px", height: "16px", paddingInline: 4 }}
+                        >
+                          {c.author_role === "super_admin" ? "супер-адмін" : c.author_role === "admin" ? "адмін" : "продавець"}
+                        </Tag>
+                      </Space>
+                      <Text type="secondary" style={{ fontSize: 11 }}>
+                        {formatRelative(c.created_at)}
+                      </Text>
+                    </div>
+                    <Paragraph style={{ margin: 0, fontSize: 13, whiteSpace: "pre-wrap" }}>
+                      {c.body}
+                    </Paragraph>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* New Comment Form */}
+          <Space.Compact style={{ width: "100%" }}>
+            <Input
+              value={newCommentText}
+              onChange={(e) => setNewCommentText(e.target.value)}
+              placeholder="Написати повідомлення продавчині..."
+              onPressEnter={handleAddComment}
+              disabled={submittingComment}
+              maxLength={2000}
+            />
+            <Button
+              type="primary"
+              onClick={handleAddComment}
+              loading={submittingComment}
+              disabled={!newCommentText.trim()}
+              icon={<SendOutlined />}
+            />
+          </Space.Compact>
+        </div>
       </Space>
     </Drawer>
   );

@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const PIN_RE = /^\d{6,8}$/;
+const PIN_RE = /^\d{6}$/;
 
 /**
  * POST /api/admin/users/<uuid>/pin   { pin: "123456" }
@@ -57,7 +57,10 @@ export async function POST(
     p_pin: pin,
   });
   if (error) {
-    console.error("set_user_pin rpc error", { code: error.code });
+    console.error("set_user_pin rpc error", { code: error.code, message: error.message });
+    if (error.code === "P0001" || error.code === "23505") {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     return NextResponse.json({ error: "Помилка сервера" }, { status: 500 });
   }
 

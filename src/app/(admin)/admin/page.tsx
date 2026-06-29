@@ -6,6 +6,7 @@ import { AdminClient } from "./admin-client";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 import { DashboardKPI, type DashboardRow } from "@/components/admin/DashboardKPI";
 import { DashboardHeatmap } from "@/components/admin/DashboardHeatmap";
+import { DashboardSignals } from "@/components/admin/DashboardSignals";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,9 @@ export interface FeedRow {
   status: string;
   assigned_to: string | null;
   assigned_full_name: string | null;
+  product_id: number | null;
+  product_name: string | null;
+  product_unit: string | null;
 }
 
 export interface AdminOption {
@@ -64,7 +68,7 @@ async function fetchRows(): Promise<{ rows: FeedRow[]; error: string | null }> {
   return { rows, error: null };
 }
 
-async function fetchDashboardStats(): Promise<DashboardRow[]> {
+async function fetchDashboardStats(): Promise<any[]> {
   const supabase = getServerSupabase();
   if (!supabase) return [];
   const since = new Date(
@@ -72,11 +76,11 @@ async function fetchDashboardStats(): Promise<DashboardRow[]> {
   ).toISOString();
   const { data, error } = await supabase
     .from("feedback_feed")
-    .select("created_at,category,category_title,store_name,status")
+    .select("created_at,category,category_title,store_name,status,product_id,product_name")
     .gte("created_at", since)
     .limit(5000);
   if (error) return [];
-  return (data as DashboardRow[]) ?? [];
+  return (data as any[]) ?? [];
 }
 
 async function resolvePhotoUrl(
@@ -108,7 +112,7 @@ async function fetchAdmins(): Promise<AdminOption[]> {
   const { data, error } = await supabase
     .from("users")
     .select("id, full_name")
-    .eq("role", "admin")
+    .in("role", ["admin", "super_admin"])
     .eq("is_active", true)
     .order("full_name", { ascending: true });
   if (error) return [];
@@ -153,6 +157,7 @@ export default async function AdminPage() {
       ) : null}
 
       <DashboardKPI rows={statsRows} />
+      <DashboardSignals rows={statsRows as any} />
       <DashboardHeatmap rows={statsRows} days={14} />
 
       <AdminClient

@@ -138,6 +138,13 @@ export async function PATCH(
   }
 
   if (comment.length > 0) {
+    // Write comment to feedback_comments
+    await supabase.from("feedback_comments").insert({
+      feedback_id: id,
+      author_id: sess.uid,
+      body: comment,
+    });
+
     await logAudit("admin.feedback.note", {
       actorUserId: sess.uid,
       feedbackId: id,

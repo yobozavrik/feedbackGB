@@ -13,7 +13,8 @@ export type CategoryId =
   | "store_idea"
   | "spotted_elsewhere"
   | "tech_issue"
-  | "customer_voice";
+  | "customer_voice"
+  | "consumables_request";
 
 export type FieldKind = "text" | "textarea" | "number" | "photo";
 
@@ -238,13 +239,14 @@ export const CATEGORIES: Category[] = [
   {
     id: "tech_issue",
     emoji: "🔧",
-    title: "Технічна проблема",
-    short: "Обладнання, ремонт, чистота",
+    title: "Заявка на ремонт",
+    short: "Зламалось обладнання / потрібен ремонт",
     description:
       "Не працює холодильник, тече кран, треба ремонт, ліхтар перегорів — фіксуй сюди.",
     gradient: "bg-cat-tech/40",
     accent: "text-ink-900",
     tint: "tech",
+    priority: true,
     fields: [
       {
         id: "what_broken",
@@ -296,6 +298,33 @@ export const CATEGORIES: Category[] = [
         label: "Як часто таке чуєш?",
         placeholder: "Сьогодні вперше / регулярно",
         kind: "text",
+      },
+    ],
+  },
+  {
+    id: "consumables_request",
+    emoji: "📋",
+    title: "Заявка на розхідні матеріали",
+    short: "Чекова стрічка, пакети, хімія тощо",
+    description:
+      "Замовлення розхідних матеріалів для роботи магазину: стрічка для терміналів, пакети, засоби для чищення.",
+    gradient: "bg-cat-supply/40",
+    accent: "text-amber-500",
+    tint: "supply",
+    priority: true,
+    fields: [
+      {
+        id: "materials_list",
+        label: "Що саме потрібно?",
+        placeholder: "Наприклад: чекова стрічка 57мм (5 шт), пакети майка (2 рулони)",
+        kind: "textarea",
+        required: true,
+      },
+      {
+        id: "comment",
+        label: "Коментар / примітки (необов'язково)",
+        placeholder: "Коли потрібно привезти, особливі побажання",
+        kind: "textarea",
       },
     ],
   },
