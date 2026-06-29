@@ -25,6 +25,7 @@ vi.mock("@/lib/supabase", () => ({
 
 vi.mock("@/lib/telegram", () => ({
   sendTelegramMessage: vi.fn(async () => true),
+  escapeHtml: (s: string) => s,
 }));
 
 const SAMPLE_FEEDBACK_ID = "33333333-3333-3333-3333-333333333333";

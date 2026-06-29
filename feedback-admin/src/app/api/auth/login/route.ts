@@ -45,7 +45,17 @@ const IP_LIMIT = 10;
 export async function POST(req: Request) {
   const ip = clientIp(req);
 
-  const ipLimit = rateLimit(`login:ip:${ip}`, IP_LIMIT, IP_WINDOW_MS);
+  let ipLimit;
+  try {
+    ipLimit = await rateLimit(`login:ip:${ip}`, IP_LIMIT, IP_WINDOW_MS);
+  } catch (err) {
+    console.error("Rate limiting failed on login route:", err);
+    return NextResponse.json(
+      { error: "Послуга тимчасово недоступна. Будь ласка, спробуйте пізніше." },
+      { status: 503 }
+    );
+  }
+
   if (!ipLimit.ok) {
     return NextResponse.json(
       { error: "Забагато спроб, спробуй за декілька хвилин." },

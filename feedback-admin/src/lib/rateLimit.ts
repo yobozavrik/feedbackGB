@@ -1,12 +1,4 @@
-/**
- * Tiny sliding-window rate limiter.
- *
- * On Vercel serverless this is per-instance (best-effort), so deploy with
- * Upstash Redis when UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN are
- * available. The in-memory fallback is intentional — it's enough to kill
- * dumb brute-force loops from a single box and falls back gracefully on
- * cold starts.
- */
+import { getServerSupabase } from "./supabase";
 
 interface Bucket {
   hits: number[];
@@ -20,7 +12,10 @@ export interface RateLimitResult {
   reset_ms: number;
 }
 
-export function rateLimit(
+/**
+ * Fallback sliding-window in-memory rate limiter (used in development/localhost).
+ */
+function fallbackRateLimit(
   key: string,
   limit: number,
   windowMs: number,
@@ -47,6 +42,57 @@ export function rateLimit(
     remaining: Math.max(0, limit - b.hits.length),
     reset_ms: Math.max(0, windowMs - (now - oldest)),
   };
+}
+
+/**
+ * Distributed database-backed rate limiter for production.
+ * Falls back to in-memory only in local development (non-production) mode.
+ * Fails closed in production if database is unreachable.
+ */
+export async function rateLimit(
+  key: string,
+  limit: number,
+  windowMs: number,
+): Promise<RateLimitResult> {
+  const isProd = process.env.NODE_ENV === "production";
+  const supabase = getServerSupabase();
+
+  if (!supabase) {
+    if (isProd) {
+      throw new Error("Supabase client is unavailable in production rate limiter (fail-closed).");
+    }
+    return fallbackRateLimit(key, limit, windowMs);
+  }
+
+  const windowSeconds = Math.max(1, Math.round(windowMs / 1000));
+
+  try {
+    const { data, error } = await supabase.rpc("check_rate_limit", {
+      p_key: key,
+      p_limit: limit,
+      p_window_seconds: windowSeconds,
+    });
+
+    if (error) {
+      console.error("DB rate limit RPC error:", error);
+      if (isProd) {
+        throw new Error(`DB rate limit RPC failed in production: ${error.message}`);
+      }
+      return fallbackRateLimit(key, limit, windowMs);
+    }
+
+    return {
+      ok: Boolean(data.ok),
+      remaining: Number(data.remaining),
+      reset_ms: Number(data.reset_ms),
+    };
+  } catch (e) {
+    console.error("DB rate limit exception:", e);
+    if (isProd) {
+      throw e;
+    }
+    return fallbackRateLimit(key, limit, windowMs);
+  }
 }
 
 /**

@@ -54,7 +54,13 @@ export async function GET(
   // 60 redirects/min/IP is enough for a human in a chat and breaks
   // automated scraping cold.
   const ip = ipFromRequest(req) ?? "unknown";
-  const rl = rateLimit(`photo-redirect:${ip}`, 60, 60_000);
+  let rl;
+  try {
+    rl = await rateLimit(`photo-redirect:${ip}`, 60, 60_000);
+  } catch (err) {
+    console.error("Rate limiting failed on photo redirect route:", err);
+    return NextResponse.json({ error: "service_unavailable" }, { status: 503 });
+  }
   if (!rl.ok) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
