@@ -224,6 +224,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
         title: "Імʼя (ФІО)",
         dataIndex: "full_name",
         fixed: "left",
+        width: 240,
         ellipsis: true,
         sorter: (a, b) => a.full_name.localeCompare(b.full_name, "uk"),
         render: (_, row) => (
@@ -246,6 +247,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
       {
         title: "Отображуване ім'я",
         dataIndex: "display_label",
+        width: 240,
         ellipsis: true,
         render: (_, row) => row.display_label ?? <Text type="secondary">—</Text>,
       },
@@ -287,6 +289,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
       {
         title: "Магазин",
         dataIndex: "store_name",
+        width: 200,
         ellipsis: true,
         filters: filterStoreOptions.length > 0 ? filterStoreOptions : undefined,
         onFilter: (value, row) => row.store_name === value,
@@ -498,7 +501,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
           showSizeChanger: true,
           showTotal: (total) => `${total} записів`,
         }}
-        scroll={{ x: 1000 }}
+        scroll={{ x: 1540 }}
         toolBarRender={() => [
           <Button
             key="create"
