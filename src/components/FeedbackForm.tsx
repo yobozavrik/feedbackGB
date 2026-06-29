@@ -146,6 +146,27 @@ export function FeedbackForm({ category }: Props) {
         <StoreSelect />
       )}
 
+      {/* Dev notice banner */}
+      {(category.id === "tech_issue" || category.id === "consumables_request") && (
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-50/50 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="flex gap-3">
+            <span className="text-xl" aria-hidden>
+              {category.id === "tech_issue" ? "🔧" : "📋"}
+            </span>
+            <div className="space-y-1">
+              <h4 className="text-[14px] font-semibold text-amber-900 leading-none">
+                Розділ у розробці (Демо-режим)
+              </h4>
+              <p className="mt-1 text-[12px] text-amber-700 leading-normal">
+                {category.id === "tech_issue"
+                  ? "Ця форма працює в тестовому режимі. Незабаром вона буде автоматично інтегрована з модулем технічної служби для миттєвого створення заявок."
+                  : "Ця заявка працює в режимі демо. Вона буде автоматично синхронізуватись зі складським модулем CRM для відвантаження товарів."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {category.fields.map((f) => {
         if (f.kind === "photo") {
           return <PhotoInput key={f.id} label={f.label} onChange={setPhoto} />;
