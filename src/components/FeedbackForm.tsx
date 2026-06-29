@@ -6,6 +6,7 @@ import type { Category } from "@/lib/categories";
 import { useTelegram } from "./TelegramProvider";
 import { PhotoInput } from "./PhotoInput";
 import { StoreSelect } from "./StoreSelect";
+import { VoiceInputButton } from "./VoiceInputButton";
 
 interface Props {
   category: Category;
@@ -174,16 +175,27 @@ export function FeedbackForm({ category }: Props) {
         if (f.kind === "textarea") {
           return (
             <div key={f.id}>
-              <label htmlFor={f.id} className="field-label">
-                {f.label}
-                {f.required ? <span className="text-brand-500"> *</span> : null}
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor={f.id} className="field-label !mb-0">
+                  {f.label}
+                  {f.required ? <span className="text-brand-500"> *</span> : null}
+                </label>
+                <VoiceInputButton
+                  onTranscript={(text) => {
+                    const el = document.getElementById(f.id) as HTMLTextAreaElement | null;
+                    if (el) {
+                      el.value = el.value ? el.value + " " + text : text;
+                      el.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                  }}
+                />
+              </div>
               <textarea
                 id={f.id}
                 name={f.id}
                 placeholder={f.placeholder}
                 required={f.required}
-                className="field-textarea"
+                className="field-textarea mt-1.5"
               />
               {f.hint ? (
                 <p className="mt-1 text-[12px] text-ink-500">{f.hint}</p>
