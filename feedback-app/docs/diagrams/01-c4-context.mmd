@@ -1,0 +1,37 @@
+%% C4 Level 1 — System Context
+%% Хто і навіщо взаємодіє з FeedbackGB.
+%%
+%% Render: https://mermaid.live або GitHub (натівна підтримка)
+flowchart LR
+    subgraph users["Користувачі"]
+        seller["👩 Продавчиня<br/>(Telegram Mini App)"]
+        admin["👤 Адмін<br/>(/admin у браузері)"]
+    end
+
+    subgraph fb["💖 FeedbackGB"]
+        app["Next.js 14 App Router<br/>+ API routes<br/>+ Vercel Cron"]
+    end
+
+    subgraph ext["Зовнішні системи"]
+        tg["📨 Telegram Bot API<br/>(initData HMAC, sendPhoto,<br/>sendMessage у звітний чат)"]
+        sb["🗄 Supabase<br/>Postgres (схема feedbackgb)<br/>+ Storage (feedback-photos)"]
+        erp["🏪 ERP / POS<br/>(схеми categories.spots,<br/>categories.products)"]
+        gd["☁️ Google Drive<br/>(резервне дзеркало фото)"]
+        ph["📊 PostHog (опц.)<br/>аналітика подій"]
+    end
+
+    seller -->|відкриває Mini App, заповнює форму| app
+    admin -->|/login → /admin| app
+    app <-->|JSON / RPC<br/>service_role| sb
+    app <-->|HTTPS<br/>(анонім)| tg
+    tg -.->|initData при старті Mini App| seller
+    sb -.->|FK / VIEWs| erp
+    app -->|service-account upload| gd
+    app -->|optional capture| ph
+
+    classDef user fill:#fff,stroke:#888,color:#222;
+    classDef sys fill:#f8e1ec,stroke:#d23985,color:#5a1639;
+    classDef ext fill:#eef,stroke:#557,color:#223;
+    class seller,admin user;
+    class app sys;
+    class tg,sb,erp,gd,ph ext;

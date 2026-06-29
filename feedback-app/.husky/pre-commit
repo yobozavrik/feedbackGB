@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+# Pre-commit hook: scan staged changes for secrets and infra leaks.
+#
+# - Uses gitleaks with our project-specific config (.gitleaks.toml).
+# - Only inspects what is actually staged for this commit (via `--staged`),
+#   so it stays fast even on a large repo.
+# - Skip with `git commit --no-verify` only if you know what you're doing.
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  cat <<'EOF' >&2
+[pre-commit] gitleaks is not installed.
+
+Install it once and retry:
+  macOS:    brew install gitleaks
+  Debian:   sudo apt install gitleaks
+  Other:    https://github.com/gitleaks/gitleaks/releases
+
+To bypass this check (NOT recommended): git commit --no-verify
+EOF
+  exit 1
+fi
+
+gitleaks protect --staged --config=.gitleaks.toml --redact --verbose

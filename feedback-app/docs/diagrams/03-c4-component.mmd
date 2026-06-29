@@ -1,0 +1,80 @@
+%% C4 Level 3 — Components
+%% Скомпоновано в шари Clean Architecture (детальніше у ARCHITECTURE.md).
+flowchart LR
+    subgraph fw["Frameworks & Drivers"]
+        next["Next.js App Router<br/>+ middleware.ts"]
+        nodecrypto["node:crypto · WebCrypto"]
+        sbsdk["@supabase/supabase-js"]
+        google["googleapis (Drive v3)"]
+        antd["antd 5 · @ant-design/<br/>pro-components · plots"]
+    end
+
+    subgraph adapters["Interface Adapters (HTTP / Storage / Bot / UI)"]
+        routesAuth["/api/auth/*"]
+        routesFeedback["/api/feedback"]
+        routesAdmin["/api/admin/users/*<br/>send-report-now<br/>mirror-to-drive-now"]
+        routesLifecycle["/api/admin/feedback/[id] (PATCH)"]
+        routesCron["/api/cron/*"]
+        routesPub["/api/products*<br/>/api/stores<br/>/api/r/photo/[id]"]
+        miniApp["(app) Mini App — Tailwind<br/>login · feedback/[cat] · thanks"]
+        adminApp["(admin) AdminShell — antd<br/>· Огляд (KPI + ProTable)<br/>· Аналітика · Магазини<br/>· Користувачі · Журнал<br/>· Інструменти · Налаштування"]
+    end
+
+    subgraph usecases["Use Cases (lib/*)"]
+        ucFeedback["createFeedback<br/>(inline у /api/feedback)"]
+        ucLifecycle["updateFeedbackLifecycle<br/>(inline у /api/admin/feedback/[id])"]
+        ucReport["buildAndSendDailyReport"]
+        ucMirror["mirrorPendingPhotos"]
+        ucAuth["signSession · verifySession<br/>+ verify_pin RPC"]
+        ucAudit["logAudit"]
+        ucRedirect["resolveRedirectUrl<br/>(inline у /api/r/photo/[id])"]
+    end
+
+    subgraph entities["Entities & Domain (lib/*)"]
+        catDef["categories.ts<br/>(8 категорій + поля)"]
+        types["types.ts<br/>(FeedbackPayload,<br/>SessionPayload, ...)"]
+        summary["summary.ts<br/>(buildSummary)"]
+        telegramHmac["telegram.ts<br/>(validateInitData)"]
+        slaDom["sla.ts<br/>(AGING_HOURS, isOpen,<br/>ageMs, bucketFor, formatAge)"]
+    end
+
+    next --> routesAuth
+    next --> routesFeedback
+    next --> routesAdmin
+    next --> routesLifecycle
+    next --> routesCron
+    next --> routesPub
+    next --> miniApp
+    next --> adminApp
+    antd --> adminApp
+
+    routesAuth --> ucAuth
+    routesAuth --> ucAudit
+    routesFeedback --> ucFeedback
+    routesLifecycle --> ucLifecycle
+    routesLifecycle --> ucAudit
+    routesAdmin --> ucReport
+    routesAdmin --> ucMirror
+    routesAdmin --> ucAudit
+    routesCron --> ucReport
+    routesCron --> ucMirror
+    routesPub --> ucRedirect
+
+    adminApp --> slaDom
+    adminApp --> catDef
+
+    ucFeedback --> summary
+    ucFeedback --> telegramHmac
+    ucFeedback --> catDef
+    ucFeedback --> ucAudit
+    ucLifecycle --> sbsdk
+    ucReport --> catDef
+    ucReport --> types
+
+    ucAuth --> nodecrypto
+    ucFeedback --> sbsdk
+    ucReport --> sbsdk
+    ucMirror --> sbsdk
+    ucMirror --> google
+    ucAudit --> sbsdk
+    ucRedirect --> sbsdk

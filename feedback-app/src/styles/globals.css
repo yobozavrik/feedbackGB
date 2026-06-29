@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  /* Light theme — warm cream */
+  --bg: 253 248 243;
+  --elev: 255 255 255;
+  --elev-2: 251 243 235;
+  --ink-900: 43 27 27;
+  --ink-700: 90 72 72;
+  --ink-500: 140 122 122;
+  --ink-300: 200 185 185;
+  --brand-500: 232 90 138;
+  --brand-600: 213 74 120;
+  --brand-50: 253 231 238;
+  --accent-amber: 244 162 97;
+  --cat-missing: 251 207 232;
+  --cat-overstock: 186 230 253;
+  --cat-defect: 254 202 202;
+  --cat-supply: 254 215 170;
+  --cat-idea: 221 214 254;
+  --cat-spotted: 187 247 208;
+  --cat-tech: 253 230 138;
+  --cat-voice: 254 205 211;
+  --success: 22 163 74;
+  --danger: 220 38 38;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: 26 19 19;
+    --elev: 42 31 31;
+    --elev-2: 34 25 25;
+    --ink-900: 247 238 234;
+    --ink-700: 197 180 174;
+    --ink-500: 138 122 116;
+    --ink-300: 74 60 56;
+    --brand-500: 255 126 170;
+    --brand-50: 42 24 32;
+  }
+}
+
+html,
+body {
+  background-color: rgb(var(--bg));
+  color: rgb(var(--ink-900));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@layer components {
+  .card {
+    @apply rounded-3xl bg-elev shadow-soft;
+  }
+  .card-flat {
+    @apply rounded-3xl bg-elev2;
+  }
+  .field-label {
+    @apply mb-1.5 block text-[13px] font-medium text-ink-700;
+  }
+  .field-input {
+    @apply h-13 w-full rounded-2xl border-[1.5px] border-transparent bg-elev2 px-4 text-[15px]
+           text-ink-900 placeholder:text-ink-300
+           focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/15
+           transition;
+  }
+  .field-textarea {
+    @apply field-input min-h-[112px] resize-y py-3 leading-relaxed;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium;
+  }
+  .btn-primary {
+    @apply inline-flex h-13 items-center justify-center gap-2 rounded-2xl
+           bg-brand-500 px-6 font-medium text-white
+           hover:bg-brand-600 active:scale-[0.97]
+           disabled:opacity-50 disabled:pointer-events-none
+           transition-all duration-200;
+  }
+  .btn-ghost {
+    @apply inline-flex h-13 items-center justify-center gap-2 rounded-2xl
+           border border-ink-300/40 bg-elev2 px-5 text-ink-900
+           hover:bg-elev2/70 active:scale-[0.97] transition-all duration-200;
+  }
+  .btn-step {
+    @apply inline-flex h-13 items-center justify-center rounded-2xl
+           bg-elev2 text-[24px] font-semibold text-ink-900
+           hover:bg-elev2/70 active:scale-[0.95]
+           disabled:opacity-40 disabled:pointer-events-none
+           transition-all duration-150 select-none;
+    width: 3.25rem;
+  }
+  .grad-text {
+    background-image: linear-gradient(
+      90deg,
+      rgb(var(--brand-500)),
+      rgb(var(--accent-amber))
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .h-13 {
+    height: 3.25rem;
+  }
+}
+
+/* Skeleton shimmer */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgb(var(--ink-300) / 0.15) 0%,
+    rgb(var(--ink-300) / 0.3) 50%,
+    rgb(var(--ink-300) / 0.15) 100%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+/* Reduce-motion respects */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
