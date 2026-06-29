@@ -23,10 +23,15 @@ vi.mock("@/lib/supabase", () => ({
   getServerSupabase: vi.fn(() => null),
 }));
 
-vi.mock("@/lib/telegram", () => ({
-  sendTelegramMessage: vi.fn(async () => true),
-  escapeHtml: (s: string) => s,
-}));
+vi.mock("@/lib/telegram", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/telegram")>(
+    "@/lib/telegram",
+  );
+  return {
+    ...actual,
+    sendTelegramMessage: vi.fn(async () => true),
+  };
+});
 
 const SAMPLE_FEEDBACK_ID = "33333333-3333-3333-3333-333333333333";
 
@@ -56,7 +61,7 @@ function fakeSupabase(selectResult: any[] | null, insertResult: any = null) {
   });
 
   const maybeSingleMock = vi.fn().mockResolvedValue({
-    data: { tg_user_id: 12345, summary: "Мало молока" },
+    data: { tg_user_id: 12345, summary: "Мало <b>молока</b> & хліба" },
     error: null,
   });
 
@@ -182,7 +187,7 @@ describe("POST /api/admin/feedback/[id]/comments", () => {
       id: "new-c",
       feedback_id: SAMPLE_FEEDBACK_ID,
       author_id: "admin-uuid",
-      body: "Hello seller",
+      body: "Hello <b>seller</b> & team",
       created_at: new Date().toISOString(),
     };
 
@@ -191,16 +196,19 @@ describe("POST /api/admin/feedback/[id]/comments", () => {
 
     const { POST } = await loadRoute();
     const res = await POST(
-      commentsRequest("POST", { body: "Hello seller" }, adminCookie),
+      commentsRequest("POST", { body: "Hello <b>seller</b> & team" }, adminCookie),
       { params: { id: SAMPLE_FEEDBACK_ID } },
     );
 
     expect(res.status).toBe(200);
     const resBody = await res.json();
     expect(resBody.ok).toBe(true);
-    expect(resBody.comment.body).toBe("Hello seller");
+    expect(resBody.comment.body).toBe("Hello <b>seller</b> & team");
 
-    // Check that Telegram notification was attempted
     expect(telegram.sendTelegramMessage).toHaveBeenCalled();
+    const [, , sentText] = vi.mocked(telegram.sendTelegramMessage).mock.calls[0]!;
+    expect(sentText).toContain("Мало &lt;b&gt;молока&lt;/b&gt; &amp; хліба");
+    expect(sentText).toContain("Hello &lt;b&gt;seller&lt;/b&gt; &amp; team");
+    expect(sentText).not.toContain("Hello <b>seller</b>");
   });
 });

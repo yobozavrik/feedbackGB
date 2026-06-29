@@ -388,7 +388,7 @@ update feedbackgb.users
 ### 8.5 Ретригерити Drive mirror
 
 ```bash
-curl -X POST -H "x-admin-cron-secret: $CRON_SECRET" \
+curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
   https://<host>/api/admin/mirror-to-drive-now
 ```
 
