@@ -43,3 +43,15 @@ export function isSupabaseConfigured(): boolean {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
   );
 }
+
+/**
+ * Client-side Supabase client (uses anon key).
+ */
+export function getClientSupabase(): LooseClient | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, {
+    db: { schema: FEEDBACK_SCHEMA },
+  }) as unknown as LooseClient;
+}

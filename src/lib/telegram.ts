@@ -50,3 +50,40 @@ function safeJson<T>(raw: string): T | null {
     return null;
   }
 }
+
+/**
+ * Send a simple text message via Telegram Bot API.
+ */
+export async function sendTelegramMessage(
+  botToken: string,
+  chatId: string | number,
+  text: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `https://api.telegram.org/bot${botToken}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+        }),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error("sendTelegramMessage failed", {
+        status: res.status,
+        body: body.slice(0, 300),
+      });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("sendTelegramMessage error", err);
+    return false;
+  }
+}

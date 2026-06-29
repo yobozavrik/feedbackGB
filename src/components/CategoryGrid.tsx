@@ -3,28 +3,57 @@
 import Link from "next/link";
 import { useState } from "react";
 import {
-  getPriorityCategories,
+  getCategory,
   getSecondaryCategories,
   type Category,
 } from "@/lib/categories";
 import { track } from "@/lib/analytics";
 
 /**
- * v1 priority layout: 3 big stacked cards for the most-frequent situations
- * (Мало / Багато / Брак), then a collapsed "+ Інше" section with the
- * remaining 5 categories.
+ * Main screen grid layout:
+ * - "Продукція магазину" custom navigation card.
+ * - "Заявка на ремонт" (tech_issue) priority card.
+ * - "Заявка на розхідні матеріали" (consumables_request) priority card.
+ * - Collapsed "+ Інше" section with secondary categories.
  */
 export function CategoryGrid() {
-  const priority = getPriorityCategories();
-  const secondary = getSecondaryCategories();
   const [expanded, setExpanded] = useState(false);
+  const techIssue = getCategory("tech_issue");
+  const consumables = getCategory("consumables_request");
+  const secondary = getSecondaryCategories();
 
   return (
     <div className="space-y-3">
-      {priority.map((c, idx) => (
-        <PriorityCard key={c.id} c={c} idx={idx} />
-      ))}
+      {/* 1. Products flow button */}
+      <Link
+        href="/products-menu"
+        onClick={() => track("home_category_open", { category: "products_menu", section: "priority" })}
+        className="group relative flex h-[120px] animate-fade-up items-center overflow-hidden rounded-3xl bg-elev p-5 shadow-soft transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99]"
+      >
+        <div className="absolute -bottom-12 -right-12 h-40 w-40 rounded-full bg-cat-overstock/40 blur-md" />
+        <div className="relative flex w-full items-center gap-4">
+          <div className="text-[44px] leading-none">🛍️</div>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-[19px] font-semibold leading-tight text-ink-900">
+              Продукція магазину
+            </h3>
+            <p className="mt-1 text-[13px] leading-snug text-ink-500">
+              Мало товару, багато товару, брак
+            </p>
+          </div>
+          <span aria-hidden className="text-[22px] text-ink-300 group-hover:text-brand-500">
+            →
+          </span>
+        </div>
+      </Link>
 
+      {/* 2. Repair request */}
+      {techIssue && <PriorityCard c={techIssue} idx={1} />}
+
+      {/* 3. Consumables request */}
+      {consumables && <PriorityCard c={consumables} idx={2} />}
+
+      {/* Secondary dropdown */}
       {secondary.length > 0 ? (
         <div className="pt-2">
           <button
@@ -51,7 +80,7 @@ export function CategoryGrid() {
   );
 }
 
-function PriorityCard({ c, idx }: { c: Category; idx: number }) {
+export function PriorityCard({ c, idx }: { c: Category; idx: number }) {
   return (
     <Link
       href={`/feedback/${c.id}`}

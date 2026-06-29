@@ -68,6 +68,7 @@ const CATEGORY_TAG_COLOR: Record<string, string> = {
   spotted_elsewhere: "magenta",
   tech_issue: "cyan",
   customer_voice: "blue",
+  consumables_request: "orange",
 };
 
 interface Props {

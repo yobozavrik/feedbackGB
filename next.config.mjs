@@ -1,13 +1,36 @@
 /** @type {import('next').NextConfig} */
 
+const isDev = process.env.NODE_ENV === "development";
+const scriptSrc = [
+  "'self'",
+  "'unsafe-inline'",
+  "https://telegram.org",
+  "https://*.i.posthog.com",
+  ...(isDev ? ["'unsafe-eval'"] : []),
+].join(" ");
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+let supabaseConnect = "https://*.supabase.co wss://*.supabase.co";
+
+if (supabaseUrl) {
+  try {
+    const urlObj = new URL(supabaseUrl);
+    const host = urlObj.host;
+    const wsProto = urlObj.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${wsProto}//${host}`;
+    supabaseConnect += ` ${supabaseUrl} ${wsUrl}`;
+  } catch (e) {
+    // Ignore
+  }
+}
+
 const csp = [
   "default-src 'self'",
   "img-src 'self' data: blob: https:",
-  // 'unsafe-inline' on scripts is needed for Next.js inline bootstrap; we keep
-  // it narrow by pinning script-src to self + telegram.org.
-  "script-src 'self' 'unsafe-inline' https://telegram.org https://*.i.posthog.com",
+  // In development Next.js react-refresh needs eval; keep it disabled in production.
+  `script-src ${scriptSrc}`,
   "style-src 'self' 'unsafe-inline'",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://telegram.org https://*.i.posthog.com https://*.posthog.com",
+  `connect-src 'self' ${supabaseConnect} https://telegram.org https://*.i.posthog.com https://*.posthog.com`,
   // Telegram Mini App runs inside an iframe from web.telegram.org / *.telegram.org.
   "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org",
   "base-uri 'self'",

@@ -526,6 +526,7 @@ const CATEGORY_ORDER: Array<{ id: string; emoji: string }> = [
   { id: "spotted_elsewhere", emoji: "👀" },
   { id: "tech_issue", emoji: "🔧" },
   { id: "customer_voice", emoji: "🗣" },
+  { id: "consumables_request", emoji: "📋" },
 ];
 
 function formatHeatmap(rows: FeedRow[]): string {
