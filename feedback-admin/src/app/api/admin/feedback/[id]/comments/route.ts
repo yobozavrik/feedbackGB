@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase";
 import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
-import { sendTelegramMessage } from "@/lib/telegram";
+import { sendTelegramMessage, escapeHtml } from "@/lib/telegram";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -126,7 +126,9 @@ export async function POST(
       .maybeSingle();
 
     if (fb && fb.tg_user_id && process.env.TELEGRAM_BOT_TOKEN) {
-      const formattedMsg = `💬 <b>Нове повідомлення від адміністратора:</b>\n\n<i>"${fb.summary}"</i>\n\n<b>Відповідь:</b>\n${commentText}`;
+      const escapedSummary = escapeHtml(fb.summary || "");
+      const escapedComment = escapeHtml(commentText);
+      const formattedMsg = `💬 <b>Нове повідомлення від адміністратора:</b>\n\n<i>"${escapedSummary}"</i>\n\n<b>Відповідь:</b>\n${escapedComment}`;
       await sendTelegramMessage(
         process.env.TELEGRAM_BOT_TOKEN,
         String(fb.tg_user_id),

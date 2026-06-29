@@ -26,9 +26,14 @@ type LooseClient = SupabaseClient<any, any, any>;
  */
 export function getServerSupabase(): LooseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const isProd = process.env.NODE_ENV === "production";
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (isProd && !serviceKey) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required in production environment!");
+  }
+
+  const key = serviceKey ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
   return createClient(url, key, {
     auth: { persistSession: false },

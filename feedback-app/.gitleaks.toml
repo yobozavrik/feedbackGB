@@ -1,0 +1,87 @@
+# Gitleaks config for FeedbackGB.
+#
+# Inherits all built-in gitleaks rules (AWS keys, JWT, Slack tokens, GitHub
+# PAT, generic API keys, etc.) and adds a few project-specific guard-rails:
+#
+# 1. Sibling-project schema names that share our self-hosted Supabase. They
+#    are not "secrets" cryptographically, but mentioning them publicly leaks
+#    information about the wider infrastructure.
+# 2. Private VPS / Supabase hostnames.
+# 3. Hard-coded JWTs in source files (default rule), with a tight allowlist
+#    for legitimate look-alikes (npm sha512 hashes in `package-lock.json`,
+#    placeholder values in `.env.example`).
+#
+# Run locally:
+#   gitleaks protect --staged --config=.gitleaks.toml
+# Or scan full history:
+#   gitleaks detect --config=.gitleaks.toml --redact
+#
+# Updating: when a real new sibling project is added to the same Supabase
+# instance, add its schema name here so we never accidentally commit it.
+
+title = "FeedbackGB gitleaks config"
+
+# `extend.useDefault = true` pulls in gitleaks' full bundled rule set in
+# addition to the rules below.
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Custom rules — project specific.
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "feedbackgb-sibling-schema-name"
+description = "Mentions of sibling-project schemas on the shared self-hosted Supabase. These are infra-leakage, not secrets — but we don't want them in the public repo."
+# Word-bounded match. Add new schema names here when a new sibling project
+# joins the same Supabase instance.
+regex = '''(?i)\b(bakery[0-9]?|pizza[0-9]?|graviton|konditerka|sadova|bulvar|shveyka)\b'''
+tags = ["infra-leak", "supabase", "schema"]
+
+[[rules]]
+id = "feedbackgb-private-host"
+description = "Private self-hosted hostnames + concrete production deployment URL. Use placeholders like <your-prod-host> in docs."
+regex = '''(?i)\b(supabase\.dmytrotovstytskyi\.online|vmi[0-9]{6,}\.[a-z0-9.-]+|feedback-gb\.vercel\.app)\b'''
+tags = ["infra-leak", "hostname"]
+
+# ---------------------------------------------------------------------------
+# Global allowlist — applied to all rules above and to the default rules.
+# ---------------------------------------------------------------------------
+
+[allowlist]
+description = "Files and patterns that are inherently safe to skip."
+
+paths = [
+  # npm lockfile contains many sha512 hashes that look like JWTs.
+  '''package-lock\.json''',
+  # `.env.example` has placeholder values that intentionally pattern-match
+  # secrets so people know what shape to put in `.env.local`.
+  '''\.env\.example''',
+  # Build outputs and dependencies — gitleaks should not need to scan them
+  # but be explicit just in case.
+  '''node_modules/''',
+  '''\.next/''',
+  '''build/''',
+  '''dist/''',
+  # The gitleaks config itself necessarily contains the regex of the bad
+  # words it protects against.
+  '''\.gitleaks\.toml''',
+]
+
+regexes = [
+  # Telegram chat-id placeholders (clearly fake "1234567890" style).
+  '''-?100?123456789\d?''',
+  # Documentation placeholders.
+  '''<your-prod-host>''',
+  '''<other-schemas>''',
+  '''<id>''',
+  # SQL keyword "graviton" only matters if it shows up as a schema name —
+  # the rule already requires word-boundary, but if it ever appears as a
+  # technical term in unrelated docs (e.g., AWS Graviton CPUs), allow.
+  '''AWS Graviton''',
+  '''aws graviton''',
+]
+
+# Note: npm `sha512-…` integrity hashes use the `eyJ`-style base64 alphabet
+# and can pattern-match the default "jwt" rule, but `package-lock.json`
+# is excluded via the path allowlist above, which is sufficient.

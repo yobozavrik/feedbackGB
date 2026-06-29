@@ -254,7 +254,7 @@ API має fallback на `store_label` (вільний текст), якщо `st
 Перевірка:
 
 ```bash
-curl -X POST -H "x-cron-secret: $CRON_SECRET" \
+curl -H "Authorization: Bearer $CRON_SECRET" \
   https://<your-domain>/api/cron/mirror-to-drive
 ```
 
@@ -481,7 +481,7 @@ select feedback_id, attempts, error
 ### 9.6 "Cron-ендпоінт повертає 401"
 
 - bearer не збігається з `CRON_SECRET`. Якщо ти руками — додай
-  `Authorization: Bearer $CRON_SECRET` або `x-cron-secret: $CRON_SECRET`.
+  `Authorization: Bearer $CRON_SECRET`.
 - Якщо це Vercel Cron — перевір, що `CRON_SECRET` у Vercel ENV
   виставлений (Settings → Environment Variables).
 
