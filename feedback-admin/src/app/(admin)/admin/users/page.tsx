@@ -1,12 +1,15 @@
+import { cookies } from "next/headers";
 import { getServerSupabase } from "@/lib/supabase";
 import { UsersClient } from "./users-client";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
+import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export interface AdminUser {
   id: string;
   full_name: string;
+  display_label: string | null;
   role: "seller" | "admin" | "super_admin";
   store_id: number | null;
   store_name: string | null;
@@ -23,11 +26,19 @@ export interface AdminUser {
 
 async function fetchData(): Promise<{
   users: AdminUser[];
+  stores: Array<{ id: number; name: string }>;
+  currentUserId: string;
+  currentUserRole: "admin" | "super_admin";
   error: string | null;
 }> {
+  const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
+  if (!sess || (sess.role !== "admin" && sess.role !== "super_admin")) {
+    return { users: [], stores: [], currentUserId: "", currentUserRole: "admin", error: "Недостатньо прав" };
+  }
+
   const supabase = getServerSupabase();
   if (!supabase) {
-    return { users: [], error: "Supabase ще не налаштовано" };
+    return { users: [], stores: [], currentUserId: sess.uid, currentUserRole: sess.role, error: "Supabase ще не налаштовано" };
   }
 
   const [{ data: userRows, error: userErr }, { data: storeRows }] =
@@ -35,22 +46,24 @@ async function fetchData(): Promise<{
       supabase
         .from("users")
         .select(
-          "id, full_name, role, store_id, is_active, pin_hash, failed_attempts, locked_until, last_login, last_login_country, last_login_city, last_login_asn, last_login_isp",
+          "id, full_name, display_label, role, store_id, is_active, pin_hash, failed_attempts, locked_until, last_login, last_login_country, last_login_city, last_login_asn, last_login_isp",
         )
         .order("full_name", { ascending: true }),
       supabase.from("v_stores").select("id, name"),
     ]);
 
-  if (userErr) return { users: [], error: userErr.message };
+  if (userErr) return { users: [], stores: [], currentUserId: sess.uid, currentUserRole: sess.role, error: userErr.message };
 
+  const stores = (storeRows ?? []) as Array<{ id: number; name: string }>;
   const storeMap = new Map<number, string>();
-  for (const s of (storeRows ?? []) as Array<{ id: number; name: string }>) {
+  for (const s of stores) {
     storeMap.set(s.id, s.name);
   }
 
   const rows = (userRows ?? []) as Array<{
     id: string;
     full_name: string;
+    display_label: string | null;
     role: "seller" | "admin" | "super_admin";
     store_id: number | null;
     is_active: boolean;
@@ -67,6 +80,7 @@ async function fetchData(): Promise<{
   const users: AdminUser[] = rows.map((u) => ({
     id: u.id,
     full_name: u.full_name,
+    display_label: u.display_label,
     role: u.role,
     store_id: u.store_id,
     store_name: u.store_id != null ? storeMap.get(u.store_id) ?? null : null,
@@ -81,11 +95,11 @@ async function fetchData(): Promise<{
     last_login_isp: u.last_login_isp,
   }));
 
-  return { users, error: null };
+  return { users, stores, currentUserId: sess.uid, currentUserRole: sess.role, error: null };
 }
 
 export default async function AdminUsersPage() {
-  const { users, error } = await fetchData();
+  const { users, stores, currentUserId, currentUserRole, error } = await fetchData();
 
   return (
     <AdminPageContainer
@@ -98,7 +112,12 @@ export default async function AdminUsersPage() {
           <p className="mt-3 text-[14px] text-ink-700">{error}</p>
         </div>
       ) : (
-        <UsersClient users={users} />
+        <UsersClient
+          users={users}
+          stores={stores}
+          currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
+        />
       )}
     </AdminPageContainer>
   );
