@@ -129,3 +129,32 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Admin users table: keep the wide CRUD grid readable inside ProLayout. */
+.admin-users-table .ant-pro-card-body {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.admin-users-table .ant-table-wrapper,
+.admin-users-table .ant-spin-nested-loading,
+.admin-users-table .ant-spin-container {
+  min-width: 0;
+}
+
+.admin-users-table .ant-table-cell {
+  vertical-align: top;
+}
+
+.admin-users-table .ant-table-cell-fix-right .ant-space {
+  flex-wrap: nowrap;
+}
+
+.admin-users-table .ant-table-cell-fix-right .ant-btn {
+  width: 28px;
+  padding-inline: 0;
+}
+
+.admin-users-table .ant-table-cell-fix-right .ant-btn > span:not(.anticon) {
+  display: none;
+}

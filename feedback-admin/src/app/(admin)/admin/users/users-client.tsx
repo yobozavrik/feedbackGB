@@ -224,7 +224,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
         title: "Імʼя (ФІО)",
         dataIndex: "full_name",
         fixed: "left",
-        width: 240,
+        width: 220,
         ellipsis: true,
         sorter: (a, b) => a.full_name.localeCompare(b.full_name, "uk"),
         render: (_, row) => (
@@ -247,7 +247,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
       {
         title: "Отображуване ім'я",
         dataIndex: "display_label",
-        width: 240,
+        width: 220,
         ellipsis: true,
         render: (_, row) => row.display_label ?? <Text type="secondary">—</Text>,
       },
@@ -289,7 +289,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
       {
         title: "Магазин",
         dataIndex: "store_name",
-        width: 200,
+        width: 180,
         ellipsis: true,
         filters: filterStoreOptions.length > 0 ? filterStoreOptions : undefined,
         onFilter: (value, row) => row.store_name === value,
@@ -299,7 +299,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
       {
         title: "Стан",
         key: "state",
-        width: 140,
+        width: 120,
         filters: (Object.keys(STATE_META) as RowState[]).map((k) => ({
           text: STATE_META[k].text,
           value: k,
@@ -329,7 +329,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
       {
         title: "Помилок",
         dataIndex: "failed_attempts",
-        width: 100,
+        width: 92,
         align: "right",
         sorter: (a, b) => a.failed_attempts - b.failed_attempts,
         render: (_, row) => {
@@ -353,7 +353,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
       {
         title: "Останній вхід",
         dataIndex: "last_login",
-        width: 200,
+        width: 190,
         sorter: (a, b) => {
           const ta = a.last_login ? new Date(a.last_login).getTime() : 0;
           const tb = b.last_login ? new Date(b.last_login).getTime() : 0;
@@ -380,7 +380,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
         key: "actions",
         valueType: "option",
         fixed: "right",
-        width: 280,
+        width: 152,
         render: (_, row) => {
           const isLocked =
             row.locked_until != null &&
@@ -486,10 +486,13 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
   return (
     <>
       <ProTable<AdminUser>
+        className="admin-users-table"
         rowKey="id"
         dataSource={list}
         columns={columns}
         search={false}
+        size="small"
+        tableLayout="fixed"
         options={{
           density: true,
           fullScreen: true,
@@ -501,7 +504,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
           showSizeChanger: true,
           showTotal: (total) => `${total} записів`,
         }}
-        scroll={{ x: 1540 }}
+        scroll={{ x: 1314 }}
         toolBarRender={() => [
           <Button
             key="create"
