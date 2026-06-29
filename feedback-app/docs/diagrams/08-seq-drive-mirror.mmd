@@ -1,0 +1,40 @@
+%% Sequence — резервне дзеркалення фото у Google Drive.
+%% Викликається 1) cron-handler-ом /api/cron/mirror-to-drive,
+%% 2) /api/admin/mirror-to-drive-now, 3) синхронно перед звітом у drive-mode.
+sequenceDiagram
+    autonumber
+    participant Trigger as Cron / Admin
+    participant DM as mirrorPendingPhotos()
+    participant SB as Supabase
+    participant ST as Supabase Storage
+    participant GD as Google Drive API
+
+    Trigger->>DM: invoke()
+    DM->>SB: SELECT feedback_feed<br/>WHERE photo_url IS NOT NULL<br/>ORDER BY created_at DESC LIMIT 100
+    SB-->>DM: candidates[]
+
+    DM->>SB: SELECT photo_mirror WHERE feedback_id IN (...)
+    SB-->>DM: mirrorByFeedback Map
+
+    loop для кожного rows[i] (max BATCH_LIMIT=50)
+        alt mirrored_at != null OR attempts >= MAX_ATTEMPTS=5
+            Note right of DM: skip
+        else
+            DM->>DM: resolveStoragePath(photo_url)
+            DM->>ST: download(path)
+            alt download error
+                DM->>SB: journalFailure → photo_mirror UPSERT (error, attempts++)
+            end
+
+            DM->>DM: buildDriveFileName(date_store_idShort.ext)
+            DM->>GD: uploadFileToDrive(name, mimeType, bytes,<br/>folderId, sa)
+            alt upload error
+                DM->>SB: journalFailure
+            else
+                GD-->>DM: {id: drive_file_id}
+                DM->>SB: UPSERT photo_mirror<br/>(drive_file_id, mirrored_at=now,<br/>attempts++, error=null)
+            end
+        end
+    end
+
+    DM-->>Trigger: {ok, mirrored, failed, skipped}
