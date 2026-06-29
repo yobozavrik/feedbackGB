@@ -17,7 +17,6 @@ import { track } from "@/lib/analytics";
  * - Collapsed "+ Інше" section with secondary categories.
  */
 export function CategoryGrid() {
-  const [expanded, setExpanded] = useState(false);
   const techIssue = getCategory("tech_issue");
   const consumables = getCategory("consumables_request");
   const secondary = getSecondaryCategories();
@@ -53,29 +52,14 @@ export function CategoryGrid() {
       {/* 3. Consumables request */}
       {consumables && <PriorityCard c={consumables} idx={2} />}
 
-      {/* Secondary dropdown */}
-      {secondary.length > 0 ? (
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            className="flex w-full items-center justify-between rounded-2xl bg-elev px-4 py-3 text-left text-[14px] font-medium text-ink-700 hover:bg-elev2"
-          >
-            <span>+ Інше</span>
-            <span aria-hidden className={`transition-transform ${expanded ? "rotate-180" : ""}`}>
-              ▾
-            </span>
-          </button>
-          {expanded ? (
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {secondary.map((c) => (
-                <SecondaryCard key={c.id} c={c} />
-              ))}
-            </div>
-          ) : null}
+      {/* 4. Secondary categories directly rendered in a 2-column grid */}
+      {secondary.length > 0 && (
+        <div className="grid grid-cols-2 gap-2 pt-1 animate-fade-up" style={{ animationDelay: "180ms" }}>
+          {secondary.map((c) => (
+            <SecondaryCard key={c.id} c={c} />
+          ))}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
