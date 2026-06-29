@@ -145,9 +145,10 @@ export const CATEGORIES: Category[] = [
       },
       {
         id: "comment",
-        label: "Деталі (необов'язково)",
+        label: "Деталі",
         placeholder: "Коли помітила, які ознаки, скільки партія",
         kind: "textarea",
+        required: true,
       },
       { id: "photo", label: "Фото браку (дуже бажано)", kind: "photo" },
     ],
