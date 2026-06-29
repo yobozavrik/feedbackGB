@@ -12,7 +12,6 @@ import { StoreSelect } from "./StoreSelect";
 import { ProductPicker } from "./ProductPicker";
 import { QuantityStepper } from "./QuantityStepper";
 import { ConfirmSheet } from "./ConfirmSheet";
-import { VoiceInputButton } from "./VoiceInputButton";
 
 interface Props {
   category: Category;
@@ -337,18 +336,13 @@ export function PriorityFeedbackForm({ category }: Props) {
       {(product || useFreeName) ? (
         <div className="card space-y-4 p-4">
           <div>
-            <div className="flex items-center justify-between">
-              <label htmlFor="comment" className="field-label !mb-0">
-                {category.id === "defect" ? (
-                  <>Деталі <span className="text-brand-500">*</span></>
-                ) : (
-                  "Коментар (необов'язково)"
-                )}
-              </label>
-              <VoiceInputButton
-                onTranscript={(text) => setComment((prev) => (prev ? prev + " " + text : text))}
-              />
-            </div>
+            <label htmlFor="comment" className="field-label">
+              {category.id === "defect" ? (
+                <>Деталі <span className="text-brand-500">*</span></>
+              ) : (
+                "Коментар (необов'язково)"
+              )}
+            </label>
             <textarea
               id="comment"
               value={comment}
@@ -362,7 +356,7 @@ export function PriorityFeedbackForm({ category }: Props) {
               }
               maxLength={1000}
               required={category.id === "defect"}
-              className="field-textarea mt-1.5"
+              className="field-textarea"
             />
           </div>
           <PhotoInput
