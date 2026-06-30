@@ -721,7 +721,7 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
                     overflow: "hidden",
                     cursor: "pointer",
                   }}
-                  bodyStyle={{ padding: 16 }}
+                  styles={{ body: { padding: 16 } }}
                   onClick={() => setActivityTarget(seller)}
                   actions={[
                     <Tooltip key="edit" title="Редагувати">
@@ -907,7 +907,7 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
         title="Створити користувача"
         onOpenChange={setCreateOpen}
         modalProps={{
-          destroyOnClose: true,
+          destroyOnHidden: true,
           okText: "Створити",
           cancelText: "Скасувати",
           maskClosable: false,
@@ -987,7 +987,7 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
           if (!open) setEditTarget(null);
         }}
         modalProps={{
-          destroyOnClose: true,
+          destroyOnHidden: true,
           okText: "Зберегти",
           cancelText: "Скасувати",
           maskClosable: false,
@@ -1142,39 +1142,43 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
             showIcon
           />
         ) : (
-          <Timeline mode="left">
-            {activityLogs.map((log: any, idx: number) => {
+          <Timeline
+            mode="left"
+            items={activityLogs.map((log: any) => {
               const dateStr = new Date(log.occurred_at).toLocaleString("uk-UA");
               const hasMeta = log.meta && Object.keys(log.meta).length > 0;
               const hasDiff = log.diff && Object.keys(log.diff).length > 0;
 
-              return (
-                <Timeline.Item key={idx} label={dateStr}>
-                  <div style={{ fontWeight: "bold" }}>{log.action_title}</div>
-                  {log.ip && (
-                    <div style={{ fontSize: 11, color: "#8c8c8c" }}>
-                      IP: {log.ip} {log.user_agent ? `| ${log.user_agent.slice(0, 40)}...` : ""}
-                    </div>
-                  )}
-                  {hasMeta && (
-                    <div style={{ marginTop: 4, background: "#f5f5f5", padding: "4px 8px", borderRadius: 4, fontSize: 11 }}>
-                      <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-                        {JSON.stringify(log.meta, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                  {hasDiff && (
-                    <div style={{ marginTop: 4, background: "#fffbe6", padding: "4px 8px", borderRadius: 4, fontSize: 11, border: "1px solid #ffe58f" }}>
-                      <div style={{ fontWeight: "bold", color: "#d4b106", marginBottom: 2 }}>Зміни:</div>
-                      <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-                        {JSON.stringify(log.diff, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                </Timeline.Item>
-              );
+              return {
+                label: dateStr,
+                children: (
+                  <>
+                    <div style={{ fontWeight: "bold" }}>{log.action_title}</div>
+                    {log.ip && (
+                      <div style={{ fontSize: 11, color: "#8c8c8c" }}>
+                        IP: {log.ip} {log.user_agent ? `| ${log.user_agent.slice(0, 40)}...` : ""}
+                      </div>
+                    )}
+                    {hasMeta && (
+                      <div style={{ marginTop: 4, background: "#f5f5f5", padding: "4px 8px", borderRadius: 4, fontSize: 11 }}>
+                        <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                          {JSON.stringify(log.meta, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                    {hasDiff && (
+                      <div style={{ marginTop: 4, background: "#fffbe6", padding: "4px 8px", borderRadius: 4, fontSize: 11, border: "1px solid #ffe58f" }}>
+                        <div style={{ fontWeight: "bold", color: "#d4b106", marginBottom: 2 }}>Зміни:</div>
+                        <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                          {JSON.stringify(log.diff, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </>
+                ),
+              };
             })}
-          </Timeline>
+          />
         )}
       </Drawer>
     </>
