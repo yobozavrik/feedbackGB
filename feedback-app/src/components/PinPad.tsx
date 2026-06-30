@@ -142,11 +142,11 @@ export function PinPad() {
                     ? `Цифра ${k}`
                     : undefined
             }
-            className={`h-[68px] w-[68px] rounded-2xl text-[22px] font-medium transition-all duration-150 ${
+            className={`h-[68px] w-[68px] rounded-xl text-[22px] font-medium transition-all duration-150 ${
               !k
                 ? "invisible"
                 : k === "OK"
-                  ? "bg-brand-100 text-brand-700 shadow-soft active:scale-95"
+                  ? "bg-brand-50 text-brand-500 shadow-soft active:scale-95"
                   : "bg-elev text-ink-900 shadow-soft hover:bg-brand-50 active:scale-95"
             } ${busy ? "opacity-50" : ""}`}
           >

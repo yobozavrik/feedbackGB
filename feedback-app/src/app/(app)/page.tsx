@@ -16,17 +16,17 @@ export default async function HomePage() {
       <Header subtitle="Що сьогодні в магазині?" />
 
       {/* Hero speech-bubble */}
-      <section className="card relative mb-5 p-5">
-        <div className="absolute -left-1.5 bottom-3 h-4 w-4 rotate-45 bg-elev shadow-soft" />
-        <p className="text-[14px] leading-relaxed text-ink-700">
+      <section className="relative mb-6 overflow-hidden rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 p-5 shadow-soft">
+        <div className="pointer-events-none absolute -bottom-8 -right-8 h-28 w-28 rounded-full bg-white/10" />
+        <p className="relative text-[15px] leading-relaxed text-white/90">
           Привіт,{" "}
-          <span className="font-semibold text-ink-900">{greeting}</span>{" "}
+          <span className="font-semibold text-white">{greeting}</span>{" "}
           <span aria-hidden>🌸</span> Розкажи менеджменту прямо: чого не вистачає
           на полицях, що клієнти просять і які ідеї крутяться в голові.
         </p>
       </section>
 
-      <h2 className="mb-3 px-1 font-display text-[15px] font-semibold text-ink-900">
+      <h2 className="mb-3 px-1 font-display text-[20px] font-bold text-ink-900">
         Обери категорію
       </h2>
       <CategoryGrid />

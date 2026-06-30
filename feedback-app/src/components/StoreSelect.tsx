@@ -100,7 +100,7 @@ export function StoreSelect({ name = "store_id", onChange }: Props) {
             }}
           />
           {open && filtered.length > 0 ? (
-            <ul className="mt-1 max-h-60 overflow-y-auto rounded-2xl border border-ink-300/30 bg-elev shadow-soft">
+            <ul className="mt-1 max-h-60 overflow-y-auto rounded-lg border border-ink-300/30 bg-elev shadow-soft">
               {filtered.map((s) => (
                 <li key={s.id}>
                   <button

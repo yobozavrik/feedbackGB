@@ -41,7 +41,7 @@ const config: Config = {
         display: ["var(--font-display)", "system-ui", "sans-serif"],
       },
       boxShadow: {
-        soft: "0 1px 2px rgba(43,27,27,0.04), 0 8px 24px rgba(43,27,27,0.06)",
+        soft: "0 1px 2px rgba(20,27,43,0.05), 0 10px 28px rgba(20,27,43,0.08)",
         ring: "0 0 0 4px rgb(var(--brand-500) / 0.18)",
       },
       borderRadius: {
