@@ -438,7 +438,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
         key: "actions",
         valueType: "option",
         fixed: "right",
-        width: 320,
+        width: 380,
         render: (_, row) => {
           const isLocked =
             row.locked_until != null &&
