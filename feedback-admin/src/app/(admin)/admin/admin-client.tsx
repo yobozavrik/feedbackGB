@@ -293,6 +293,7 @@ export function AdminClient({
         dataIndex: "created_at",
         width: 130,
         fixed: "left",
+        defaultSortOrder: "descend",
         sorter: (a, b) =>
           new Date(a.created_at).getTime() -
           new Date(b.created_at).getTime(),
@@ -407,7 +408,6 @@ export function AdminClient({
         title: "Висить",
         key: "aging",
         width: 110,
-        defaultSortOrder: "descend",
         sorter: (a, b) => {
           // Closed rows always sink to the bottom regardless of sort direction;
           // among open rows we compare age (висить довше → більше значення).
