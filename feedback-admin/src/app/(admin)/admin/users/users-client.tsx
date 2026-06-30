@@ -451,95 +451,95 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
 
           const isSelf = currentUserId === row.id;
 
-          return (
-            <Space size={2}>
-              <Button
-                key="edit"
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
+          return [
+            <Button
+              key="edit"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              disabled={!isEditable}
+              onClick={() => {
+                setEditTarget(row);
+                editForm.setFieldsValue({
+                  full_name: row.full_name,
+                  display_label: row.display_label,
+                  role: row.role,
+                  store_id: row.store_id,
+                  is_active: row.is_active,
+                });
+              }}
+            >
+              Редагувати
+            </Button>,
+            <Button
+              key="reset"
+              type="link"
+              size="small"
+              disabled={!isEditable}
+              icon={row.has_pin ? <ReloadOutlined /> : <KeyOutlined />}
+              onClick={() => setResetTarget(row)}
+            >
+              {row.has_pin ? "Змінити PIN" : "Створити PIN"}
+            </Button>,
+            isLocked ? (
+              <Popconfirm
+                key="unlock"
+                title="Розблокувати акаунт?"
+                description={`Скинути лічильник помилок для ${row.full_name}.`}
+                okText="Так"
+                cancelText="Скасувати"
                 disabled={!isEditable}
-                onClick={() => {
-                  setEditTarget(row);
-                  editForm.setFieldsValue({
-                    full_name: row.full_name,
-                    display_label: row.display_label,
-                    role: row.role,
-                    store_id: row.store_id,
-                    is_active: row.is_active,
-                  });
-                }}
+                onConfirm={() => handleUnlock(row)}
               >
-                Редагувати
-              </Button>
-              <Button
-                key="reset"
-                type="link"
-                size="small"
-                disabled={!isEditable}
-                icon={row.has_pin ? <ReloadOutlined /> : <KeyOutlined />}
-                onClick={() => setResetTarget(row)}
+                <Button key="unlock-btn" type="link" size="small" icon={<UnlockOutlined />} disabled={!isEditable}>
+                  Розблокувати
+                </Button>
+              </Popconfirm>
+            ) : row.is_active ? (
+              <Popconfirm
+                key="deactivate"
+                title="Деактивувати акаунт?"
+                description={`Користувач ${row.full_name} більше не зможе увійти.`}
+                okText="Деактивувати"
+                cancelText="Скасувати"
+                okButtonProps={{ danger: true }}
+                disabled={!isEditable || isSelf}
+                onConfirm={() => handleToggleActive(row, false)}
               >
-                {row.has_pin ? "Змінити PIN" : "Створити PIN"}
-              </Button>
-              {isLocked ? (
-                <Popconfirm
-                  key="unlock"
-                  title="Розблокувати акаунт?"
-                  description={`Скинути лічильник помилок для ${row.full_name}.`}
-                  okText="Так"
-                  cancelText="Скасувати"
-                  disabled={!isEditable}
-                  onConfirm={() => handleUnlock(row)}
-                >
-                  <Button type="link" size="small" icon={<UnlockOutlined />} disabled={!isEditable}>
-                    Розблокувати
-                  </Button>
-                </Popconfirm>
-              ) : row.is_active ? (
-                <Popconfirm
-                  key="deactivate"
-                  title="Деактивувати акаунт?"
-                  description={`Користувач ${row.full_name} більше не зможе увійти.`}
-                  okText="Деактивувати"
-                  cancelText="Скасувати"
-                  okButtonProps={{ danger: true }}
+                <Button
+                  key="deactivate-btn"
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<StopOutlined />}
                   disabled={!isEditable || isSelf}
-                  onConfirm={() => handleToggleActive(row, false)}
                 >
-                  <Button
-                    type="link"
-                    size="small"
-                    danger
-                    icon={<StopOutlined />}
-                    disabled={!isEditable || isSelf}
-                  >
-                    Деактивувати
-                  </Button>
-                </Popconfirm>
-              ) : (
-                <Popconfirm
-                  key="activate"
-                  title="Активувати акаунт?"
-                  description={`Активувати доступ для ${row.full_name}.`}
-                  okText="Активувати"
-                  cancelText="Скасувати"
+                  Деактивувати
+                </Button>
+              </Popconfirm>
+            ) : (
+              <Popconfirm
+                key="activate"
+                title="Активувати акаунт?"
+                description={`Активувати доступ для ${row.full_name}.`}
+                okText="Активувати"
+                cancelText="Скасувати"
+                disabled={!isEditable}
+                onConfirm={() => handleToggleActive(row, true)}
+              >
+                <Button
+                  key="activate-btn"
+                  type="link"
+                  size="small"
+                  style={{ color: token.colorSuccess }}
+                  icon={<CheckCircleOutlined />}
                   disabled={!isEditable}
-                  onConfirm={() => handleToggleActive(row, true)}
                 >
-                  <Button
-                    type="link"
-                    size="small"
-                    style={{ color: token.colorSuccess }}
-                    icon={<CheckCircleOutlined />}
-                    disabled={!isEditable}
-                  >
-                    Активувати
-                  </Button>
-                </Popconfirm>
-              )}
-            </Space>
-          );
+                  Активувати
+                </Button>
+              </Popconfirm>
+            ),
+          ];
         },
       },
     ],
