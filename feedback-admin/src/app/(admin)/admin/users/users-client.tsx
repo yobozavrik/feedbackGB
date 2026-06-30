@@ -150,6 +150,29 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
       return;
     }
     const targetId = activityTarget.id;
+
+    if (activityTarget.role === "seller") {
+      const sellerFeeds = feedbacks
+        .filter((f) => f.user_id === targetId)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      setActivityLogs(
+        sellerFeeds.map((f) => ({
+          isFeedback: true,
+          id: f.id,
+          category: f.category,
+          category_emoji: f.category_emoji,
+          category_title: f.category_title,
+          store_name: f.store_name,
+          summary: f.summary,
+          status: f.status,
+          occurred_at: f.created_at,
+        }))
+      );
+      setLoadingActivity(false);
+      return;
+    }
+
     let active = true;
     async function fetchActivity() {
       setLoadingActivity(true);
@@ -171,7 +194,7 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
     return () => {
       active = false;
     };
-  }, [activityTarget, message]);
+  }, [activityTarget, feedbacks, message]);
 
   const updateUser = useCallback(
     (patch: Partial<AdminUser> & { id: string }) =>
@@ -1123,7 +1146,11 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
         />
       </ModalForm>
       <Drawer
-        title={`Активність користувача: ${activityTarget?.full_name}`}
+        title={
+          activityTarget?.role === "seller"
+            ? `Відгуки співробітника: ${activityTarget?.full_name}`
+            : `Активність адміністратора: ${activityTarget?.full_name}`
+        }
         placement="right"
         width={480}
         onClose={() => setActivityTarget(null)}
@@ -1136,8 +1163,12 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
           </div>
         ) : activityLogs.length === 0 ? (
           <Alert
-            message="Активність відсутня"
-            description="За цим користувачем не зафіксовано жодних дій."
+            message={activityTarget?.role === "seller" ? "Відгуки відсутні" : "Активність відсутня"}
+            description={
+              activityTarget?.role === "seller"
+                ? "Цей співробітник ще не надсилав відгуків."
+                : "За цим користувачем не зафіксовано жодних дій."
+            }
             type="info"
             showIcon
           />
@@ -1146,6 +1177,46 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
             mode="left"
             items={activityLogs.map((log: any) => {
               const dateStr = new Date(log.occurred_at).toLocaleString("uk-UA");
+
+              if (log.isFeedback) {
+                let statusColor = "blue";
+                let statusText = "Новий";
+                if (log.status === "in_progress") {
+                  statusColor = "orange";
+                  statusText = "В роботі";
+                } else if (log.status === "resolved") {
+                  statusColor = "green";
+                  statusText = "Вирішено";
+                } else if (log.status === "rejected") {
+                  statusColor = "red";
+                  statusText = "Відхилено";
+                }
+
+                return {
+                  label: dateStr,
+                  children: (
+                    <div style={{ paddingBottom: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        <Text strong style={{ fontSize: 13 }}>
+                          {log.category_emoji || "📝"} {log.category_title || log.category}
+                        </Text>
+                        <Tag color={statusColor} style={{ fontSize: 10, margin: 0, paddingInline: 4 }}>
+                          {statusText}
+                        </Tag>
+                      </div>
+                      <div style={{ marginBlock: 4 }}>
+                        <Text style={{ fontSize: 12 }}>{log.summary}</Text>
+                      </div>
+                      {log.store_name && (
+                        <div style={{ fontSize: 11, color: token.colorTextDescription }}>
+                          Магазин: {log.store_name}
+                        </div>
+                      )}
+                    </div>
+                  ),
+                };
+              }
+
               const hasMeta = log.meta && Object.keys(log.meta).length > 0;
               const hasDiff = log.diff && Object.keys(log.diff).length > 0;
 
