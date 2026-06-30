@@ -1,40 +1,74 @@
+import { cookies } from "next/headers";
 import { getServerSupabase } from "@/lib/supabase";
+import { verifySession, SESSION_COOKIE } from "@/lib/session";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
-import { AnalyticsClient, type AnalyticsRow } from "./analytics-client";
+import { AnalyticsClient } from "./analytics-client";
 
 export const dynamic = "force-dynamic";
 
-const ANALYTICS_WINDOW_DAYS = 90;
-
-async function fetchAnalytics(): Promise<{
-  rows: AnalyticsRow[];
-  error: string | null;
-}> {
-  const supabase = getServerSupabase();
-  if (!supabase) {
-    return { rows: [], error: "Supabase ще не налаштовано" };
-  }
-  const since = new Date(
-    Date.now() - ANALYTICS_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-  ).toISOString();
-  const { data, error } = await supabase
-    .from("feedback_feed")
-    .select("created_at,category,category_title,store_name,status")
-    .gte("created_at", since)
-    .order("created_at", { ascending: true })
-    .limit(10000);
-  if (error) return { rows: [], error: error.message };
-  return { rows: (data as AnalyticsRow[]) ?? [], error: null };
+export interface AnalyticsUserOpt {
+  id: string;
+  full_name: string;
+  display_label: string | null;
 }
 
-export default async function AnalyticsPage() {
-  const { rows, error } = await fetchAnalytics();
+async function fetchData(): Promise<{
+  users: AnalyticsUserOpt[];
+  isSuper: boolean;
+  error: string | null;
+}> {
+  const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
+  if (!sess) {
+    return { users: [], isSuper: false, error: "Необхідно увійти в систему" };
+  }
+
+  if (sess.role !== "super_admin") {
+    return { users: [], isSuper: false, error: null }; // Forbidden but not db_error
+  }
+
+  const supabase = getServerSupabase();
+  if (!supabase) {
+    return { users: [], isSuper: true, error: "Supabase не налаштовано" };
+  }
+
+  const { data: userRows, error: userErr } = await supabase
+    .from("users")
+    .select("id, full_name, display_label")
+    .order("full_name", { ascending: true });
+
+  if (userErr) {
+    return { users: [], isSuper: true, error: userErr.message };
+  }
+
+  const users = (userRows ?? []) as AnalyticsUserOpt[];
+
+  return { users, isSuper: true, error: null };
+}
+
+export default async function AdminAnalyticsPage() {
+  const { users, isSuper, error } = await fetchData();
+
   return (
     <AdminPageContainer
-      title="Аналітика"
-      subTitle={`Розподіл за категоріями, тренди, топ магазинів. Вікно — до ${ANALYTICS_WINDOW_DAYS} днів.`}
+      title="Теплові карти & Аналітика кліків"
+      subTitle="Аналіз взаємодій продавчинь з інтерфейсом Mini App"
     >
-      <AnalyticsClient rows={rows} error={error} />
+      {!isSuper ? (
+        <div className="card p-6 text-center">
+          <div className="text-3xl">🔒</div>
+          <h2 className="mt-3 text-lg font-bold text-ink-900">Доступ обмежено</h2>
+          <p className="mt-2 text-[14px] text-ink-500 max-w-md mx-auto">
+            Цей розділ містить персональну аналітику активності та доступний виключно для ролі <strong>Супер-адмін</strong>.
+          </p>
+        </div>
+      ) : error ? (
+        <div className="card p-6 text-center">
+          <div className="text-3xl">⚠️</div>
+          <p className="mt-3 text-[14px] text-ink-700">{error}</p>
+        </div>
+      ) : (
+        <AnalyticsClient users={users} />
+      )}
     </AdminPageContainer>
   );
 }
