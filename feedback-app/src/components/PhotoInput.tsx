@@ -40,7 +40,7 @@ export function PhotoInput({ label, onChange }: Props) {
     <div>
       <label className="field-label">{label}</label>
       <div
-        className="flex items-center gap-3 rounded-2xl border-2 border-dashed border-ink-300/40 bg-elev2 p-3 transition hover:border-brand-500/40"
+        className="flex items-center gap-3 rounded-lg border-2 border-dashed border-ink-300/45 bg-elev2 p-3 transition hover:border-brand-500/40"
         onClick={() => inputRef.current?.click()}
         role="button"
         tabIndex={0}
@@ -53,10 +53,10 @@ export function PhotoInput({ label, onChange }: Props) {
           <img
             src={preview}
             alt="preview"
-            className="h-16 w-16 flex-shrink-0 rounded-xl object-cover"
+            className="h-16 w-16 flex-shrink-0 rounded-lg object-cover"
           />
         ) : (
-          <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl bg-elev text-3xl">
+          <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg bg-elev text-3xl">
             📷
           </div>
         )}

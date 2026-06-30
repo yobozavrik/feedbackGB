@@ -121,7 +121,7 @@ export function FeedbackForm({ category }: Props) {
             Від: <span className="font-medium text-ink-900">{me.full_name}</span>
           </span>
           {me.role === "super_admin" ? (
-            <span className="pill bg-brand-100 text-brand-700">супер-адмін</span>
+            <span className="pill bg-brand-50 text-brand-500">супер-адмін</span>
           ) : me.role === "admin" ? (
             <span className="pill bg-brand-50 text-brand-600">адмін</span>
           ) : null}
@@ -148,7 +148,7 @@ export function FeedbackForm({ category }: Props) {
 
       {/* Dev notice banner */}
       {(category.id === "tech_issue" || category.id === "consumables_request") && (
-        <div className="rounded-2xl border border-amber-500/20 bg-amber-50/50 p-4 backdrop-blur-sm animate-fade-in">
+        <div className="rounded-lg border border-amber-500/20 bg-amber-50/50 p-4 backdrop-blur-sm animate-fade-in">
           <div className="flex gap-3">
             <span className="text-xl" aria-hidden>
               {category.id === "tech_issue" ? "🔧" : "📋"}
@@ -211,7 +211,7 @@ export function FeedbackForm({ category }: Props) {
       })}
 
       {error ? (
-        <div className="rounded-2xl border border-brand-500/40 bg-brand-50 px-4 py-3 text-[14px] text-brand-600">
+        <div className="rounded-lg border border-brand-500/40 bg-brand-50 px-4 py-3 text-[14px] text-brand-600">
           {error}
         </div>
       ) : null}

@@ -51,7 +51,7 @@ export function ConfirmSheet({
         <h2 className="font-display text-[18px] font-semibold text-ink-900">
           {title}
         </h2>
-        <ul className="mt-4 space-y-2 rounded-2xl bg-elev2 p-4">
+        <ul className="mt-4 space-y-2 rounded-lg border border-ink-300/20 bg-elev2 p-4">
           {lines.map((l) => (
             <li key={l.label} className="flex items-baseline justify-between gap-3">
               <span className="text-[12px] uppercase tracking-wide text-ink-500">

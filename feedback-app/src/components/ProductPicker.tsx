@@ -194,7 +194,7 @@ export function ProductPicker({ open, storeId, onSelect, onClose }: Props) {
 
         <div className="flex-1 overflow-y-auto px-4 pb-6">
           {error ? (
-            <div className="mt-4 rounded-2xl border border-rose-300/40 bg-rose-50 px-4 py-3 text-[14px] text-rose-700">
+            <div className="mt-4 rounded-lg border border-rose-300/40 bg-rose-50 px-4 py-3 text-[14px] text-rose-700">
               {error}
             </div>
           ) : null}
@@ -249,7 +249,7 @@ export function ProductPicker({ open, storeId, onSelect, onClose }: Props) {
                 return (
                   <li
                     key={g.id}
-                    className="overflow-hidden rounded-2xl border border-ink-300/15 bg-elev"
+                    className="overflow-hidden rounded-lg border border-ink-300/20 bg-elev"
                   >
                     <button
                       type="button"

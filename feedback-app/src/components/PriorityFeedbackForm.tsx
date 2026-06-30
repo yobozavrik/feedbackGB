@@ -292,7 +292,7 @@ export function PriorityFeedbackForm({ category }: Props) {
           <button
             type="button"
             onClick={() => setPickerOpen(true)}
-            className="flex w-full items-center gap-3 rounded-2xl border border-ink-300/20 bg-elev2 p-3 text-left hover:border-brand-500/40"
+            className="flex w-full items-center gap-3 rounded-lg border border-ink-300/35 bg-elev p-3 text-left hover:border-brand-500/40"
           >
             <ProductThumb photo={product.photo} />
             <span className="min-w-0 flex-1">
@@ -312,7 +312,7 @@ export function PriorityFeedbackForm({ category }: Props) {
           <button
             type="button"
             onClick={() => setPickerOpen(true)}
-            className="flex h-13 w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-ink-300/40 bg-elev2 px-4 text-[15px] font-medium text-ink-700 hover:border-brand-500/40 hover:text-brand-600"
+            className="flex h-13 w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-ink-300/45 bg-elev2 px-4 text-[15px] font-medium text-ink-700 hover:border-brand-500/40 hover:text-brand-600"
           >
             <span aria-hidden>＋</span> Обрати товар
           </button>
@@ -371,7 +371,7 @@ export function PriorityFeedbackForm({ category }: Props) {
       ) : null}
 
       {error ? (
-        <div className="rounded-2xl border border-rose-300/40 bg-rose-50 px-4 py-3 text-[14px] text-rose-700">
+        <div className="rounded-lg border border-rose-300/40 bg-rose-50 px-4 py-3 text-[14px] text-rose-700">
           {error}
         </div>
       ) : null}

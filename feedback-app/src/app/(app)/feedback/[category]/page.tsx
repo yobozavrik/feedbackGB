@@ -23,9 +23,11 @@ export default function FeedbackCategoryPage({
         back={{ href: "/", label: "На головну" }}
       />
 
-      <section className={`relative mb-4 overflow-hidden rounded-3xl ${category.gradient} p-5`}>
+      <section className="relative mb-4 overflow-hidden rounded-xl border border-ink-300/20 bg-elev p-5 shadow-soft">
         <div className="flex items-start gap-3">
-          <div className="text-[36px] leading-none">{category.emoji}</div>
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-[28px] leading-none text-brand-500">
+            {category.emoji}
+          </div>
           <div>
             <h1 className="font-display text-[19px] font-semibold leading-tight text-ink-900">
               {category.title}
