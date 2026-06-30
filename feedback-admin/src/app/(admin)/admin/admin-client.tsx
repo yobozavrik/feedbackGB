@@ -59,6 +59,7 @@ interface Props {
   categories: CategoryMeta[];
   admins: AdminOption[];
   currentAdminId: string | null;
+  assignedToMeOnly?: boolean;
 }
 
 const PERIOD_LABELS: Record<Period, string> = {
@@ -162,13 +163,14 @@ export function AdminClient({
   categories,
   admins,
   currentAdminId,
+  assignedToMeOnly = false,
 }: Props) {
   const { token } = antdTheme.useToken();
   const { notification } = App.useApp();
   const router = useRouter();
   const [period, setPeriod] = useState<Period>("all");
   const [active, setActive] = useState<FeedRow | null>(null);
-  const [myQueueOnly, setMyQueueOnly] = useState(false);
+  const [myQueueOnly, setMyQueueOnly] = useState(assignedToMeOnly);
 
   useEffect(() => {
     const supabase = getClientSupabase();
@@ -495,7 +497,7 @@ export function AdminClient({
           </Space>
         }
         toolBarRender={() => [
-          currentAdminId ? (
+          currentAdminId && !assignedToMeOnly ? (
             <Space key="my-queue" size={6}>
               <Switch
                 checked={myQueueOnly}

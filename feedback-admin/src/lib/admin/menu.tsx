@@ -1,6 +1,7 @@
 import {
   AreaChartOutlined,
   AuditOutlined,
+  CheckSquareOutlined,
   DashboardOutlined,
   FunnelPlotOutlined,
   SettingOutlined,
@@ -15,6 +16,7 @@ import type { ProLayoutProps } from "@ant-design/pro-components";
  *
  * Активні розділи:
  *   /admin            — Огляд (KPI + heatmap + стрічка фідбеку ProTable)
+ *   /admin/tasks      — Мої завдання (призначені мені фідбеки)
  *   /admin/analytics  — Аналітика (графіки)
  *   /admin/funnel     — Воронка (PostHog: де відвалюються користувачі)
  *   /admin/stores     — Магазини (список з метриками + Drawer-деталь)
@@ -30,6 +32,11 @@ export const adminRoute: ProLayoutProps["route"] = {
       path: "/admin",
       name: "Огляд",
       icon: <DashboardOutlined />,
+    },
+    {
+      path: "/admin/tasks",
+      name: "Мої завдання",
+      icon: <CheckSquareOutlined />,
     },
     {
       path: "/admin/analytics",
@@ -75,6 +82,7 @@ export const adminRoute: ProLayoutProps["route"] = {
  */
 export const adminBreadcrumbNames: Record<string, string> = {
   "/admin": "Огляд",
+  "/admin/tasks": "Мої завдання",
   "/admin/users": "Користувачі",
   "/admin/audit": "Журнал",
   "/admin/tools": "Інструменти",
