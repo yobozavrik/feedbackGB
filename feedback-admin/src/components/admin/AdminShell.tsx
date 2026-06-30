@@ -47,6 +47,18 @@ export function AdminShell({ children, user }: AdminShellProps) {
   const router = useRouter();
   const { token } = antdTheme.useToken();
 
+  const filteredRoute = useMemo(() => {
+    if (!adminRoute?.routes) return adminRoute;
+    const isSuper = user.role === "super_admin";
+    const routes = adminRoute.routes.filter((r: any) => {
+      if (r.path === "/admin/analytics" || r.path === "/admin/funnel" || r.path === "/admin/audit") {
+        return isSuper;
+      }
+      return true;
+    });
+    return { ...adminRoute, routes };
+  }, [user.role]);
+
   const breadcrumbItems = useMemo(() => {
     if (!pathname) return [{ path: "/admin", breadcrumbName: "Огляд" }];
     const parts = pathname.split("/").filter(Boolean);
@@ -99,7 +111,7 @@ export function AdminShell({ children, user }: AdminShellProps) {
       fixSiderbar
       fixedHeader
       siderWidth={232}
-      route={adminRoute}
+      route={filteredRoute}
       location={{ pathname: pathname ?? "/admin" }}
       breadcrumbProps={{
         items: breadcrumbItems.map((it) => ({

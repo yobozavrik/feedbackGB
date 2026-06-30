@@ -1,0 +1,63 @@
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { getServerSupabase } from "@/lib/supabase";
+import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function GET(
+  req: Request,
+  { params }: { params: { id: string } },
+) {
+  const id = params.id;
+  if (!UUID_RE.test(id)) {
+    return NextResponse.json({ error: "Недійсний UUID" }, { status: 400 });
+  }
+
+  const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
+  if (!sess || !isAdminTier(sess.role)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const supabase = getServerSupabase();
+  if (!supabase) {
+    return NextResponse.json({ error: "db_error" }, { status: 500 });
+  }
+
+  // 1. Fetch target user's role from DB (Database-first RBAC)
+  const { data: targetUser, error: userErr } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (userErr) {
+    return NextResponse.json({ error: "db_error" }, { status: 500 });
+  }
+  if (!targetUser) {
+    return NextResponse.json({ error: "Користувача не знайдено" }, { status: 404 });
+  }
+
+  // 2. Admin cannot view activity of other admins or super_admins
+  if (sess.role === "admin" && (targetUser.role === "admin" || targetUser.role === "super_admin")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  // 3. Fetch latest 100 audit log entries where this user was the actor
+  const { data: logs, error: logsErr } = await supabase
+    .from("v_audit_log")
+    .select("occurred_at, action_title, ip, user_agent, meta, diff")
+    .eq("actor_user_id", id)
+    .order("occurred_at", { ascending: false })
+    .limit(100);
+
+  if (logsErr) {
+    console.error("[users.id.activity] fetch logs error", { code: logsErr.code });
+    return NextResponse.json({ error: "failed to fetch activity log" }, { status: 500 });
+  }
+
+  return NextResponse.json({ logs: logs || [] });
+}
