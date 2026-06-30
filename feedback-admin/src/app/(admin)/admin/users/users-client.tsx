@@ -719,8 +719,43 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
                     borderRadius: token.borderRadiusLG,
                     border: `1px solid ${token.colorBorderSecondary}`,
                     overflow: "hidden",
+                    cursor: "pointer",
                   }}
                   bodyStyle={{ padding: 16 }}
+                  onClick={() => setActivityTarget(seller)}
+                  actions={[
+                    <Tooltip key="edit" title="Редагувати">
+                      <EditOutlined
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditTarget(seller);
+                          editForm.setFieldsValue({
+                            full_name: seller.full_name,
+                            display_label: seller.display_label,
+                            role: seller.role,
+                            store_id: seller.store_id,
+                            is_active: seller.is_active,
+                          });
+                        }}
+                      />
+                    </Tooltip>,
+                    <Tooltip key="reset" title={seller.has_pin ? "Змінити PIN" : "Створити PIN"}>
+                      <KeyOutlined
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setResetTarget(seller);
+                        }}
+                      />
+                    </Tooltip>,
+                    <Tooltip key="activity" title="Активність">
+                      <HistoryOutlined
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActivityTarget(seller);
+                        }}
+                      />
+                    </Tooltip>,
+                  ]}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
                     <Avatar
