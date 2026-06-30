@@ -60,7 +60,7 @@ export async function GET() {
     storeMap.set(s.id, s.name);
   }
 
-  const rows = (userRows ?? []) as Array<{
+  const rawRows = (userRows ?? []) as Array<{
     id: string;
     full_name: string;
     display_label: string | null;
@@ -76,6 +76,8 @@ export async function GET() {
     last_login_asn: string | null;
     last_login_isp: string | null;
   }>;
+
+  const rows = sess.role === "admin" ? rawRows.filter((r) => r.role !== "super_admin") : rawRows;
 
   const users: AdminUserRow[] = rows.map((u) => ({
     id: u.id,

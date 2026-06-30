@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
+import { SESSION_COOKIE, isSuperAdmin, verifySession } from "@/lib/session";
 import { buildFunnelSnapshot, isPeriodDays } from "@/lib/posthog/funnel";
 
 export const runtime = "nodejs";
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: Request) {
   const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
-  if (!sess || !isAdminTier(sess.role)) {
+  if (!sess || !isSuperAdmin(sess.role)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const url = new URL(req.url);

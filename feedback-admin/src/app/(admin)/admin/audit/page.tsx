@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+import { verifySession, SESSION_COOKIE, isSuperAdmin } from "@/lib/session";
 import { getServerSupabase } from "@/lib/supabase";
 import { AuditClient } from "./audit-client";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
@@ -38,6 +40,23 @@ async function fetchRows(): Promise<{ rows: AuditRow[]; error: string | null }> 
 }
 
 export default async function AdminAuditPage() {
+  const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
+  const isSuper = sess && isSuperAdmin(sess.role);
+
+  if (!isSuper) {
+    return (
+      <AdminPageContainer title="Журнал дій" subTitle="Журнал дій користувачів">
+        <div className="card p-6 text-center">
+          <div className="text-3xl">🔒</div>
+          <h2 className="mt-3 text-lg font-bold text-ink-900">Доступ обмежено</h2>
+          <p className="mt-2 text-[14px] text-ink-500 max-w-md mx-auto">
+            Цей розділ містить журнал дій системи та доступний виключно для ролі <strong>Супер-адмін</strong>.
+          </p>
+        </div>
+      </AdminPageContainer>
+    );
+  }
+
   const { rows, error } = await fetchRows();
   return (
     <AdminPageContainer

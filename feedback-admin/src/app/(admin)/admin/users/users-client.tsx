@@ -8,6 +8,7 @@ import {
   PlusOutlined,
   StopOutlined,
   CheckCircleOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 import {
   ModalForm,
@@ -27,8 +28,12 @@ import {
   Typography,
   theme as antdTheme,
   Form,
+  Drawer,
+  Timeline,
+  Alert,
+  Spin,
 } from "antd";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { countryFlag, formatGeoLines } from "@/lib/geoip";
 import type { AdminUser } from "./page";
 
@@ -70,8 +75,41 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
 
+  const [activityTarget, setActivityTarget] = useState<AdminUser | null>(null);
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+
   const { token } = antdTheme.useToken();
   const { message } = App.useApp();
+
+  useEffect(() => {
+    if (!activityTarget) {
+      setActivityLogs([]);
+      return;
+    }
+    const targetId = activityTarget.id;
+    let active = true;
+    async function fetchActivity() {
+      setLoadingActivity(true);
+      try {
+        const res = await fetch(`/api/admin/users/${targetId}/activity`);
+        if (!res.ok) throw new Error("API error");
+        const data = await res.json();
+        if (active) {
+          setActivityLogs(data.logs || []);
+        }
+      } catch (err) {
+        message.error("Помилка при завантаженні активності");
+        console.error("Activity load error:", err);
+      } finally {
+        if (active) setLoadingActivity(false);
+      }
+    }
+    void fetchActivity();
+    return () => {
+      active = false;
+    };
+  }, [activityTarget, message]);
 
   const updateUser = useCallback(
     (patch: Partial<AdminUser> & { id: string }) =>
@@ -376,6 +414,26 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
           ),
       },
       {
+        title: "Активність",
+        key: "activity",
+        width: 140,
+        render: (_, row) => {
+          const isAllowed =
+            currentUserRole === "super_admin" ||
+            (currentUserRole === "admin" && row.role === "seller");
+          return (
+            <Button
+              size="small"
+              icon={<HistoryOutlined />}
+              disabled={!isAllowed}
+              onClick={() => setActivityTarget(row)}
+            >
+              Активність
+            </Button>
+          );
+        },
+      },
+      {
         title: "Дії",
         key: "actions",
         valueType: "option",
@@ -504,7 +562,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
           showSizeChanger: true,
           showTotal: (total) => `${total} записів`,
         }}
-        scroll={{ x: 1314 }}
+        scroll={{ x: 1454 }}
         toolBarRender={() => [
           <Button
             key="create"
@@ -741,6 +799,61 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
           ]}
         />
       </ModalForm>
+      <Drawer
+        title={`Активність користувача: ${activityTarget?.full_name}`}
+        placement="right"
+        width={480}
+        onClose={() => setActivityTarget(null)}
+        open={activityTarget != null}
+        destroyOnClose
+      >
+        {loadingActivity ? (
+          <div style={{ textAlign: "center", padding: "40px 0" }}>
+            <Spin size="large" />
+          </div>
+        ) : activityLogs.length === 0 ? (
+          <Alert
+            message="Активність відсутня"
+            description="За цим користувачем не зафіксовано жодних дій."
+            type="info"
+            showIcon
+          />
+        ) : (
+          <Timeline mode="left">
+            {activityLogs.map((log: any, idx: number) => {
+              const dateStr = new Date(log.occurred_at).toLocaleString("uk-UA");
+              const hasMeta = log.meta && Object.keys(log.meta).length > 0;
+              const hasDiff = log.diff && Object.keys(log.diff).length > 0;
+
+              return (
+                <Timeline.Item key={idx} label={dateStr}>
+                  <div style={{ fontWeight: "bold" }}>{log.action_title}</div>
+                  {log.ip && (
+                    <div style={{ fontSize: 11, color: "#8c8c8c" }}>
+                      IP: {log.ip} {log.user_agent ? `| ${log.user_agent.slice(0, 40)}...` : ""}
+                    </div>
+                  )}
+                  {hasMeta && (
+                    <div style={{ marginTop: 4, background: "#f5f5f5", padding: "4px 8px", borderRadius: 4, fontSize: 11 }}>
+                      <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                        {JSON.stringify(log.meta, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                  {hasDiff && (
+                    <div style={{ marginTop: 4, background: "#fffbe6", padding: "4px 8px", borderRadius: 4, fontSize: 11, border: "1px solid #ffe58f" }}>
+                      <div style={{ fontWeight: "bold", color: "#d4b106", marginBottom: 2 }}>Зміни:</div>
+                      <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                        {JSON.stringify(log.diff, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </Timeline.Item>
+              );
+            })}
+          </Timeline>
+        )}
+      </Drawer>
     </>
   );
 }
