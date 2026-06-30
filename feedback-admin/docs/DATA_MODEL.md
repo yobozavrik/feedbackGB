@@ -67,6 +67,8 @@ erDiagram
         timestamptz resolved_at
         uuid  resolved_by FK
         uuid  assigned_to FK
+        uuid  client_submission_id
+        timestamptz client_created_at
     }
     PHOTO_MIRROR {
         uuid feedback_id PK_FK
@@ -172,6 +174,8 @@ Seed зашитий у `schema.sql` із `on conflict (id) do update`, тобт�
 | `resolved_at` | timestamptz | виставляється при переході у `resolved`; обнуляється при поверненні назад. |
 | `resolved_by` | uuid FK → `users.id` | хто перевів у `resolved`. |
 | `assigned_to` | uuid FK → `users.id` `on delete set null` | поточний адмін-виконавець (007). Не плутати з `resolved_by`: assigned_to — хто **зараз** працює, resolved_by — хто **закрив**. |
+| `client_submission_id` | uuid | унікальний ідентифікатор клієнтської транзакції для дедуплікації офлайн-відгуків. |
+| `client_created_at` | timestamptz | оригінальний час створення відгуку в офлайні на пристрої продавця. |
 
 Індекси:
 
@@ -182,6 +186,7 @@ Seed зашитий у `schema.sql` із `on conflict (id) do update`, тобт�
 - `feedback_user_idx (user_id)` — для топ-авторів і аудиту
 - `feedback_assigned_idx (assigned_to) where assigned_to is not null` — для "Моя черга" (007)
 - `feedback_product_idx (product_id) where product_id is not null` — повтори
+- `feedback_client_submission_id_uniq (client_submission_id) where client_submission_id is not null` — унікальний частковий індекс для дедуплікації офлайн-відгуків
 - `feedback_product_store_time_idx (store_id, product_id, created_at desc) where product_id is not null` — composite для дублів і повторів
 - `feedback_summary_trgm_idx using gin (summary gin_trgm_ops)` — full-text пошук
 - `feedback_embedding_ivf_idx using ivfflat (embedding vector_cosine_ops)` — ANN-пошук
