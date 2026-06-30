@@ -191,6 +191,7 @@ describe("POST /api/auth/login", () => {
 
   it("sets the session cookie on success", async () => {
     const supabase = await import("@/lib/supabase");
+    const audit = await import("@/lib/audit");
     const fake = fakeSupabase(SAMPLE_ADMIN);
     vi.mocked(supabase.getServerSupabase).mockReturnValue(
       fake.client as unknown as ReturnType<typeof supabase.getServerSupabase>,
@@ -210,6 +211,12 @@ describe("POST /api/auth/login", () => {
     expect(body.user.role).toBe("super_admin");
     // display_label preferred over full_name in the response.
     expect(body.user.full_name).toBe("Супер-адмін");
+    expect(audit.logAudit).toHaveBeenCalledWith(
+      "auth.login.success",
+      expect.objectContaining({
+        meta: expect.objectContaining({ app_surface: "web_app" }),
+      }),
+    );
   });
 
   it("returns 401 with anonymous audit on missing user", async () => {
@@ -230,6 +237,11 @@ describe("POST /api/auth/login", () => {
     expect(audit.logAudit).toHaveBeenCalledTimes(1);
     const [action, details] = vi.mocked(audit.logAudit).mock.calls[0];
     expect(action).toBe("auth.login.failure");
+    expect(details).toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({ app_surface: "web_app" }),
+      }),
+    );
     // PIN-only flow can't attribute the failure to a user.
     expect(details).not.toHaveProperty("targetUserId");
     expect(details).not.toHaveProperty("actorUserId");

@@ -191,6 +191,7 @@ describe("POST /api/auth/login", () => {
 
   it("sets the session cookie on success", async () => {
     const supabase = await import("@/lib/supabase");
+    const audit = await import("@/lib/audit");
     const fake = fakeSupabase(SAMPLE_ADMIN);
     vi.mocked(supabase.getServerSupabase).mockReturnValue(
       fake.client as unknown as ReturnType<typeof supabase.getServerSupabase>,
@@ -210,6 +211,12 @@ describe("POST /api/auth/login", () => {
     expect(body.user.role).toBe("super_admin");
     // display_label preferred over full_name in the response.
     expect(body.user.full_name).toBe("Супер-адмін");
+    expect(audit.logAudit).toHaveBeenCalledWith(
+      "auth.login.success",
+      expect.objectContaining({
+        meta: expect.objectContaining({ app_surface: "admin_panel" }),
+      }),
+    );
   });
 
   it("returns 401 with anonymous audit on missing user", async () => {
@@ -230,6 +237,11 @@ describe("POST /api/auth/login", () => {
     expect(audit.logAudit).toHaveBeenCalledTimes(1);
     const [action, details] = vi.mocked(audit.logAudit).mock.calls[0];
     expect(action).toBe("auth.login.failure");
+    expect(details).toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({ app_surface: "admin_panel" }),
+      }),
+    );
     // PIN-only flow can't attribute the failure to a user.
     expect(details).not.toHaveProperty("targetUserId");
     expect(details).not.toHaveProperty("actorUserId");
@@ -237,6 +249,7 @@ describe("POST /api/auth/login", () => {
 
   it("rejects seller role with 403", async () => {
     const supabase = await import("@/lib/supabase");
+    const audit = await import("@/lib/audit");
     const fake = fakeSupabase(SAMPLE_USER);
     vi.mocked(supabase.getServerSupabase).mockReturnValue(
       fake.client as unknown as ReturnType<typeof supabase.getServerSupabase>,
@@ -247,5 +260,14 @@ describe("POST /api/auth/login", () => {
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.error).toContain("Доступ обмежено");
+    expect(audit.logAudit).toHaveBeenCalledWith(
+      "auth.login.failure",
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          app_surface: "admin_panel",
+          reason: "seller_tried_admin_login",
+        }),
+      }),
+    );
   });
 });

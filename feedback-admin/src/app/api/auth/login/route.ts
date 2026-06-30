@@ -12,6 +12,7 @@ import { logAudit, uaFromRequest } from "@/lib/audit";
 import { geoipToAuditMeta, geoipToUserUpdate, lookupIp } from "@/lib/geoip";
 
 export const runtime = "nodejs";
+const APP_SURFACE = "admin_panel";
 
 interface UserRow {
   id: string;
@@ -114,6 +115,7 @@ export async function POST(req: Request) {
       ip,
       userAgent: uaFromRequest(req),
       meta: {
+        app_surface: APP_SURFACE,
         ip_attempts_remaining: ipLimit.remaining,
       },
     });
@@ -126,6 +128,7 @@ export async function POST(req: Request) {
       ip,
       userAgent: uaFromRequest(req),
       meta: {
+        app_surface: APP_SURFACE,
         reason: "seller_tried_admin_login",
         user_id: user.id,
       },
@@ -168,6 +171,7 @@ export async function POST(req: Request) {
     ip,
     userAgent: uaFromRequest(req),
     meta: {
+      app_surface: APP_SURFACE,
       role: user.role,
       store_id: user.store_id,
       ...(geoMeta ? { geoip: geoMeta } : {}),
