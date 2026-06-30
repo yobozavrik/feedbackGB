@@ -39,7 +39,7 @@ export async function POST(
   const pin = (body.pin ?? "").trim();
   if (!PIN_RE.test(pin)) {
     return NextResponse.json(
-      { error: "PIN має бути 6–8 цифр" },
+      { error: "PIN має бути ровно 6 цифр" },
       { status: 400 },
     );
   }
@@ -50,6 +50,27 @@ export async function POST(
       { error: "Backend ще не налаштовано" },
       { status: 503 },
     );
+  }
+
+  // Fetch target user to check existence and role
+  const { data: targetUser, error: targetErr } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (targetErr) {
+    console.error("error fetching target user", targetErr);
+    return NextResponse.json({ error: "Помилка сервера" }, { status: 500 });
+  }
+
+  if (!targetUser) {
+    return NextResponse.json({ error: "Користувача не знайдено" }, { status: 404 });
+  }
+
+  // RBAC check: ordinary admin can only modify sellers or themselves
+  if (sess.role === "admin" && sess.uid !== userId && targetUser.role !== "seller") {
+    return NextResponse.json({ error: "forbidden: admin can only reset pin for sellers" }, { status: 403 });
   }
 
   const { error } = await supabase.rpc("set_user_pin", {

@@ -37,6 +37,27 @@ export async function POST(
     );
   }
 
+  // Fetch target user to check existence and role
+  const { data: targetUser, error: targetErr } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (targetErr) {
+    console.error("error fetching target user", targetErr);
+    return NextResponse.json({ error: "Помилка сервера" }, { status: 500 });
+  }
+
+  if (!targetUser) {
+    return NextResponse.json({ error: "Користувача не знайдено" }, { status: 404 });
+  }
+
+  // RBAC check: ordinary admin can only unlock sellers
+  if (sess.role === "admin" && targetUser.role !== "seller") {
+    return NextResponse.json({ error: "forbidden: admin can only unlock sellers" }, { status: 403 });
+  }
+
   const { error } = await supabase
     .from("users")
     .update({ failed_attempts: 0, locked_until: null })
