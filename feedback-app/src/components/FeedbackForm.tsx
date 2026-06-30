@@ -27,7 +27,7 @@ export function FeedbackForm({ category }: Props) {
   const { initData, webApp } = useTelegram();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [photo, setPhoto] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
   const [me, setMe] = useState<SessionUser | null>(null);
   const [storeName, setStoreName] = useState<string | null>(null);
   const [meReady, setMeReady] = useState(false);
@@ -70,7 +70,8 @@ export function FeedbackForm({ category }: Props) {
       store_id: storeIdRaw ? Number(storeIdRaw) : null,
       store_label: storeLabelRaw || null,
       fields,
-      photo_url: photo,
+      photo_url: photos[0] ?? null,
+      photo_urls: photos,
       init_data: initData || undefined,
     };
 
@@ -169,7 +170,7 @@ export function FeedbackForm({ category }: Props) {
 
       {category.fields.map((f) => {
         if (f.kind === "photo") {
-          return <PhotoInput key={f.id} label={f.label} onChange={setPhoto} />;
+          return <PhotoInput key={f.id} label={f.label} onChange={setPhotos} />;
         }
         if (f.kind === "textarea") {
           return (

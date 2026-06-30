@@ -22,8 +22,9 @@ export interface FeedbackPayload {
   product_id?: number | null;
   /** v1 priority flow: numeric quantity (units of the product). */
   quantity?: number | null;
-  fields: Record<string, string | number | null>;
+  fields: Record<string, string | number | string[] | null>;
   photo_url?: string | null;
+  photo_urls?: string[];
   /** Raw initData string from Telegram WebApp — server validates HMAC. */
   init_data?: string;
 }

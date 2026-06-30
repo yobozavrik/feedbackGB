@@ -3,37 +3,59 @@
 import { useRef, useState } from "react";
 
 const MAX_DIMENSION = 1600;
-const MAX_BYTES = 5 * 1024 * 1024; // 5 MB after compression
+const MAX_BYTES = 900 * 1024; // keep multi-photo JSON payloads small
+const DEFAULT_MAX_PHOTOS = 5;
 
 interface Props {
   label: string;
-  onChange: (dataUrl: string | null) => void;
+  maxPhotos?: number;
+  onChange: (dataUrls: string[]) => void;
 }
 
 /**
- * Mobile-friendly photo input. Uses canvas to compress to ≤1600px JPEG before
- * passing back as a data URL — keeps payloads small and avoids needing a
- * separate upload endpoint while still capturing visual evidence.
+ * Mobile-friendly multi-photo input. Uses canvas compression before passing
+ * data URLs back to the form, so the existing /api/feedback JSON contract can
+ * stay simple while supporting several images.
  */
-export function PhotoInput({ label, onChange }: Props) {
+export function PhotoInput({
+  label,
+  maxPhotos = DEFAULT_MAX_PHOTOS,
+  onChange,
+}: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleFile(file: File) {
+  async function handleFiles(files: File[]) {
+    if (files.length === 0) return;
     setBusy(true);
     setError(null);
     try {
-      const compressed = await compressImage(file);
-      setPreview(compressed);
-      onChange(compressed);
+      const slots = Math.max(0, maxPhotos - previews.length);
+      const selected = files.slice(0, slots);
+      if (selected.length < files.length) {
+        setError(`Можна додати максимум ${maxPhotos} фото`);
+      }
+      const compressed = await Promise.all(
+        selected.map((file) => compressImage(file)),
+      );
+      const next = [...previews, ...compressed];
+      setPreviews(next);
+      onChange(next);
     } catch (e) {
       console.error(e);
-      setError("Не вдалось обробити фото");
+      setError("Не вдалося обробити фото");
     } finally {
       setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
     }
+  }
+
+  function removePhoto(index: number) {
+    const next = previews.filter((_, i) => i !== index);
+    setPreviews(next);
+    onChange(next);
   }
 
   return (
@@ -48,13 +70,30 @@ export function PhotoInput({ label, onChange }: Props) {
           if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
         }}
       >
-        {preview ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={preview}
-            alt="preview"
-            className="h-16 w-16 flex-shrink-0 rounded-lg object-cover"
-          />
+        {previews.length > 0 ? (
+          <div className="grid max-w-[148px] flex-shrink-0 grid-cols-2 gap-1">
+            {previews.slice(0, 4).map((src, index) => (
+              <div key={`${src.slice(0, 32)}-${index}`} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt={`preview ${index + 1}`}
+                  className="h-[34px] w-[68px] rounded-md object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removePhoto(index);
+                  }}
+                  className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-[11px] font-semibold text-white shadow-soft"
+                  aria-label="Видалити фото"
+                >
+                  x
+                </button>
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg bg-elev text-3xl">
             📷
@@ -62,36 +101,28 @@ export function PhotoInput({ label, onChange }: Props) {
         )}
         <div className="min-w-0 flex-1 text-[14px]">
           <div className="font-medium text-ink-900">
-            {preview ? "Замінити фото" : "Додати фото"}
+            {previews.length > 0
+              ? `Додано ${previews.length}/${maxPhotos} фото`
+              : "Додати фото"}
           </div>
           <div className="truncate text-[12px] text-ink-500">
-            {busy ? "Обробка..." : error ? error : "Камера або галерея"}
+            {busy
+              ? "Обробка..."
+              : error
+                ? error
+                : "Камера або галерея, можна кілька фото"}
           </div>
         </div>
-        {preview ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setPreview(null);
-              onChange(null);
-              if (inputRef.current) inputRef.current.value = "";
-            }}
-            className="rounded-full bg-brand-50 px-2.5 py-1 text-[12px] font-medium text-brand-600"
-          >
-            ✕
-          </button>
-        ) : null}
       </div>
       <input
         ref={inputRef}
         type="file"
         accept="image/*"
+        multiple
         capture="environment"
         className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void handleFile(f);
+          void handleFiles(Array.from(e.target.files ?? []));
         }}
       />
     </div>
@@ -118,8 +149,8 @@ async function compressImage(file: File): Promise<string> {
 
   let quality = 0.82;
   let out = canvas.toDataURL("image/jpeg", quality);
-  while (out.length > MAX_BYTES && quality > 0.4) {
-    quality -= 0.1;
+  while (out.length > MAX_BYTES && quality > 0.35) {
+    quality -= 0.08;
     out = canvas.toDataURL("image/jpeg", quality);
   }
   return out;

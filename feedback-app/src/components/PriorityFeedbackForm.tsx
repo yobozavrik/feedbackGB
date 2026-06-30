@@ -53,7 +53,7 @@ export function PriorityFeedbackForm({ category }: Props) {
   const [useFreeName, setUseFreeName] = useState(false);
   const [quantity, setQuantity] = useState<number>(1);
   const [comment, setComment] = useState("");
-  const [photo, setPhoto] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
 
   const [storeIdAdmin, setStoreIdAdmin] = useState<number | null>(null);
   const [storeLabelAdmin, setStoreLabelAdmin] = useState<string>("");
@@ -95,7 +95,7 @@ export function PriorityFeedbackForm({ category }: Props) {
       track("feedback_form_abandon", {
         category: category.id,
         had_product: !!product,
-        had_photo: !!photo,
+        had_photo: photos.length > 0,
         had_comment: !!comment.trim(),
       });
     }
@@ -104,7 +104,7 @@ export function PriorityFeedbackForm({ category }: Props) {
       window.removeEventListener("beforeunload", flushAbandon);
       flushAbandon();
     };
-  }, [category.id, product, photo, comment]);
+  }, [category.id, product, photos.length, comment]);
 
   if (!meReady) {
     return (
@@ -165,7 +165,7 @@ export function PriorityFeedbackForm({ category }: Props) {
       has_product: !!product,
       used_free_name: useFreeName,
       quantity,
-      has_photo: !!photo,
+      has_photo: photos.length > 0,
       has_comment: !!comment.trim(),
     });
     setConfirmOpen(true);
@@ -191,7 +191,8 @@ export function PriorityFeedbackForm({ category }: Props) {
       product_id: product?.id ?? null,
       quantity,
       fields,
-      photo_url: photo,
+      photo_url: photos[0] ?? null,
+      photo_urls: photos,
       init_data: initData || undefined,
     };
 
@@ -365,7 +366,7 @@ export function PriorityFeedbackForm({ category }: Props) {
                 ? "Фото браку (дуже бажано)"
                 : "Фото полиці (необов'язково)"
             }
-            onChange={setPhoto}
+            onChange={setPhotos}
           />
         </div>
       ) : null}
