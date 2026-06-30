@@ -121,6 +121,7 @@ export async function POST(req: Request) {
   const displayLabel = (body.display_label ?? "").trim();
   const role = body.role;
   let storeId = body.store_id;
+  const pin = (body.pin ?? "").trim();
 
   // 1. Validations
   if (!fullName || fullName.length < 2 || fullName.length > 100) {
@@ -135,6 +136,16 @@ export async function POST(req: Request) {
       { error: "Відображуване ім'я має містити від 2 до 100 символів" },
       { status: 400 },
     );
+  }
+
+  if (pin) {
+    const PIN_RE = /^\d{6}$/;
+    if (!PIN_RE.test(pin)) {
+      return NextResponse.json(
+        { error: "PIN-код має складатися рівно з 6 цифр" },
+        { status: 400 },
+      );
+    }
   }
 
   if (!["seller", "admin", "super_admin"].includes(role)) {
@@ -199,6 +210,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Помилка при створенні користувача" }, { status: 500 });
   }
 
+  // 3.5. Set PIN if provided
+  if (pin) {
+    const { error: pinErr } = await supabase.rpc("set_user_pin", {
+      p_user_id: newUser.id,
+      p_pin: pin,
+    });
+
+    if (pinErr) {
+      console.error("admin create user set_user_pin error", { code: pinErr.code, message: pinErr.message });
+      // Rollback the created user
+      await supabase.from("users").delete().eq("id", newUser.id);
+      const msg = pinErr.message?.includes("collision")
+        ? "Цей PIN-код вже використовується іншим користувачем"
+        : "Не вдалося встановити PIN-код";
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
+  }
+
   // 4. Log Audit Event
   await logAudit("admin.user.create", {
     actorUserId: sess.uid,
@@ -220,7 +249,7 @@ export async function POST(req: Request) {
     store_id: newUser.store_id,
     store_name: storeName,
     is_active: newUser.is_active,
-    has_pin: newUser.pin_hash != null,
+    has_pin: pin ? true : newUser.pin_hash != null,
     failed_attempts: newUser.failed_attempts ?? 0,
     locked_until: newUser.locked_until,
     last_login: newUser.last_login,
