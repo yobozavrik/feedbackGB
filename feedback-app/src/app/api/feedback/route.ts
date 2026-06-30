@@ -12,8 +12,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const VALID_CATEGORY_IDS = new Set<string>(CATEGORIES.map((c) => c.id));
-const MAX_BODY_BYTES = 2 * 1024 * 1024; // 2 MB total JSON body
+const MAX_BODY_BYTES = 8 * 1024 * 1024; // enough for several compressed photos
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB decoded
+const MAX_PHOTOS = 5;
 const ALLOWED_PHOTO_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_FIELD_LEN = 4000;
 const MAX_FIELDS = 40;
@@ -191,9 +192,25 @@ export async function POST(req: Request) {
   // mime. Anything else (arbitrary http(s):// URLs, javascript:, data: with
   // non-image mime, oversized) is dropped — never stored.
   let photoUrl: string | null = null;
-  if (supabase && typeof payload.photo_url === "string") {
-    const safePath = await sanitizeAndUploadPhoto(supabase, payload.photo_url);
-    photoUrl = safePath;
+  let photoUrls: string[] = [];
+  const incomingPhotos = Array.isArray(payload.photo_urls)
+    ? payload.photo_urls
+    : typeof payload.photo_url === "string"
+      ? [payload.photo_url]
+      : [];
+  if (incomingPhotos.length > MAX_PHOTOS) {
+    return NextResponse.json(
+      { error: `Too many photos: max ${MAX_PHOTOS}` },
+      { status: 400 },
+    );
+  }
+  if (supabase && incomingPhotos.length > 0) {
+    for (const rawPhoto of incomingPhotos) {
+      if (typeof rawPhoto !== "string") continue;
+      const safePath = await sanitizeAndUploadPhoto(supabase, rawPhoto);
+      if (safePath) photoUrls.push(safePath);
+    }
+    photoUrl = photoUrls[0] ?? null;
   }
 
   let storeName: string | null = null;
@@ -232,16 +249,18 @@ export async function POST(req: Request) {
   if (productName) fieldsForSummary["product_name"] = productName;
   if (quantity !== null) fieldsForSummary["quantity"] = quantity;
   if (productUnit) fieldsForSummary["product_unit"] = productUnit;
+  if (photoUrls.length > 1) fieldsForSummary["photo_count"] = photoUrls.length;
 
   const summary = buildSummary(
     {
       ...payload,
       product_id: productId,
       quantity: quantity,
-      fields: fieldsForSummary,
-      store_id: effectiveStoreId,
-      store_label: storeLabel,
-      photo_url: photoUrl,
+    fields: fieldsForSummary,
+    store_id: effectiveStoreId,
+    store_label: storeLabel,
+    photo_url: photoUrl,
+    photo_urls: photoUrls,
     },
     {
       display_name: display,
@@ -257,7 +276,10 @@ export async function POST(req: Request) {
     user_id: sess.uid,
     product_id: productId,
     quantity: quantity,
-    fields: cleanFields,
+    fields: {
+      ...cleanFields,
+      ...(photoUrls.length > 1 ? { photo_urls: photoUrls } : {}),
+    },
     photo_url: photoUrl,
     tg_user_id: tgValid ? tgUser?.id ?? null : null,
     tg_username: tgValid ? tgUser?.username ?? null : null,
