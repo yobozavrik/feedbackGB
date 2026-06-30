@@ -13,6 +13,7 @@ export async function POST(req: Request) {
       targetType: "session",
       ip: ipFromRequest(req),
       userAgent: uaFromRequest(req),
+      meta: { app_surface: "admin_panel" },
     });
   }
 

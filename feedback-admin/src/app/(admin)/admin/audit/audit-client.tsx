@@ -72,6 +72,21 @@ function formatTime(iso: string): string {
   });
 }
 
+function readAppSurface(meta: AuditRow["meta"]): string | null {
+  if (!meta || typeof meta !== "object") return null;
+  const value = (meta as Record<string, unknown>).app_surface;
+  return typeof value === "string" ? value : null;
+}
+
+function appSurfaceLabel(surface: string | null): {
+  label: string;
+  color: string;
+} | null {
+  if (surface === "web_app") return { label: "Веб-апп", color: "green" };
+  if (surface === "admin_panel") return { label: "Адмінка", color: "magenta" };
+  return null;
+}
+
 export function AuditClient({ rows }: Props) {
   const { token } = antdTheme.useToken();
 
@@ -168,6 +183,26 @@ export function AuditClient({ rows }: Props) {
                 {row.action}
               </Text>
             </Space>
+          );
+        },
+      },
+      {
+        title: "Куди",
+        dataIndex: "meta",
+        width: 120,
+        filters: [
+          { text: "Веб-апп", value: "web_app" },
+          { text: "Адмінка", value: "admin_panel" },
+        ],
+        onFilter: (value, row) => readAppSurface(row.meta) === value,
+        render: (_, row) => {
+          const surface = appSurfaceLabel(readAppSurface(row.meta));
+          return surface ? (
+            <Tag color={surface.color} bordered={false}>
+              {surface.label}
+            </Tag>
+          ) : (
+            <Text type="secondary">—</Text>
           );
         },
       },
