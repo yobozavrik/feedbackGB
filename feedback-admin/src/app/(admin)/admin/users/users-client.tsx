@@ -636,6 +636,15 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
           }
           rules={[{ required: true, message: "Виберіть роль" }]}
         />
+        <ProFormText.Password
+          name="pin"
+          label="PIN-код (6 цифр)"
+          placeholder="Введіть 6-значний PIN-код"
+          rules={[
+            { required: true, message: "Введіть PIN-код" },
+            { pattern: /^\d{6}$/, message: "PIN-код має складатися рівно з 6 цифр" },
+          ]}
+        />
         <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.role !== currentValues.role}>
           {({ getFieldValue }) => {
             const role = getFieldValue("role");
