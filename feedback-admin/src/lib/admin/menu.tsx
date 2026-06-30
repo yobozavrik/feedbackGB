@@ -55,7 +55,7 @@ export const adminRoute: ProLayoutProps["route"] = {
     },
     {
       path: "/admin/users",
-      name: "Користувачі",
+      name: "Співробітники",
       icon: <TeamOutlined />,
     },
     {
@@ -83,7 +83,7 @@ export const adminRoute: ProLayoutProps["route"] = {
 export const adminBreadcrumbNames: Record<string, string> = {
   "/admin": "Огляд",
   "/admin/tasks": "Мої завдання",
-  "/admin/users": "Користувачі",
+  "/admin/users": "Співробітники",
   "/admin/audit": "Журнал",
   "/admin/tools": "Інструменти",
   "/admin/analytics": "Аналітика",

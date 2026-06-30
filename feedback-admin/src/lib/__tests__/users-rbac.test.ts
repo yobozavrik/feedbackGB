@@ -19,14 +19,18 @@ vi.mock("next/headers", () => ({
 }));
 
 const mockFrom = vi.fn();
+const mockRpc = vi.fn();
 vi.mock("@/lib/supabase", () => ({
   getServerSupabase: vi.fn(() => ({
     from: mockFrom,
+    rpc: mockRpc,
   })),
 }));
 
 vi.mock("@/lib/audit", () => ({
   logAudit: vi.fn(async () => {}),
+  ipFromRequest: vi.fn(() => "127.0.0.1"),
+  uaFromRequest: vi.fn(() => "test-ua"),
 }));
 
 // Helper to sign session cookies
@@ -52,6 +56,7 @@ function mockRequest(method: "POST" | "PATCH" | "DELETE", path: string, body?: u
 describe("Users CRUD API & RBAC Checks", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRpc.mockReset();
   });
 
   describe("POST /api/admin/users (Create User)", () => {
@@ -348,6 +353,375 @@ describe("Users CRUD API & RBAC Checks", () => {
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.ok).toBe(true);
+    });
+  });
+
+  describe("POST /api/admin/users/[id]/pin (Reset PIN)", () => {
+    it("should allow admin to reset own PIN", async () => {
+      const { POST } = await import("@/app/api/admin/users/[id]/pin/route");
+      const targetId = "11111111-1111-1111-1111-111111111111";
+      const cookie = await makeCookie(targetId, "admin");
+
+      mockFrom.mockImplementation((table) => {
+        if (table === "users") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: { id: targetId, role: "admin" },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        return {};
+      });
+
+      mockRpc.mockResolvedValue({ error: null });
+
+      const res = await POST(
+        mockRequest("POST", `/api/admin/users/${targetId}/pin`, { pin: "123456" }, cookie),
+        { params: { id: targetId } }
+      );
+
+      expect(res.status).toBe(200);
+      expect(mockRpc).toHaveBeenCalledWith("set_user_pin", {
+        p_user_id: targetId,
+        p_pin: "123456",
+      });
+    });
+
+    it("should allow admin to reset seller PIN", async () => {
+      const { POST } = await import("@/app/api/admin/users/[id]/pin/route");
+      const cookie = await makeCookie("11111111-1111-1111-1111-111111111111", "admin");
+      const targetId = "22222222-2222-2222-2222-222222222222";
+
+      mockFrom.mockImplementation((table) => {
+        if (table === "users") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: { id: targetId, role: "seller" },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        return {};
+      });
+
+      mockRpc.mockResolvedValue({ error: null });
+
+      const res = await POST(
+        mockRequest("POST", `/api/admin/users/${targetId}/pin`, { pin: "123456" }, cookie),
+        { params: { id: targetId } }
+      );
+
+      expect(res.status).toBe(200);
+      expect(mockRpc).toHaveBeenCalledWith("set_user_pin", {
+        p_user_id: targetId,
+        p_pin: "123456",
+      });
+    });
+
+    it("should deny admin resetting another admin PIN", async () => {
+      const { POST } = await import("@/app/api/admin/users/[id]/pin/route");
+      const cookie = await makeCookie("11111111-1111-1111-1111-111111111111", "admin");
+      const targetId = "33333333-3333-3333-3333-333333333333";
+
+      mockFrom.mockImplementation((table) => {
+        if (table === "users") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: { id: targetId, role: "admin" },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        return {};
+      });
+
+      const res = await POST(
+        mockRequest("POST", `/api/admin/users/${targetId}/pin`, { pin: "123456" }, cookie),
+        { params: { id: targetId } }
+      );
+
+      expect(res.status).toBe(403);
+      expect(mockRpc).not.toHaveBeenCalled();
+    });
+
+    it("should deny admin resetting super_admin PIN", async () => {
+      const { POST } = await import("@/app/api/admin/users/[id]/pin/route");
+      const cookie = await makeCookie("11111111-1111-1111-1111-111111111111", "admin");
+      const targetId = "44444444-4444-4444-4444-444444444444";
+
+      mockFrom.mockImplementation((table) => {
+        if (table === "users") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: { id: targetId, role: "super_admin" },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        return {};
+      });
+
+      const res = await POST(
+        mockRequest("POST", `/api/admin/users/${targetId}/pin`, { pin: "123456" }, cookie),
+        { params: { id: targetId } }
+      );
+
+      expect(res.status).toBe(403);
+      expect(mockRpc).not.toHaveBeenCalled();
+    });
+
+    it("should allow super_admin to reset anyone's PIN", async () => {
+      const { POST } = await import("@/app/api/admin/users/[id]/pin/route");
+      const cookie = await makeCookie("99999999-9999-9999-9999-999999999999", "super_admin");
+      const targetId = "33333333-3333-3333-3333-333333333333";
+
+      mockFrom.mockImplementation((table) => {
+        if (table === "users") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: { id: targetId, role: "admin" },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        return {};
+      });
+
+      mockRpc.mockResolvedValue({ error: null });
+
+      const res = await POST(
+        mockRequest("POST", `/api/admin/users/${targetId}/pin`, { pin: "123456" }, cookie),
+        { params: { id: targetId } }
+      );
+
+      expect(res.status).toBe(200);
+      expect(mockRpc).toHaveBeenCalledWith("set_user_pin", {
+        p_user_id: targetId,
+        p_pin: "123456",
+      });
+    });
+
+    it("should return 404 if user not found", async () => {
+      const { POST } = await import("@/app/api/admin/users/[id]/pin/route");
+      const cookie = await makeCookie("11111111-1111-1111-1111-111111111111", "admin");
+      const targetId = "55555555-5555-5555-5555-555555555555";
+
+      mockFrom.mockImplementation((table) => {
+        if (table === "users") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: null,
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        return {};
+      });
+
+      const res = await POST(
+        mockRequest("POST", `/api/admin/users/${targetId}/pin`, { pin: "123456" }, cookie),
+        { params: { id: targetId } }
+      );
+
+      expect(res.status).toBe(404);
+      expect(mockRpc).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("POST /api/admin/users/[id]/unlock (Unlock User)", () => {
+    it("should allow admin to unlock seller", async () => {
+      const { POST } = await import("@/app/api/admin/users/[id]/unlock/route");
+      const cookie = await makeCookie("11111111-1111-1111-1111-111111111111", "admin");
+      const targetId = "22222222-2222-2222-2222-222222222222";
+      const mockUpdateEq = vi.fn().mockResolvedValue({ error: null });
+
+      mockFrom.mockImplementation((table) => {
+        if (table === "users") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: { id: targetId, role: "seller" },
+                  error: null,
+                }),
+              }),
+            }),
+            update: () => ({
+              eq: mockUpdateEq,
+            }),
+          };
+        }
+        return {};
+      });
+
+      const res = await POST(
+        mockRequest("POST", `/api/admin/users/${targetId}/unlock`, undefined, cookie),
+        { params: { id: targetId } }
+      );
+
+      expect(res.status).toBe(200);
+      expect(mockUpdateEq).toHaveBeenCalled();
+    });
+
+    it("should deny admin unlocking another admin", async () => {
+      const { POST } = await import("@/app/api/admin/users/[id]/unlock/route");
+      const cookie = await makeCookie("11111111-1111-1111-1111-111111111111", "admin");
+      const targetId = "33333333-3333-3333-3333-333333333333";
+      const mockUpdateEq = vi.fn();
+
+      mockFrom.mockImplementation((table) => {
+        if (table === "users") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: { id: targetId, role: "admin" },
+                  error: null,
+                }),
+              }),
+            }),
+            update: () => ({
+              eq: mockUpdateEq,
+            }),
+          };
+        }
+        return {};
+      });
+
+      const res = await POST(
+        mockRequest("POST", `/api/admin/users/${targetId}/unlock`, undefined, cookie),
+        { params: { id: targetId } }
+      );
+
+      expect(res.status).toBe(403);
+      expect(mockUpdateEq).not.toHaveBeenCalled();
+    });
+
+    it("should deny admin unlocking super_admin", async () => {
+      const { POST } = await import("@/app/api/admin/users/[id]/unlock/route");
+      const cookie = await makeCookie("11111111-1111-1111-1111-111111111111", "admin");
+      const targetId = "44444444-4444-4444-4444-444444444444";
+      const mockUpdateEq = vi.fn();
+
+      mockFrom.mockImplementation((table) => {
+        if (table === "users") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: { id: targetId, role: "super_admin" },
+                  error: null,
+                }),
+              }),
+            }),
+            update: () => ({
+              eq: mockUpdateEq,
+            }),
+          };
+        }
+        return {};
+      });
+
+      const res = await POST(
+        mockRequest("POST", `/api/admin/users/${targetId}/unlock`, undefined, cookie),
+        { params: { id: targetId } }
+      );
+
+      expect(res.status).toBe(403);
+      expect(mockUpdateEq).not.toHaveBeenCalled();
+    });
+
+    it("should allow super_admin to unlock anyone", async () => {
+      const { POST } = await import("@/app/api/admin/users/[id]/unlock/route");
+      const cookie = await makeCookie("99999999-9999-9999-9999-999999999999", "super_admin");
+      const targetId = "33333333-3333-3333-3333-333333333333";
+      const mockUpdateEq = vi.fn().mockResolvedValue({ error: null });
+
+      mockFrom.mockImplementation((table) => {
+        if (table === "users") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: { id: targetId, role: "admin" },
+                  error: null,
+                }),
+              }),
+            }),
+            update: () => ({
+              eq: mockUpdateEq,
+            }),
+          };
+        }
+        return {};
+      });
+
+      const res = await POST(
+        mockRequest("POST", `/api/admin/users/${targetId}/unlock`, undefined, cookie),
+        { params: { id: targetId } }
+      );
+
+      expect(res.status).toBe(200);
+      expect(mockUpdateEq).toHaveBeenCalled();
+    });
+
+    it("should return 404 if user not found", async () => {
+      const { POST } = await import("@/app/api/admin/users/[id]/unlock/route");
+      const cookie = await makeCookie("11111111-1111-1111-1111-111111111111", "admin");
+      const targetId = "55555555-5555-5555-5555-555555555555";
+      const mockUpdateEq = vi.fn();
+
+      mockFrom.mockImplementation((table) => {
+        if (table === "users") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: null,
+                  error: null,
+                }),
+              }),
+            }),
+            update: () => ({
+              eq: mockUpdateEq,
+            }),
+          };
+        }
+        return {};
+      });
+
+      const res = await POST(
+        mockRequest("POST", `/api/admin/users/${targetId}/unlock`, undefined, cookie),
+        { params: { id: targetId } }
+      );
+
+      expect(res.status).toBe(404);
+      expect(mockUpdateEq).not.toHaveBeenCalled();
     });
   });
 });

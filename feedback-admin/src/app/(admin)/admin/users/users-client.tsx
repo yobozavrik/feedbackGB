@@ -9,6 +9,9 @@ import {
   StopOutlined,
   CheckCircleOutlined,
   HistoryOutlined,
+  ShopOutlined,
+  TeamOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
 import {
   ModalForm,
@@ -32,16 +35,25 @@ import {
   Timeline,
   Alert,
   Spin,
+  Row,
+  Col,
+  Card,
+  Avatar,
+  Badge,
+  Segmented,
+  Select,
+  Input,
 } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { countryFlag, formatGeoLines } from "@/lib/geoip";
-import type { AdminUser } from "./page";
+import type { AdminUser, FeedbacksStat } from "./page";
 
 const { Text } = Typography;
 
 interface Props {
   users: AdminUser[];
   stores: Array<{ id: number; name: string }>;
+  feedbacks: FeedbacksStat[];
   currentUserId: string;
   currentUserRole: "admin" | "super_admin";
 }
@@ -67,7 +79,7 @@ const STATE_META: Record<
   no_pin: { text: "Без PIN", status: "Warning" },
 };
 
-export function UsersClient({ users, stores, currentUserId, currentUserRole }: Props) {
+export function UsersClient({ users, stores, feedbacks, currentUserId, currentUserRole }: Props) {
   const [list, setList] = useState<AdminUser[]>(users);
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -79,8 +91,58 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
 
+  // New tab state
+  const [activeTab, setActiveTab] = useState<"cards" | "admin">("cards");
+
+  // New filter states for cards view
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStore, setSelectedStore] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<"feedbacks" | "name">("feedbacks");
+
   const { token } = antdTheme.useToken();
   const { message } = App.useApp();
+
+  const sellerStats = useMemo(() => {
+    const stats = new Map<string, { total: number; categories: Record<string, number> }>();
+    for (const f of feedbacks) {
+      if (!f.user_id) continue;
+      if (!stats.has(f.user_id)) {
+        stats.set(f.user_id, { total: 0, categories: {} });
+      }
+      const uStat = stats.get(f.user_id)!;
+      uStat.total += 1;
+      uStat.categories[f.category] = (uStat.categories[f.category] ?? 0) + 1;
+    }
+    return stats;
+  }, [feedbacks]);
+
+  const sellers = useMemo(() => {
+    return list.filter((u) => u.role === "seller");
+  }, [list]);
+
+  const filteredSellers = useMemo(() => {
+    let out = sellers;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      out = out.filter((u) => u.full_name.toLowerCase().includes(q));
+    }
+    if (selectedStore !== null) {
+      out = out.filter((u) => u.store_id === selectedStore);
+    }
+
+    out = [...out].sort((a, b) => {
+      if (sortBy === "feedbacks") {
+        const aCount = sellerStats.get(a.id)?.total ?? 0;
+        const bCount = sellerStats.get(b.id)?.total ?? 0;
+        if (aCount !== bCount) {
+          return bCount - aCount; // descending
+        }
+      }
+      return a.full_name.localeCompare(b.full_name, "uk");
+    });
+
+    return out;
+  }, [sellers, searchQuery, selectedStore, sortBy, sellerStats]);
 
   useEffect(() => {
     if (!activityTarget) {
@@ -543,53 +605,265 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
         },
       },
     ],
-    [storeOptions, filterStoreOptions, token, handleUnlock, handleToggleActive, currentUserRole, currentUserId, editForm],
+    [filterStoreOptions, token, handleUnlock, handleToggleActive, currentUserRole, currentUserId, editForm],
+  );
+
+  const CATEGORY_NAMES: Record<string, { label: string; emoji: string; color: string }> = {
+    missing: { label: "Нехватка", emoji: "📦", color: "orange" },
+    overstock: { label: "Надлишок", emoji: "📈", color: "blue" },
+    defect: { label: "Брак", emoji: "⚠️", color: "red" },
+    supply: { label: "Поставка", emoji: "🚛", color: "geekblue" },
+    idea: { label: "Ідея", emoji: "💡", color: "purple" },
+    spotted: { label: "Знайдено", emoji: "🔍", color: "cyan" },
+    tech: { label: "Технічне", emoji: "⚙️", color: "gold" },
+    voice: { label: "Голос", emoji: "🗣️", color: "magenta" },
+  };
+
+  const formatLastLogin = (iso: string | null): string => {
+    if (!iso) return "ніколи";
+    return new Date(iso).toLocaleString("uk-UA", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const cardsView = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Filters Toolbar */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
+          background: token.colorBgContainer,
+          padding: 16,
+          borderRadius: token.borderRadiusLG,
+          border: `1px solid ${token.colorBorderSecondary}`,
+        }}
+      >
+        <Space size={12} wrap>
+          <Input
+            placeholder="Пошук за ПІБ..."
+            prefix={<SearchOutlined style={{ color: token.colorTextDescription }} />}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ width: 220 }}
+            allowClear
+          />
+          <Select
+            placeholder="Всі магазини"
+            style={{ width: 220 }}
+            value={selectedStore ?? undefined}
+            onChange={setSelectedStore}
+            allowClear
+            options={stores.map((s) => ({ label: s.name, value: s.id }))}
+          />
+        </Space>
+        
+        <Space size={12}>
+          <Text type="secondary" style={{ fontSize: 13 }}>Сортувати:</Text>
+          <Segmented<"feedbacks" | "name">
+            value={sortBy}
+            onChange={setSortBy}
+            options={[
+              { label: "За активністю", value: "feedbacks" },
+              { label: "За алфавітом", value: "name" },
+            ]}
+          />
+        </Space>
+      </div>
+
+      {filteredSellers.length === 0 ? (
+        <Alert
+          message="Співробітників не знайдено"
+          description="Спробуйте змінити параметри пошуку або фільтрації."
+          type="info"
+          showIcon
+          style={{ borderRadius: token.borderRadiusLG }}
+        />
+      ) : (
+        <Row gutter={[16, 16]}>
+          {filteredSellers.map((seller) => {
+            const stats = sellerStats.get(seller.id) || { total: 0, categories: {} };
+            const isActive = seller.is_active;
+            const hasPin = seller.has_pin;
+            const isLocked = seller.locked_until && new Date(seller.locked_until) > new Date();
+            
+            // Get initials for avatar
+            const initials = seller.full_name
+              .split(" ")
+              .map((n) => n[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase();
+
+            // Status tag
+            let statusTag = <Tag color="green">Активна</Tag>;
+            if (!isActive) {
+              statusTag = <Tag color="default">Неактивна</Tag>;
+            } else if (isLocked) {
+              statusTag = <Tag color="error">Заблокована</Tag>;
+            } else if (!hasPin) {
+              statusTag = <Tag color="warning">Без PIN</Tag>;
+            }
+
+            return (
+              <Col xs={24} sm={12} md={8} lg={6} key={seller.id}>
+                <Card
+                  hoverable
+                  style={{
+                    borderRadius: token.borderRadiusLG,
+                    border: `1px solid ${token.colorBorderSecondary}`,
+                    overflow: "hidden",
+                  }}
+                  bodyStyle={{ padding: 16 }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                    <Avatar
+                      size={48}
+                      style={{
+                        background: isActive ? `linear-gradient(135deg, ${token.colorPrimary}, ${token.colorPrimaryActive})` : token.colorTextDisabled,
+                        color: "#fff",
+                        fontWeight: 600,
+                        fontSize: 16,
+                      }}
+                    >
+                      {initials}
+                    </Avatar>
+                    <div style={{ overflow: "hidden", flex: 1 }}>
+                      <Text strong style={{ display: "block", fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {seller.full_name}
+                      </Text>
+                      <div style={{ marginTop: 2 }}>{statusTag}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: 12 }}>
+                    <Space size={4} style={{ color: token.colorTextDescription, fontSize: 13 }}>
+                      <ShopOutlined />
+                      <Text style={{ fontSize: 13 }}>
+                        {seller.store_name || "Не прикріплено"}
+                      </Text>
+                    </Space>
+                  </div>
+
+                  {/* Feedback Count Stats */}
+                  <div
+                    style={{
+                      background: token.colorFillAlter,
+                      borderRadius: token.borderRadius,
+                      padding: "8px 12px",
+                      marginBottom: 12,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Надіслано відгуків:</Text>
+                      <Text strong style={{ fontSize: 18, color: token.colorPrimary }}>{stats.total}</Text>
+                    </div>
+
+                    {stats.total > 0 && (
+                      <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {Object.entries(stats.categories).map(([catId, count]) => {
+                          const catMeta = CATEGORY_NAMES[catId] || { label: catId, emoji: "📝", color: "default" };
+                          return (
+                            <Tooltip key={catId} title={`${catMeta.label}: ${count}`}>
+                              <Tag bordered={false} color={catMeta.color} style={{ fontSize: 11, margin: 0, paddingInline: 6 }}>
+                                {catMeta.emoji} {count}
+                              </Tag>
+                            </Tooltip>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Last Login Info */}
+                  <div style={{ borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text type="secondary" style={{ fontSize: 11 }}>Останній вхід:</Text>
+                    {seller.last_login ? (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                        <Text style={{ fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
+                          {formatLastLogin(seller.last_login)}
+                        </Text>
+                        <UserLastLocation row={seller} />
+                      </div>
+                    ) : (
+                      <Text type="secondary" style={{ fontSize: 11 }}>ніколи</Text>
+                    )}
+                  </div>
+                </Card>
+              </Col>
+            );
+          })}
+        </Row>
+      )}
+    </div>
   );
 
   return (
     <>
-      <ProTable<AdminUser>
-        className="admin-users-table"
-        rowKey="id"
-        dataSource={list}
-        columns={columns}
-        search={false}
-        size="small"
-        tableLayout="fixed"
-        options={{
-          density: true,
-          fullScreen: true,
-          reload: false,
-          setting: true,
-        }}
-        pagination={{
-          pageSize: 25,
-          showSizeChanger: true,
-          showTotal: (total) => `${total} записів`,
-        }}
-        scroll={{ x: 1454 }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              createForm.resetFields();
-              setCreateOpen(true);
-            }}
-          >
-            Створити користувача
-          </Button>,
-        ]}
-        headerTitle={
-          <Space size={8}>
-            <Text strong>Усі користувачі</Text>
-            <Tag color="magenta" bordered={false}>
-              {list.length}
-            </Tag>
-          </Space>
-        }
-      />
+      <div style={{ marginBottom: 16 }}>
+        <Segmented<"cards" | "admin">
+          value={activeTab}
+          onChange={setActiveTab}
+          size="large"
+          options={[
+            { label: "Картки співробітників", value: "cards" },
+            { label: "Керування доступом", value: "admin" },
+          ]}
+        />
+      </div>
+
+      {activeTab === "cards" ? (
+        cardsView
+      ) : (
+        <ProTable<AdminUser>
+          className="admin-users-table"
+          rowKey="id"
+          dataSource={list}
+          columns={columns}
+          search={false}
+          size="small"
+          tableLayout="fixed"
+          options={{
+            density: true,
+            fullScreen: true,
+            reload: false,
+            setting: true,
+          }}
+          pagination={{
+            pageSize: 25,
+            showSizeChanger: true,
+            showTotal: (total) => `${total} записів`,
+          }}
+          scroll={{ x: 1454 }}
+          toolBarRender={() => [
+            <Button
+              key="create"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                createForm.resetFields();
+                setCreateOpen(true);
+              }}
+            >
+              Створити користувача
+            </Button>,
+          ]}
+          headerTitle={
+            <Space size={8}>
+              <Text strong>Усі користувачі</Text>
+              <Tag color="magenta" bordered={false}>
+                {list.length}
+              </Tag>
+            </Space>
+          }
+        />
+      )}
 
       {/* CREATE MODAL */}
       <ModalForm
@@ -766,24 +1040,24 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
         width={420}
       >
         <Text type="secondary" style={{ display: "block", marginBottom: 16 }}>
-          Новий код 6–8 цифр. Скажи цей код користувачці особисто — він не
+          Новий код має складатися рівно з 6 цифр. Скажи цей код користувачці особисто — він не
           зберігається в логах.
         </Text>
         <ProFormText.Password
           name="pin"
           label="Новий PIN"
-          placeholder="6–8 цифр"
+          placeholder="6 цифр"
           fieldProps={{
             inputMode: "numeric",
             autoComplete: "off",
-            maxLength: 8,
+            maxLength: 6,
             visibilityToggle: true,
           }}
           rules={[
             { required: true, message: "Введи новий PIN" },
             {
-              pattern: /^\d{6,8}$/,
-              message: "PIN має бути 6–8 цифр",
+              pattern: /^\d{6}$/,
+              message: "PIN має бути ровно 6 цифр",
             },
           ]}
         />
@@ -794,7 +1068,7 @@ export function UsersClient({ users, stores, currentUserId, currentUserRole }: P
           fieldProps={{
             inputMode: "numeric",
             autoComplete: "off",
-            maxLength: 8,
+            maxLength: 6,
             visibilityToggle: true,
           }}
           dependencies={["pin"]}

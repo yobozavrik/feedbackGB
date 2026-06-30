@@ -24,24 +24,31 @@ export interface AdminUser {
   last_login_isp: string | null;
 }
 
+export interface FeedbacksStat {
+  user_id: string | null;
+  category: string;
+  created_at: string;
+}
+
 async function fetchData(): Promise<{
   users: AdminUser[];
   stores: Array<{ id: number; name: string }>;
+  feedbacks: FeedbacksStat[];
   currentUserId: string;
   currentUserRole: "admin" | "super_admin";
   error: string | null;
 }> {
   const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
   if (!sess || (sess.role !== "admin" && sess.role !== "super_admin")) {
-    return { users: [], stores: [], currentUserId: "", currentUserRole: "admin", error: "Недостатньо прав" };
+    return { users: [], stores: [], feedbacks: [], currentUserId: "", currentUserRole: "admin", error: "Недостатньо прав" };
   }
 
   const supabase = getServerSupabase();
   if (!supabase) {
-    return { users: [], stores: [], currentUserId: sess.uid, currentUserRole: sess.role, error: "Supabase ще не налаштовано" };
+    return { users: [], stores: [], feedbacks: [], currentUserId: sess.uid, currentUserRole: sess.role, error: "Supabase ще не налаштовано" };
   }
 
-  const [{ data: userRows, error: userErr }, { data: storeRows }] =
+  const [{ data: userRows, error: userErr }, { data: storeRows }, { data: feedbackRows }] =
     await Promise.all([
       supabase
         .from("users")
@@ -50,15 +57,18 @@ async function fetchData(): Promise<{
         )
         .order("full_name", { ascending: true }),
       supabase.from("v_stores").select("id, name"),
+      supabase.from("feedback").select("user_id, category, created_at"),
     ]);
 
-  if (userErr) return { users: [], stores: [], currentUserId: sess.uid, currentUserRole: sess.role, error: userErr.message };
+  if (userErr) return { users: [], stores: [], feedbacks: [], currentUserId: sess.uid, currentUserRole: sess.role, error: userErr.message };
 
   const stores = (storeRows ?? []) as Array<{ id: number; name: string }>;
   const storeMap = new Map<number, string>();
   for (const s of stores) {
     storeMap.set(s.id, s.name);
   }
+
+  const feedbacks = (feedbackRows ?? []) as FeedbacksStat[];
 
   const rawRows = (userRows ?? []) as Array<{
     id: string;
@@ -97,16 +107,16 @@ async function fetchData(): Promise<{
     last_login_isp: u.last_login_isp,
   }));
 
-  return { users, stores, currentUserId: sess.uid, currentUserRole: sess.role, error: null };
+  return { users, stores, feedbacks, currentUserId: sess.uid, currentUserRole: sess.role, error: null };
 }
 
 export default async function AdminUsersPage() {
-  const { users, stores, currentUserId, currentUserRole, error } = await fetchData();
+  const { users, stores, feedbacks, currentUserId, currentUserRole, error } = await fetchData();
 
   return (
     <AdminPageContainer
-      title="Користувачі"
-      subTitle="PIN-коди, розблокування, активність"
+      title="Співробітники"
+      subTitle="Управління продавцями, PIN-коди, статистика активності"
     >
       {error ? (
         <div className="card p-6 text-center">
@@ -117,6 +127,7 @@ export default async function AdminUsersPage() {
         <UsersClient
           users={users}
           stores={stores}
+          feedbacks={feedbacks}
           currentUserId={currentUserId}
           currentUserRole={currentUserRole}
         />
