@@ -731,6 +731,34 @@ function FeedDrawer({
           </Space>
         </Space>
 
+        {row.product_name ? (
+          <div
+            style={{
+              background: token.colorInfoBg,
+              border: `1px solid ${token.colorInfoBorder}`,
+              borderRadius: token.borderRadiusLG,
+              padding: "8px 12px",
+            }}
+          >
+            <Text
+              type="secondary"
+              style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 }}
+            >
+              Обраний товар
+            </Text>
+            <div style={{ marginTop: 2 }}>
+              <Text strong style={{ fontSize: 14 }}>
+                {row.product_name}
+              </Text>
+              {row.product_unit ? (
+                <Text type="secondary" style={{ marginLeft: 6, fontSize: 13 }}>
+                  ({row.product_unit})
+                </Text>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         {/* === КЕРУВАННЯ === */}
         <div
           style={{
