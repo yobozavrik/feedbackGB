@@ -4,6 +4,7 @@ import {
   signSession,
   SESSION_COOKIE,
   SESSION_MAX_AGE,
+  isAdminTier,
   type UserRole,
 } from "@/lib/session";
 import { clientIp, rateLimit } from "@/lib/rateLimit";
@@ -117,6 +118,22 @@ export async function POST(req: Request) {
       },
     });
     return NextResponse.json({ error: "Невірний PIN" }, { status: 401 });
+  }
+
+  if (!isAdminTier(user.role)) {
+    await logAudit("auth.login.failure", {
+      targetType: "session",
+      ip,
+      userAgent: uaFromRequest(req),
+      meta: {
+        reason: "seller_tried_admin_login",
+        user_id: user.id,
+      },
+    });
+    return NextResponse.json(
+      { error: "Доступ обмежено. Продавчиням вхід в адмін-панель закритий." },
+      { status: 403 },
+    );
   }
 
   const displayName = user.display_label ?? user.full_name;
