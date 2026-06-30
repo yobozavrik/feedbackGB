@@ -149,12 +149,3 @@ body {
 .admin-users-table .ant-table-cell-fix-right .ant-space {
   flex-wrap: nowrap;
 }
-
-.admin-users-table .ant-table-cell-fix-right .ant-btn {
-  width: 28px;
-  padding-inline: 0;
-}
-
-.admin-users-table .ant-table-cell-fix-right .ant-btn > span:not(.anticon) {
-  display: none;
-}
