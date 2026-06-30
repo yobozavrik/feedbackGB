@@ -290,8 +290,15 @@ create table if not exists feedbackgb.feedback (
   status          text not null default 'new'
     check (status in ('new', 'in_progress', 'resolved', 'rejected')),
   resolved_at     timestamptz,
-  resolved_by     uuid references feedbackgb.users(id)
+  resolved_by     uuid references feedbackgb.users(id),
+  assigned_to     uuid references feedbackgb.users(id),
+  client_submission_id uuid,
+  client_created_at timestamptz
 );
+
+create unique index if not exists feedback_client_submission_id_uniq
+  on feedbackgb.feedback (client_submission_id)
+  where client_submission_id is not null;
 
 create index if not exists feedback_created_at_idx on feedbackgb.feedback (created_at desc);
 create index if not exists feedback_category_idx   on feedbackgb.feedback (category);
@@ -415,11 +422,18 @@ create or replace view feedbackgb.feedback_feed as
     f.summary,
     f.status,
     f.resolved_at,
-    f.resolved_by
+    f.resolved_by,
+    f.assigned_to,
+    a.full_name    as assigned_full_name,
+    -- Offline columns
+    f.client_created_at,
+    f.client_submission_id,
+    f.fields -> 'photo_urls' as photo_urls
   from feedbackgb.feedback f
   left join feedbackgb.categories c on c.id = f.category
   left join categories.spots      s on s.spot_id = f.store_id
   left join feedbackgb.users      u on u.id = f.user_id
+  left join feedbackgb.users      a on a.id = f.assigned_to
   left join categories.products   p on p.id = f.product_id;
 
 -- -----------------------------------------------------------------------------

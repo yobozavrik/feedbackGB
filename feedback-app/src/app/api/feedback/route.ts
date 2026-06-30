@@ -19,6 +19,7 @@ const ALLOWED_PHOTO_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_FIELD_LEN = 4000;
 const MAX_FIELDS = 40;
 const MAX_STORE_LABEL_LEN = 80;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * POST /api/feedback
@@ -121,6 +122,44 @@ export async function POST(req: Request) {
     typeof payload.store_label === "string" && payload.store_label.trim()
       ? payload.store_label.trim().slice(0, MAX_STORE_LABEL_LEN)
       : null;
+
+  let clientSubmissionId: string | null = null;
+  if (payload.client_submission_id !== undefined && payload.client_submission_id !== null) {
+    if (
+      typeof payload.client_submission_id !== "string" ||
+      !UUID_REGEX.test(payload.client_submission_id)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid client_submission_id" },
+        { status: 400 },
+      );
+    }
+    clientSubmissionId = payload.client_submission_id;
+  }
+
+  let clientCreatedAt: string | null = null;
+  if (payload.client_created_at !== undefined && payload.client_created_at !== null) {
+    if (typeof payload.client_created_at !== "string") {
+      return NextResponse.json(
+        { error: "Invalid client_created_at" },
+        { status: 400 },
+      );
+    }
+    const parsedDate = Date.parse(payload.client_created_at);
+    if (Number.isNaN(parsedDate)) {
+      return NextResponse.json(
+        { error: "Неправильний формат часу створення відгуку" },
+        { status: 400 },
+      );
+    }
+    if (parsedDate > Date.now() + 5 * 60 * 1000) {
+      return NextResponse.json(
+        { error: "Час створення відгуку не може бути у майбутньому" },
+        { status: 400 },
+      );
+    }
+    clientCreatedAt = payload.client_created_at;
+  }
 
   // v1 priority flow: structured product reference + quantity.
   // product_id is a bigint PK from categories.products; we accept any positive
@@ -256,11 +295,11 @@ export async function POST(req: Request) {
       ...payload,
       product_id: productId,
       quantity: quantity,
-    fields: fieldsForSummary,
-    store_id: effectiveStoreId,
-    store_label: storeLabel,
-    photo_url: photoUrl,
-    photo_urls: photoUrls,
+      fields: fieldsForSummary,
+      store_id: effectiveStoreId,
+      store_label: storeLabel,
+      photo_url: photoUrl,
+      photo_urls: photoUrls,
     },
     {
       display_name: display,
@@ -286,6 +325,8 @@ export async function POST(req: Request) {
     tg_display_name: tgValid ? display : null,
     tg_verified: tgValid,
     summary,
+    client_submission_id: clientSubmissionId,
+    client_created_at: clientCreatedAt,
   };
 
   if (!isSupabaseConfigured() || !supabase) {
@@ -309,6 +350,28 @@ export async function POST(req: Request) {
   const { error } = await supabase.from("feedback").insert(record);
   if (error) {
     console.error("supabase insert error", { code: error.code });
+    // Check for unique constraint violation (code 23505)
+    if (error.code === "23505" && clientSubmissionId) {
+      // Look up the existing record to verify owner
+      const { data: existing, error: queryError } = await supabase
+        .from("feedback")
+        .select("id, user_id")
+        .eq("client_submission_id", clientSubmissionId)
+        .maybeSingle();
+
+      if (!queryError && existing) {
+        if (existing.user_id === sess.uid) {
+          console.log(`Duplicate submission detected for user ${sess.uid}. Returning 200 OK.`);
+          return NextResponse.json({ ok: true, persisted: true, duplicate: true });
+        } else {
+          console.warn(`UUID Conflict! Duplicate client_submission_id ${clientSubmissionId} owned by user ${existing.user_id}, but requested by ${sess.uid}.`);
+          return NextResponse.json(
+            { error: "Conflict: submission ID already exists under another user" },
+            { status: 409 },
+          );
+        }
+      }
+    }
     return NextResponse.json({ error: "Помилка збереження" }, { status: 500 });
   }
   return NextResponse.json({ ok: true, persisted: true });

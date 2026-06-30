@@ -27,6 +27,8 @@ export interface FeedbackPayload {
   photo_urls?: string[];
   /** Raw initData string from Telegram WebApp — server validates HMAC. */
   init_data?: string;
+  client_submission_id?: string;
+  client_created_at?: string;
 }
 
 export interface FeedbackRecord extends FeedbackPayload {

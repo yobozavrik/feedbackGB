@@ -24,6 +24,7 @@
 | PIN-логін + lockout після 10 невдалих | shipped | `verify_pin()` RPC + `users.failed_attempts/locked_until` | Server-side bcrypt; rate-limit 10/10хв і 30/год/(IP+user). |
 | Telegram WebApp `initData` HMAC | shipped | `lib/telegram.ts` | Заповнює `tg_*` поля у `feedback`, не довіряє клієнту. |
 | Sticky `store_id` для seller | shipped | `/api/feedback` POST | Сервер перезаписує `store_id` з сесії, навіть якщо клієнт подав інший. |
+| Офлайн-режим (MVP 1) | shipped | `lib/offlineDb.ts`, `components/OfflineSyncProvider.tsx` | Локальне накопичення в IndexedDB (ліміт 20 відгуків або 40 МБ), таймаути 12с, ідемпотентна синхронізація при відновленні мережі із захистом від зміни продавця. |
 
 ---
 

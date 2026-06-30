@@ -3,6 +3,7 @@ import { Header } from "@/components/Header";
 import { CategoryGrid } from "@/components/CategoryGrid";
 import { LogoutButton } from "@/components/LogoutButton";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
+import { OfflineQueueBanner } from "@/components/OfflineQueueBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,8 @@ export default async function HomePage() {
   return (
     <main className="relative">
       <Header subtitle="Що сьогодні в магазині?" />
+
+      <OfflineQueueBanner />
 
       {/* Hero speech-bubble */}
       <section className="relative mb-6 overflow-hidden rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 p-5 shadow-soft">

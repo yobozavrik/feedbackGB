@@ -18,6 +18,7 @@ interface Props {
 }
 
 interface SessionUser {
+  uid: string;
   full_name: string;
   role: "seller" | "admin" | "super_admin";
   store_id: number | null;
@@ -61,6 +62,7 @@ export function PriorityFeedbackForm({ category }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [offlineSaved, setOfflineSaved] = useState(false);
 
   const formStartedRef = useRef(false);
   const submittedRef = useRef(false);
@@ -183,6 +185,9 @@ export function PriorityFeedbackForm({ category }: Props) {
       fields.comment = comment.trim();
     }
 
+    const clientSubmissionId = window.crypto.randomUUID();
+    const clientCreatedAt = new Date().toISOString();
+
     const payload: FeedbackPayload = {
       category: category.id,
       store_id: effectiveStoreId,
@@ -194,14 +199,22 @@ export function PriorityFeedbackForm({ category }: Props) {
       photo_url: photos[0] ?? null,
       photo_urls: photos,
       init_data: initData || undefined,
+      client_submission_id: clientSubmissionId,
+      client_created_at: clientCreatedAt,
     };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 seconds timeout
 
     try {
       const res = await fetch("/api/feedback", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+
       if (!res.ok) {
         const text = await res.text().catch(() => "");
         throw new Error(text || `HTTP ${res.status}`);
@@ -211,20 +224,86 @@ export function PriorityFeedbackForm({ category }: Props) {
       webApp?.HapticFeedback?.notificationOccurred("success");
       router.push(`/thanks?cat=${category.id}`);
     } catch (err) {
+      clearTimeout(timeoutId);
       console.error(err);
       track("feedback_submit_failure", {
         category: category.id,
         error: err instanceof Error ? err.message.slice(0, 200) : "unknown",
       });
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Не вдалось відправити. Спробуй ще раз.",
-      );
-      webApp?.HapticFeedback?.notificationOccurred("error");
+
+      // Check if it's a network error (TypeErrors like failed to fetch, or abort)
+      const isNetworkError =
+        err instanceof TypeError ||
+        (err instanceof DOMException && err.name === "AbortError") ||
+        (err instanceof Error && (err.message.includes("fetch") || err.message.includes("Network") || err.message.includes("aborted")));
+
+      if (isNetworkError && me) {
+        try {
+          const { saveOfflineSubmission } = await import("@/lib/offlineDb");
+
+          await saveOfflineSubmission({
+            id: clientSubmissionId,
+            client_submission_id: clientSubmissionId,
+            submitter_uid: me.uid,
+            submitter_store_id: me.store_id,
+            submitter_name: me.full_name,
+            payload,
+            client_created_at: clientCreatedAt,
+            status: "pending",
+            attempts: 0,
+          });
+
+          webApp?.HapticFeedback?.notificationOccurred("warning");
+          submittedRef.current = true;
+          setOfflineSaved(true);
+        } catch (saveErr) {
+          console.error("Failed to save offline submission:", saveErr);
+          setError(
+            saveErr instanceof Error ? saveErr.message : "Помилка при збереженні офлайн-заявки",
+          );
+          webApp?.HapticFeedback?.notificationOccurred("error");
+          setConfirmOpen(false);
+        }
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Не вдалось відправити. Спробуй ще раз.",
+        );
+        webApp?.HapticFeedback?.notificationOccurred("error");
+        setConfirmOpen(false);
+      }
+    } finally {
       setSubmitting(false);
-      setConfirmOpen(false);
     }
+  }
+
+  if (offlineSaved) {
+    return (
+      <div className="card animate-fade-up space-y-6 p-6 text-center">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 text-[32px] text-amber-500 shadow-soft">
+          💾
+        </div>
+        <div className="space-y-2">
+          <h2 className="font-display text-[20px] font-bold text-ink-900 leading-snug">
+            Збережено офлайн
+          </h2>
+          <p className="text-[14px] leading-relaxed text-ink-700">
+          Наразі немає зв&apos;язку. Ваш відгук успішно збережено в пам&apos;яті пристрою.
+          </p>
+          <p className="text-[13px] font-medium text-brand-600">
+            Він буде надісланий автоматично, коли з&apos;явиться інтернет і додаток буде відкритим.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => router.push("/")}
+          className="btn-primary w-full"
+        >
+          На головну
+        </button>
+      </div>
+    );
   }
 
   const productLabel = product?.name ?? (useFreeName ? freeName.trim() : "");
