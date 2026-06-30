@@ -163,7 +163,7 @@ describe("POST /api/auth/login", () => {
 
   it("ignores legacy user_id field (PIN alone is the credential)", async () => {
     const supabase = await import("@/lib/supabase");
-    const fake = fakeSupabase(SAMPLE_USER);
+    const fake = fakeSupabase(SAMPLE_ADMIN);
     vi.mocked(supabase.getServerSupabase).mockReturnValue(
       fake.client as unknown as ReturnType<typeof supabase.getServerSupabase>,
     );
@@ -185,8 +185,8 @@ describe("POST /api/auth/login", () => {
       user: { uid: string; role: string };
     };
     expect(body.ok).toBe(true);
-    expect(body.user.uid).toBe(SAMPLE_USER.id);
-    expect(body.user.role).toBe("seller");
+    expect(body.user.uid).toBe(SAMPLE_ADMIN.id);
+    expect(body.user.role).toBe("super_admin");
   });
 
   it("sets the session cookie on success", async () => {
@@ -233,5 +233,19 @@ describe("POST /api/auth/login", () => {
     // PIN-only flow can't attribute the failure to a user.
     expect(details).not.toHaveProperty("targetUserId");
     expect(details).not.toHaveProperty("actorUserId");
+  });
+
+  it("rejects seller role with 403", async () => {
+    const supabase = await import("@/lib/supabase");
+    const fake = fakeSupabase(SAMPLE_USER);
+    vi.mocked(supabase.getServerSupabase).mockReturnValue(
+      fake.client as unknown as ReturnType<typeof supabase.getServerSupabase>,
+    );
+
+    const { POST } = await loadRoute();
+    const res = await POST(loginRequest({ pin: "654321" }, "198.51.100.50"));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toContain("Доступ обмежено");
   });
 });
