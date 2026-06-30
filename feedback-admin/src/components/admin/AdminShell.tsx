@@ -11,10 +11,11 @@ import {
   Tag,
   Typography,
   theme as antdTheme,
+  Spin,
 } from "antd";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   adminBreadcrumbNames,
   adminRoute,
@@ -46,6 +47,11 @@ export function AdminShell({ children, user }: AdminShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { token } = antdTheme.useToken();
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const filteredRoute = useMemo(() => {
     if (!adminRoute?.routes) return adminRoute;
@@ -83,6 +89,20 @@ export function AdminShell({ children, user }: AdminShellProps) {
     router.push("/login");
     router.refresh();
   };
+
+  if (!mounted) {
+    return (
+      <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f5" }}>
+        <div style={{ width: 232, background: "#001529" }} />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          <div style={{ height: 56, background: "#fff", borderBottom: "1px solid #f0f0f0" }} />
+          <div style={{ flex: 1, padding: 24, display: "flex", justifyContent: "center", alignItems: "center" }}>
+            <Spin size="large" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ProLayout
