@@ -9,9 +9,7 @@ import {
   StopOutlined,
   CheckCircleOutlined,
   HistoryOutlined,
-  ShopOutlined,
   TeamOutlined,
-  SearchOutlined,
 } from "@ant-design/icons";
 import {
   ModalForm,
@@ -35,14 +33,7 @@ import {
   Timeline,
   Alert,
   Spin,
-  Row,
-  Col,
-  Card,
-  Avatar,
-  Badge,
   Segmented,
-  Select,
-  Input,
 } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { countryFlag, formatGeoLines } from "@/lib/geoip";
@@ -91,13 +82,8 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
 
-  // New tab state
-  const [activeTab, setActiveTab] = useState<"cards" | "admin">("cards");
-
-  // New filter states for cards view
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStore, setSelectedStore] = useState<number | null>(null);
-  const [sortBy, setSortBy] = useState<"feedbacks" | "name">("feedbacks");
+  // Tab state
+  const [activeTab, setActiveTab] = useState<"sellers" | "admin">("sellers");
 
   const { token } = antdTheme.useToken();
   const { message } = App.useApp();
@@ -116,33 +102,23 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
     return stats;
   }, [feedbacks]);
 
+  // Category emoji/title lookup built from feedbacks data (not imported from feedback-app)
+  const categoryLookup = useMemo(() => {
+    const map = new Map<string, { emoji: string; title: string }>();
+    for (const f of feedbacks) {
+      if (!map.has(f.category)) {
+        map.set(f.category, {
+          emoji: f.category_emoji ?? "📝",
+          title: f.category_title ?? f.category,
+        });
+      }
+    }
+    return map;
+  }, [feedbacks]);
+
   const sellers = useMemo(() => {
     return list.filter((u) => u.role === "seller");
   }, [list]);
-
-  const filteredSellers = useMemo(() => {
-    let out = sellers;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      out = out.filter((u) => u.full_name.toLowerCase().includes(q));
-    }
-    if (selectedStore !== null) {
-      out = out.filter((u) => u.store_id === selectedStore);
-    }
-
-    out = [...out].sort((a, b) => {
-      if (sortBy === "feedbacks") {
-        const aCount = sellerStats.get(a.id)?.total ?? 0;
-        const bCount = sellerStats.get(b.id)?.total ?? 0;
-        if (aCount !== bCount) {
-          return bCount - aCount; // descending
-        }
-      }
-      return a.full_name.localeCompare(b.full_name, "uk");
-    });
-
-    return out;
-  }, [sellers, searchQuery, selectedStore, sortBy, sellerStats]);
 
   useEffect(() => {
     if (!activityTarget) {
@@ -631,253 +607,235 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
     [filterStoreOptions, token, handleUnlock, handleToggleActive, currentUserRole, currentUserId, editForm],
   );
 
-  const CATEGORY_NAMES: Record<string, { label: string; emoji: string; color: string }> = {
-    missing: { label: "Нехватка", emoji: "📦", color: "orange" },
-    overstock: { label: "Надлишок", emoji: "📈", color: "blue" },
-    defect: { label: "Брак", emoji: "⚠️", color: "red" },
-    supply: { label: "Поставка", emoji: "🚛", color: "geekblue" },
-    idea: { label: "Ідея", emoji: "💡", color: "purple" },
-    spotted: { label: "Знайдено", emoji: "🔍", color: "cyan" },
-    tech: { label: "Технічне", emoji: "⚙️", color: "gold" },
-    voice: { label: "Голос", emoji: "🗣️", color: "magenta" },
-  };
+  const sellerFilterStoreOptions = useMemo(() => {
+    const seen = new Map<number, string>();
+    for (const u of sellers) {
+      if (u.store_id != null && u.store_name && !seen.has(u.store_id)) {
+        seen.set(u.store_id, u.store_name);
+      }
+    }
+    return Array.from(seen.entries())
+      .map(([id, name]) => ({ text: name, value: id }))
+      .sort((a, b) => a.text.localeCompare(b.text, "uk"));
+  }, [sellers]);
 
-  const formatLastLogin = (iso: string | null): string => {
-    if (!iso) return "ніколи";
-    return new Date(iso).toLocaleString("uk-UA", {
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const sellerColumns: ProColumns<AdminUser>[] = useMemo(
+    () => [
+      {
+        title: "Співробітник",
+        dataIndex: "full_name",
+        width: 260,
+        ellipsis: true,
+        sorter: (a, b) => (a.display_label ?? a.full_name).localeCompare(b.display_label ?? b.full_name, "uk"),
+        filterSearch: true,
+        onFilter: (value, row) => {
+          const q = String(value).toLowerCase();
+          return (
+            row.full_name.toLowerCase().includes(q) ||
+            (row.display_label ?? "").toLowerCase().includes(q) ||
+            (row.store_name ?? "").toLowerCase().includes(q)
+          );
+        },
+        render: (_, row) => (
+          <div style={{ lineHeight: 1.4 }}>
+            <Text strong style={{ color: row.is_active ? undefined : token.colorTextDisabled }}>
+              {row.display_label ?? row.full_name}
+            </Text>
+            {row.display_label && row.display_label !== row.full_name && (
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {row.full_name}
+                </Text>
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        title: "Магазин",
+        dataIndex: "store_id",
+        width: 180,
+        ellipsis: true,
+        filters: sellerFilterStoreOptions.length > 0 ? sellerFilterStoreOptions : undefined,
+        onFilter: (value, row) => row.store_id === value,
+        render: (_, row) =>
+          row.store_name ?? <Text type="secondary">—</Text>,
+      },
+      {
+        title: "Стан",
+        key: "state",
+        width: 110,
+        filters: (Object.keys(STATE_META) as RowState[]).map((k) => ({
+          text: STATE_META[k].text,
+          value: k,
+        })),
+        onFilter: (value, row) => rowState(row) === value,
+        render: (_, row) => {
+          const state = rowState(row);
+          const color =
+            state === "active" ? "green"
+            : state === "locked" ? "red"
+            : state === "no_pin" ? "orange"
+            : "default";
+          return <Tag color={color} bordered={false}>{STATE_META[state].text}</Tag>;
+        },
+      },
+      {
+        title: "Відгуки",
+        key: "feedback_cats",
+        width: 300,
+        render: (_, row) => {
+          const stats = sellerStats.get(row.id);
+          if (!stats || stats.total === 0) {
+            return <Text type="secondary">—</Text>;
+          }
+          const entries = Object.entries(stats.categories).sort(([, a], [, b]) => b - a);
+          const MAX_TAGS = 4;
+          const visible = entries.slice(0, MAX_TAGS);
+          const overflow = entries.length - MAX_TAGS;
 
-  const cardsView = (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Filters Toolbar */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 12,
-          background: token.colorBgContainer,
-          padding: 16,
-          borderRadius: token.borderRadiusLG,
-          border: `1px solid ${token.colorBorderSecondary}`,
-        }}
-      >
-        <Space size={12} wrap>
-          <Input
-            placeholder="Пошук за ПІБ..."
-            prefix={<SearchOutlined style={{ color: token.colorTextDescription }} />}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ width: 220 }}
-            allowClear
-          />
-          <Select
-            placeholder="Всі магазини"
-            style={{ width: 220 }}
-            value={selectedStore ?? undefined}
-            onChange={setSelectedStore}
-            allowClear
-            options={stores.map((s) => ({ label: s.name, value: s.id }))}
-          />
-        </Space>
-        
-        <Space size={12}>
-          <Text type="secondary" style={{ fontSize: 13 }}>Сортувати:</Text>
-          <Segmented<"feedbacks" | "name">
-            value={sortBy}
-            onChange={setSortBy}
-            options={[
-              { label: "За активністю", value: "feedbacks" },
-              { label: "За алфавітом", value: "name" },
-            ]}
-          />
-        </Space>
-      </div>
-
-      {filteredSellers.length === 0 ? (
-        <Alert
-          message="Співробітників не знайдено"
-          description="Спробуйте змінити параметри пошуку або фільтрації."
-          type="info"
-          showIcon
-          style={{ borderRadius: token.borderRadiusLG }}
-        />
-      ) : (
-        <Row gutter={[16, 16]}>
-          {filteredSellers.map((seller) => {
-            const stats = sellerStats.get(seller.id) || { total: 0, categories: {} };
-            const isActive = seller.is_active;
-            const hasPin = seller.has_pin;
-            const isLocked = seller.locked_until && new Date(seller.locked_until) > new Date();
-            
-            // Get initials for avatar
-            const initials = seller.full_name
-              .split(" ")
-              .map((n) => n[0])
-              .join("")
-              .slice(0, 2)
-              .toUpperCase();
-
-            // Status tag
-            let statusTag = <Tag color="green">Активна</Tag>;
-            if (!isActive) {
-              statusTag = <Tag color="default">Неактивна</Tag>;
-            } else if (isLocked) {
-              statusTag = <Tag color="error">Заблокована</Tag>;
-            } else if (!hasPin) {
-              statusTag = <Tag color="warning">Без PIN</Tag>;
-            }
-
-            return (
-              <Col xs={24} sm={12} md={8} lg={6} key={seller.id}>
-                <Card
-                  hoverable
-                  style={{
-                    borderRadius: token.borderRadiusLG,
-                    border: `1px solid ${token.colorBorderSecondary}`,
-                    overflow: "hidden",
-                    cursor: "pointer",
-                  }}
-                  styles={{ body: { padding: 16 } }}
-                  onClick={() => setActivityTarget(seller)}
-                  actions={[
-                    <Tooltip key="edit" title="Редагувати">
-                      <EditOutlined
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditTarget(seller);
-                          editForm.setFieldsValue({
-                            full_name: seller.full_name,
-                            display_label: seller.display_label,
-                            role: seller.role,
-                            store_id: seller.store_id,
-                            is_active: seller.is_active,
-                          });
-                        }}
-                      />
-                    </Tooltip>,
-                    <Tooltip key="reset" title={seller.has_pin ? "Змінити PIN" : "Створити PIN"}>
-                      <KeyOutlined
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setResetTarget(seller);
-                        }}
-                      />
-                    </Tooltip>,
-                    <Tooltip key="activity" title="Активність">
-                      <HistoryOutlined
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActivityTarget(seller);
-                        }}
-                      />
-                    </Tooltip>,
-                  ]}
+          return (
+            <Space size={4} wrap>
+              {visible.map(([catId, count]) => {
+                const meta = categoryLookup.get(catId) ?? { emoji: "📝", title: catId };
+                return (
+                  <Tooltip key={catId} title={`${meta.title}: ${count}`}>
+                    <Tag bordered={false} style={{ fontSize: 11, margin: 0, paddingInline: 6 }}>
+                      {meta.emoji} {count}
+                    </Tag>
+                  </Tooltip>
+                );
+              })}
+              {overflow > 0 && (
+                <Tooltip
+                  title={entries
+                    .slice(MAX_TAGS)
+                    .map(([catId, count]) => {
+                      const meta = categoryLookup.get(catId) ?? { emoji: "📝", title: catId };
+                      return `${meta.emoji} ${meta.title}: ${count}`;
+                    })
+                    .join("\n")}
+                  overlayStyle={{ whiteSpace: "pre-line" }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                    <Avatar
-                      size={48}
-                      style={{
-                        background: isActive ? `linear-gradient(135deg, ${token.colorPrimary}, ${token.colorPrimaryActive})` : token.colorTextDisabled,
-                        color: "#fff",
-                        fontWeight: 600,
-                        fontSize: 16,
-                      }}
-                    >
-                      {initials}
-                    </Avatar>
-                    <div style={{ overflow: "hidden", flex: 1 }}>
-                      <Text strong style={{ display: "block", fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {seller.full_name}
-                      </Text>
-                      <div style={{ marginTop: 2 }}>{statusTag}</div>
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: 12 }}>
-                    <Space size={4} style={{ color: token.colorTextDescription, fontSize: 13 }}>
-                      <ShopOutlined />
-                      <Text style={{ fontSize: 13 }}>
-                        {seller.store_name || "Не прикріплено"}
-                      </Text>
-                    </Space>
-                  </div>
-
-                  {/* Feedback Count Stats */}
-                  <div
-                    style={{
-                      background: token.colorFillAlter,
-                      borderRadius: token.borderRadius,
-                      padding: "8px 12px",
-                      marginBottom: 12,
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                      <Text type="secondary" style={{ fontSize: 12 }}>Надіслано відгуків:</Text>
-                      <Text strong style={{ fontSize: 18, color: token.colorPrimary }}>{stats.total}</Text>
-                    </div>
-
-                    {stats.total > 0 && (
-                      <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>
-                        {Object.entries(stats.categories).map(([catId, count]) => {
-                          const catMeta = CATEGORY_NAMES[catId] || { label: catId, emoji: "📝", color: "default" };
-                          return (
-                            <Tooltip key={catId} title={`${catMeta.label}: ${count}`}>
-                              <Tag bordered={false} color={catMeta.color} style={{ fontSize: 11, margin: 0, paddingInline: 6 }}>
-                                {catMeta.emoji} {count}
-                              </Tag>
-                            </Tooltip>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Last Login Info */}
-                  <div style={{ borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <Text type="secondary" style={{ fontSize: 11 }}>Останній вхід:</Text>
-                    {seller.last_login ? (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                        <Text style={{ fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
-                          {formatLastLogin(seller.last_login)}
-                        </Text>
-                        <UserLastLocation row={seller} />
-                      </div>
-                    ) : (
-                      <Text type="secondary" style={{ fontSize: 11 }}>ніколи</Text>
-                    )}
-                  </div>
-                </Card>
-              </Col>
-            );
-          })}
-        </Row>
-      )}
-    </div>
+                  <Tag bordered={false} style={{ fontSize: 11, margin: 0, paddingInline: 6 }}>+{overflow}</Tag>
+                </Tooltip>
+              )}
+            </Space>
+          );
+        },
+      },
+      {
+        title: "Всього",
+        key: "total_feedbacks",
+        width: 100,
+        align: "right",
+        sorter: (a, b) => (sellerStats.get(a.id)?.total ?? 0) - (sellerStats.get(b.id)?.total ?? 0),
+        defaultSortOrder: "descend",
+        render: (_, row) => {
+          const total = sellerStats.get(row.id)?.total ?? 0;
+          return (
+            <Text strong style={{ fontSize: 16, color: total > 0 ? token.colorPrimary : token.colorTextDisabled }}>
+              {total}
+            </Text>
+          );
+        },
+      },
+      {
+        title: "Дії",
+        key: "seller_actions",
+        valueType: "option",
+        width: 160,
+        render: (_, row) => {
+          const isEditable =
+            currentUserRole === "super_admin" ||
+            (currentUserRole === "admin" && row.role === "seller");
+          return [
+            <Tooltip key="activity" title="Відгуки">
+              <Button
+                type="link"
+                size="small"
+                icon={<HistoryOutlined />}
+                onClick={() => setActivityTarget(row)}
+              />
+            </Tooltip>,
+            <Tooltip key="edit" title="Редагувати">
+              <Button
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                disabled={!isEditable}
+                onClick={() => {
+                  setEditTarget(row);
+                  editForm.setFieldsValue({
+                    full_name: row.full_name,
+                    display_label: row.display_label,
+                    role: row.role,
+                    store_id: row.store_id,
+                    is_active: row.is_active,
+                  });
+                }}
+              />
+            </Tooltip>,
+            <Tooltip key="pin" title={row.has_pin ? "Змінити PIN" : "Створити PIN"}>
+              <Button
+                type="link"
+                size="small"
+                icon={row.has_pin ? <ReloadOutlined /> : <KeyOutlined />}
+                disabled={!isEditable}
+                onClick={() => setResetTarget(row)}
+              />
+            </Tooltip>,
+          ];
+        },
+      },
+    ],
+    [sellerFilterStoreOptions, sellerStats, categoryLookup, token, currentUserRole, editForm],
   );
 
   return (
     <>
       <div style={{ marginBottom: 16 }}>
-        <Segmented<"cards" | "admin">
+        <Segmented<"sellers" | "admin">
           value={activeTab}
           onChange={setActiveTab}
           size="large"
           options={[
-            { label: "Картки співробітників", value: "cards" },
+            { label: "Співробітники", value: "sellers" },
             { label: "Керування доступом", value: "admin" },
           ]}
         />
       </div>
 
-      {activeTab === "cards" ? (
-        cardsView
+      {activeTab === "sellers" ? (
+        <ProTable<AdminUser>
+          className="admin-sellers-table"
+          rowKey="id"
+          dataSource={sellers}
+          columns={sellerColumns}
+          search={false}
+          size="small"
+          tableLayout="fixed"
+          options={{
+            density: true,
+            fullScreen: true,
+            reload: false,
+            setting: true,
+          }}
+          pagination={{
+            pageSize: 25,
+            showSizeChanger: true,
+            showTotal: (total) => `${total} записів`,
+          }}
+          scroll={{ x: 1110 }}
+          headerTitle={
+            <Space size={8}>
+              <Text strong>Співробітники</Text>
+              <Tag color="blue" bordered={false}>
+                {sellers.length}
+              </Tag>
+            </Space>
+          }
+        />
       ) : (
         <ProTable<AdminUser>
           className="admin-users-table"
