@@ -5,6 +5,12 @@
 # - Only inspects what is actually staged for this commit (via `--staged`),
 #   so it stays fast even on a large repo.
 # - Skip with `git commit --no-verify` only if you know what you're doing.
+#
+# This project lives in a subdirectory of the git repo (feedback-admin/),
+# but core.hooksPath makes git run hooks with the repo root as cwd. `cd`
+# into this script's own directory first so the relative --config path
+# below resolves correctly regardless of where git invoked us from.
+cd "$(dirname "$0")/.." || exit 1
 
 if ! command -v gitleaks >/dev/null 2>&1; then
   cat <<'EOF' >&2

@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepare": "husky",
+    "prepare": "cd .. && husky feedback-admin/.husky",
     "scan:secrets": "gitleaks detect --config=.gitleaks.toml --redact --verbose"
   },
   "dependencies": {
