@@ -4,6 +4,7 @@ import {
   getKyivClock,
   REPORT_HOUR_KYIV,
 } from "@/lib/dailyReport";
+import { checkCronAuth } from "@/lib/cronAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,23 +19,9 @@ export const dynamic = "force-dynamic";
  * checking that the current Kyiv hour is 21; the off-DST run exits early.
  */
 export async function GET(req: Request) {
-  // Vercel Cron sends Authorization: Bearer ${CRON_SECRET}.
-  const authHeader = req.headers.get("authorization") ?? "";
-  const cronSecret = process.env.CRON_SECRET;
-  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-
-  if (cronSecret) {
-    if (
-      !authHeader.startsWith("Bearer ") ||
-      authHeader.slice(7) !== cronSecret
-    ) {
-      return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
-    }
-  } else if (process.env.NODE_ENV === "production" && !isVercelCron) {
-    return NextResponse.json(
-      { error: "cron_secret_not_configured" },
-      { status: 503 },
-    );
+  const auth = checkCronAuth(req);
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   // Only run when local Kyiv hour is 21 (covers DST without dual triggering).

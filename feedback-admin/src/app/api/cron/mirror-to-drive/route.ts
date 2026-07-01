@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { mirrorPendingPhotos } from "@/lib/driveMirror";
+import { checkCronAuth } from "@/lib/cronAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,22 +17,9 @@ export const dynamic = "force-dynamic";
  * a backlog if the daily run failed.
  */
 export async function GET(req: Request) {
-  const authHeader = req.headers.get("authorization") ?? "";
-  const cronSecret = process.env.CRON_SECRET;
-  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-
-  if (cronSecret) {
-    if (
-      !authHeader.startsWith("Bearer ") ||
-      authHeader.slice(7) !== cronSecret
-    ) {
-      return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
-    }
-  } else if (process.env.NODE_ENV === "production" && !isVercelCron) {
-    return NextResponse.json(
-      { error: "cron_secret_not_configured" },
-      { status: 503 },
-    );
+  const auth = checkCronAuth(req);
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   const result = await mirrorPendingPhotos();
