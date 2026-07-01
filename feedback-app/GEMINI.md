@@ -1,13 +1,17 @@
-# 💖 Галя слухає — FeedbackGB | Project Context
+# 💖 Галя слухає — FeedbackGB | Project Context (Sellers App)
 
-This document serves as the primary instructional context for Gemini CLI when working on the **FeedbackGB** project.
+This document serves as the primary instructional context for AI agents working on the **feedback-app** package.
 
 ## 🌟 Project Overview
 **FeedbackGB** is an internal Telegram Mini App for the "Галя Балувана" chain. It allows shop assistants to report inventory issues, ideas, and technical problems.
 
+The repository is a monorepo with **two independent Next.js apps deployed as separate Vercel projects**:
+- `feedback-app/` (this package): the Telegram Mini App for sellers.
+- `feedback-admin/`: the management dashboard (Ant Design Pro). See its own `GEMINI.md`.
+
 ### Core Stack
-- **Framework**: Next.js 14 (App Router, Node.js & Edge runtimes)
-- **Styling**: Tailwind CSS (App) + Ant Design 5 / ProComponents (Admin)
+- **Framework**: Next.js 14 (App Router, Node.js runtime)
+- **Styling**: Tailwind CSS (pastel palette, mobile-first)
 - **Backend**: Supabase (PostgreSQL `feedbackgb` schema, Storage, PIN-based Auth)
 - **Integration**: Telegram Web App SDK, Google Drive API (Mirroring)
 - **Observability**: PostHog (Analytics), Audit Logs (DB Triggers)
@@ -16,11 +20,12 @@ This document serves as the primary instructional context for Gemini CLI when wo
 
 ## 🏗 Architecture & Key Components
 
-### 1. Directory Structure (Route Groups)
-The app is split into two primary experiences using Next.js Route Groups:
+### 1. Directory Structure
 - `src/app/(app)/`: The Telegram Mini App (Sellers). Minimal dependencies, mobile-first.
-- `src/app/(admin)/`: The Management Dashboard. Uses Ant Design Pro for complex tables and charts.
-- `src/app/api/`: API routes (Auth, Feedback, Admin, Cron, Public Redirects).
+- `src/app/api/`: API routes (Auth, Feedback submission, Products, Cron, Public Redirects).
+
+### ⚠️ Shared code duplicated across both apps
+Most of `src/lib/` (e.g. `categories.ts`, `session.ts`, `rateLimit.ts`, `telegram.ts`, `supabase.ts`, `dailyReport.ts`, `summary.ts`, `geoip.ts`, `cronAuth.ts`, `validation.ts`, `types.ts`) and `src/middleware.ts` exist as **copies in both `feedback-app` and `feedback-admin`**. When you change one of these files, apply the identical change to the sibling app and keep the copies byte-identical — drift here has already caused a security fix to land in only one app.
 
 ### 2. Domain & Logic (`src/lib/`)
 Follows a "Clean Architecture" inspired approach:
@@ -59,10 +64,7 @@ Always ensure `.env.local` is populated from `.env.example`. Key variables inclu
 3. (Optional) Create a specific View in Supabase for the category.
 
 ### 2. Admin UI
-The Admin interface uses `@ant-design/pro-components`.
-- Use `ProTable` for data grids.
-- Use `ProLayout` for the shell (sidebar configuration in `src/lib/admin/menu.tsx`).
-- Themes and brand tokens are managed in `src/lib/admin/theme.ts`.
+The admin panel is a **separate app** in `../feedback-admin` (Ant Design Pro). Do not add admin routes or admin UI here.
 
 ### 3. Documentation First
 Refer to the `docs/` directory for deep dives:
@@ -80,7 +82,6 @@ Refer to the `docs/` directory for deep dives:
 ## 📂 Key File Map
 - `src/lib/categories.ts`: Feedback definitions.
 - `src/lib/sla.ts`: Logic for "warm", "stale", and "overdue" feedback.
-- `src/app/(admin)/admin/page.tsx`: Main admin dashboard.
 - `src/app/api/feedback/route.ts`: Core feedback submission endpoint.
 - `src/middleware.ts`: Auth gate and role-based routing.
 - `supabase/`: SQL migrations and schema definitions.
