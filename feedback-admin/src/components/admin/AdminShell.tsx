@@ -5,7 +5,6 @@ import { ProLayout } from "@ant-design/pro-components";
 import {
   App,
   Avatar,
-  Button,
   Dropdown,
   Space,
   Tag,
@@ -145,7 +144,6 @@ export function AdminShell({ children, user }: AdminShellProps) {
         </span>
       }
       layout="side"
-      disableMobile
       contentWidth="Fluid"
       fixSiderbar
       fixedHeader
@@ -212,19 +210,6 @@ export function AdminShell({ children, user }: AdminShellProps) {
           </Dropdown>
         ),
       }}
-      actionsRender={() => [
-        <span key="role" className="admin-shell__role-pill">
-          {roleLabel(user.role)}
-        </span>,
-        <Button
-          key="logout"
-          aria-label="Вийти"
-          type="text"
-          shape="circle"
-          icon={<LogoutOutlined />}
-          onClick={onLogout}
-        />,
-      ]}
       menuFooterRender={(props) =>
         props?.collapsed ? null : (
           <div className="admin-shell__footer">

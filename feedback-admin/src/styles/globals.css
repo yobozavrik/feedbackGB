@@ -211,19 +211,6 @@ body:has(.admin-shell) {
   font-weight: 600;
 }
 
-.admin-shell__role-pill {
-  display: inline-flex;
-  height: 26px;
-  align-items: center;
-  border: 1px solid rgb(var(--border));
-  border-radius: 9px;
-  background: rgb(var(--surface));
-  color: rgb(var(--ink-700));
-  font-size: 12px;
-  font-weight: 600;
-  padding-inline: 10px;
-}
-
 .admin-shell__footer {
   padding: 12px 16px;
   border-top: 1px solid rgb(var(--border-2));
