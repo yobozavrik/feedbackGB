@@ -420,6 +420,12 @@ body {
   border-bottom: 1px solid rgb(var(--border-2));
 }
 
+.admin-audit-table .ant-pro-table-list-toolbar,
+.admin-funnel-stuck-table .ant-pro-table-list-toolbar {
+  padding-inline: 16px;
+  border-bottom: 1px solid rgb(var(--border-2));
+}
+
 .admin-stores-table .ant-pro-card {
   overflow: hidden;
 }
@@ -450,6 +456,26 @@ body {
 .admin-page .ant-segmented-item-selected {
   color: rgb(var(--brand-600));
   font-weight: 600;
+}
+
+.admin-funnel-page .ant-card {
+  overflow: hidden;
+}
+
+.admin-funnel-kpi-row .ant-pro-statistic-card {
+  min-height: 112px;
+}
+
+.admin-funnel-stuck-table .ant-table-wrapper .ant-table,
+.admin-audit-table .ant-table-wrapper .ant-table {
+  box-shadow: none;
+}
+
+.admin-page .card {
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--admin-radius-lg);
+  background: rgb(var(--elev));
+  box-shadow: var(--admin-shadow);
 }
 
 @layer components {
