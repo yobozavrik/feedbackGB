@@ -36,15 +36,18 @@ import {
   type AgingBucket,
 } from "@/lib/sla";
 import { getClientSupabase } from "@/lib/supabase";
+import {
+  FEEDBACK_STATUSES,
+  FEEDBACK_STATUS_META,
+  isFeedbackStatus,
+  type FeedbackStatus,
+} from "@/lib/feedbackStatus";
 import type { AdminOption, FeedRow } from "./page";
 
 const { Text, Paragraph, Title } = Typography;
 const { TextArea } = Input;
 
 type Period = "all" | "today" | "week" | "month";
-type Status = "new" | "in_progress" | "resolved" | "rejected";
-
-const STATUSES: Status[] = ["new", "in_progress", "resolved", "rejected"];
 
 interface CategoryMeta {
   id: string;
@@ -78,13 +81,6 @@ const TINT_COLOR: Record<string, string> = {
   spotted: "cyan",
   tech: "gold",
   voice: "magenta",
-};
-
-const STATUS_META: Record<Status, { text: string; color: string }> = {
-  new: { text: "Нове", color: "green" },
-  in_progress: { text: "В роботі", color: "gold" },
-  resolved: { text: "Закрито", color: "default" },
-  rejected: { text: "Відхилено", color: "purple" },
 };
 
 const AGING_TAG: Record<AgingBucket, string> = {
@@ -129,10 +125,6 @@ function authorOf(r: FeedRow): string {
     r.tg_username ||
     "анонім"
   );
-}
-
-function isStatus(s: string): s is Status {
-  return (STATUSES as string[]).includes(s);
 }
 
 function playNotificationSound() {
@@ -265,8 +257,8 @@ export function AdminClient({
 
   const statusFilters = useMemo(
     () =>
-      (Object.keys(STATUS_META) as Status[]).map((value) => ({
-        text: STATUS_META[value].text,
+      (Object.keys(FEEDBACK_STATUS_META) as FeedbackStatus[]).map((value) => ({
+        text: FEEDBACK_STATUS_META[value].text,
         value,
       })),
     [],
@@ -394,8 +386,8 @@ export function AdminClient({
         filters: statusFilters,
         onFilter: (value, row) => row.status === value,
         render: (_, row) => {
-          const meta = isStatus(row.status)
-            ? STATUS_META[row.status]
+          const meta = isFeedbackStatus(row.status)
+            ? FEEDBACK_STATUS_META[row.status]
             : { text: row.status, color: "default" };
           return (
             <Tag color={meta.color} bordered={false}>
@@ -561,14 +553,14 @@ function FeedDrawer({
   // Драфт-стан керується ключем по id, щоб при перемиканні рядка все
   // скинулось без явних effect-ів.
   const [draftKey, setDraftKey] = useState<string | null>(null);
-  const [draftStatus, setDraftStatus] = useState<Status>("new");
+  const [draftStatus, setDraftStatus] = useState<FeedbackStatus>("new");
   const [draftAssignee, setDraftAssignee] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
 
   if (row && row.id !== draftKey) {
     setDraftKey(row.id);
-    setDraftStatus(isStatus(row.status) ? row.status : "new");
+    setDraftStatus(isFeedbackStatus(row.status) ? row.status : "new");
     setDraftAssignee(row.assigned_to);
     setComment("");
   } else if (!row && draftKey !== null) {
@@ -670,8 +662,8 @@ function FeedDrawer({
   }
 
   const fieldEntries = row.fields ? Object.entries(row.fields) : [];
-  const meta = isStatus(row.status)
-    ? STATUS_META[row.status]
+  const meta = isFeedbackStatus(row.status)
+    ? FEEDBACK_STATUS_META[row.status]
     : { text: row.status, color: "default" };
   const tintColor = category ? TINT_COLOR[category.tint] ?? "default" : "default";
 
@@ -782,11 +774,11 @@ function FeedDrawer({
                 Статус
               </Text>
               <div style={{ marginTop: 4 }}>
-                <Segmented<Status>
+                <Segmented<FeedbackStatus>
                   value={draftStatus}
-                  onChange={(v) => setDraftStatus(v as Status)}
-                  options={STATUSES.map((s) => ({
-                    label: STATUS_META[s].text,
+                  onChange={(v) => setDraftStatus(v as FeedbackStatus)}
+                  options={FEEDBACK_STATUSES.map((s) => ({
+                    label: FEEDBACK_STATUS_META[s].text,
                     value: s,
                   }))}
                 />
@@ -851,7 +843,7 @@ function FeedDrawer({
               {dirty ? (
                 <Button
                   onClick={() => {
-                    setDraftStatus(isStatus(row.status) ? row.status : "new");
+                    setDraftStatus(isFeedbackStatus(row.status) ? row.status : "new");
                     setDraftAssignee(row.assigned_to);
                     setComment("");
                   }}

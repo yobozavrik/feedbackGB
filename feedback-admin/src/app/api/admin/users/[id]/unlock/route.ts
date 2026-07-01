@@ -3,11 +3,10 @@ import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase";
 import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
 import { ipFromRequest, logAudit, uaFromRequest } from "@/lib/audit";
+import { isUuid } from "@/lib/validation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * POST /api/admin/users/<uuid>/unlock
@@ -25,7 +24,7 @@ export async function POST(
   }
 
   const userId = params.id;
-  if (!UUID_RE.test(userId)) {
+  if (!isUuid(userId)) {
     return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
   }
 

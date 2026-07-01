@@ -28,6 +28,7 @@ import {
 } from "antd";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { FEEDBACK_STATUS_META } from "@/lib/feedbackStatus";
 import type {
   StoreFeedRow,
   StoreRow,
@@ -42,22 +43,24 @@ const TREND_WINDOW_DAYS = 30;
 const TOP_PRODUCTS = 8;
 const RECENT_FEEDBACK = 10;
 
-const STATUS_LABEL: Record<string, string> = {
-  new: "Нове",
-  in_progress: "В роботі",
-  resolved: "Закрито",
-  duplicate: "Дубль",
-};
-
+// Text labels come from the shared feedbackStatus source of truth (identical
+// across admin pages). Colors stay local: this page uses antd's
+// status-token palette (processing/warning/success/error), distinct from
+// the palette admin-client.tsx uses for the same statuses — that's a
+// deliberate per-page visual choice, not a bug, so we don't unify it.
 const STATUS_TAG: Record<
   string,
-  "default" | "processing" | "success" | "warning"
+  "default" | "processing" | "success" | "warning" | "error"
 > = {
   new: "processing",
   in_progress: "warning",
   resolved: "success",
-  duplicate: "default",
+  rejected: "error",
 };
+
+function statusLabel(status: string): string {
+  return (FEEDBACK_STATUS_META as Record<string, { text: string }>)[status]?.text ?? status;
+}
 
 const CATEGORY_TAG_COLOR: Record<string, string> = {
   missing_item: "orange",
@@ -271,7 +274,7 @@ export function StoresClient({
       }))
       .sort((a, b) => b.value - a.value);
     const statusData = Array.from(statusCount.entries()).map(([k, v]) => ({
-      type: STATUS_LABEL[k] ?? k,
+      type: statusLabel(k),
       value: v,
     }));
 
@@ -775,7 +778,7 @@ export function StoresClient({
                             color={STATUS_TAG[r.status] ?? "default"}
                             bordered={false}
                           >
-                            {STATUS_LABEL[r.status] ?? r.status}
+                            {statusLabel(r.status)}
                           </Tag>
                           <Text
                             type="secondary"

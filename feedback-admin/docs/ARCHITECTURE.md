@@ -270,6 +270,8 @@ flowchart LR
 | `src/lib/summary.ts` | `buildSummary(payload, user, storeName)` → читабельний рядок для аналітики/AI. | ✅ |
 | `src/lib/telegram.ts` | `validateInitData(initData, botToken)` — HMAC валідація Telegram WebApp init-data. | ✅ |
 | `src/lib/sla.ts` | SLA / aging-домен: пороги (`AGING_HOURS = {warm:4, stale:24, overdue:72}`), функції `isOpen(status)`, `ageMs(createdAt)`, `bucketFor(ms)`, `formatAge(ms)` із укр-плюралізацією днів. Чисті функції, без I/O і без залежності від `Date.now` (приймають `now` параметром). Споживачі: `DashboardKPI` (картка «Прострочено»), `admin-client.tsx` (колонка «Висить» у ProTable). | ✅ |
+| `src/lib/feedbackStatus.ts` | `FEEDBACK_STATUSES` / `FeedbackStatus` / `isFeedbackStatus` / `FEEDBACK_STATUS_META` (текст + колір для 4 статусів) — **єдине джерело правди**, синхронізоване з CHECK-constraint `supabase/schema.sql:291`. Споживачі: `api/admin/feedback/[id]/route.ts` (валідація), `admin-client.tsx` (Segmented + ProTable колонка), `stores/stores-client.tsx` (лейбли; колір лишається локальним — див. нижче). | ✅ |
+| `src/lib/validation.ts` | `isUuid(value)` — спільний UUID-валідатор для 7 admin/API роутів. | ✅ |
 
 **Інваріант домену:** структура `feedback` повинна збігатися між
 `categories.ts`, `supabase/schema.sql:categories` (seed) і
@@ -715,7 +717,7 @@ diff пише тригер БД, він не знає про текстовий 
 | Місце | Що змішано | Чому навмисно | Коли рефакторити |
 |---|---|---|---|
 | `src/app/api/feedback/route.ts` | Use case `createFeedback` живе як inline-функція в адаптері | На цьому розмірі окремий файл — оверкіл; route і use case 1:1 | Коли з'явиться другий вхід (наприклад, webhook бота) для того самого use case |
-| `src/app/api/admin/feedback/[id]/route.ts` | Use case `updateFeedbackLifecycle` теж inline; константа `STATUSES` дублюється з міграцією 007 (CHECK у БД) і з `FeedbackStatus` enum-ом у OpenAPI | Один callsite, swap-у нема. Дубль масиву явний і малий — компроміс кращий за shared module із cycle-залежністю | Коли з'явиться bulk-update (вибір кількох рядків у ProTable і одразу change status) — винести у `src/lib/feedback/lifecycle.ts` |
+| `src/app/api/admin/feedback/[id]/route.ts` | Use case `updateFeedbackLifecycle` живе inline у роут-хендлері | Один callsite, swap-у нема | Коли з'явиться bulk-update (вибір кількох рядків у ProTable і одразу change status) — винести у `src/lib/feedback/lifecycle.ts` |
 | `src/lib/dailyReport.ts` (~1080 рядків) | Use case + telegram-adapter (`sendTelegramHtml`, `sendTelegramPhoto`) + форматер | Звіт — єдиний споживач Telegram-API; outflowing helpers | Коли з'явиться webhook бот (planned, патч `aiAgent.ts`/`telegramApi.ts` лежить поруч) |
 | `src/lib/supabase.ts` | `LooseClient = SupabaseClient<any, any, any>` | Немає codegen типів зі схеми `feedbackgb` | Додати `supabase gen types` у CI; замінити `any` на згенерований `Database` |
 | `src/middleware.ts` | Route-list зашитий у код (`/login`, `/api/auth/`, `/api/cron/`) | Маленький список, додавати один-два рази на квартал | Коли з'явиться 5+ публічних шляхів — винести у конфіг |

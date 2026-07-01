@@ -3,11 +3,10 @@ import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase";
 import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
+import { isUuid } from "@/lib/validation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface AdminUserRow {
   id: string;
@@ -36,7 +35,7 @@ export async function PATCH(
   { params }: { params: { id: string } },
 ) {
   const id = params.id;
-  if (!UUID_RE.test(id)) {
+  if (!isUuid(id)) {
     return NextResponse.json({ error: "Недійсний UUID користувача" }, { status: 400 });
   }
 
@@ -254,7 +253,7 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   const id = params.id;
-  if (!UUID_RE.test(id)) {
+  if (!isUuid(id)) {
     return NextResponse.json({ error: "Недійсний UUID користувача" }, { status: 400 });
   }
 
