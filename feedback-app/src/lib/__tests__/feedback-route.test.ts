@@ -255,3 +255,145 @@ describe("POST /api/feedback", () => {
     expect(body.error).toBe("Conflict: submission ID already exists under another user");
   });
 });
+
+/**
+ * Characterization tests for the payload validation rules. They lock the
+ * exact status codes and error strings the route returns today, so the
+ * validation logic can be moved/refactored without changing behavior.
+ */
+describe("POST /api/feedback — payload validation", () => {
+  beforeEach(async () => {
+    vi.resetModules();
+    mockSupabaseInsert.mockReset();
+    mockSupabaseSelect.mockReset();
+    mockSupabaseRpc.mockReset();
+    mockSessionCookieValue = "valid-seller-token";
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function loadRoute() {
+    return await import("@/app/api/feedback/route");
+  }
+
+  async function expectRejected(payload: unknown, error: string) {
+    const { POST } = await loadRoute();
+    const res = await POST(feedbackRequest(payload));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe(error);
+    expect(mockSupabaseInsert).not.toHaveBeenCalled();
+  }
+
+  it("rejects an unknown category", async () => {
+    await expectRejected({ category: "nonsense", fields: {} }, "Unknown category");
+  });
+
+  it("rejects a payload with too many fields", async () => {
+    const fields: Record<string, string> = {};
+    for (let i = 0; i < 41; i += 1) fields[`f${i}`] = "v";
+    await expectRejected(
+      { category: "missing_item", product_id: 1, quantity: 1, fields },
+      "Too many fields",
+    );
+  });
+
+  it("rejects an overlong field value", async () => {
+    await expectRejected(
+      {
+        category: "missing_item",
+        product_id: 1,
+        quantity: 1,
+        fields: { comment: "x".repeat(4001) },
+      },
+      "Field too long: comment",
+    );
+  });
+
+  it("rejects a field of unsupported type", async () => {
+    await expectRejected(
+      {
+        category: "missing_item",
+        product_id: 1,
+        quantity: 1,
+        fields: { comment: true },
+      },
+      "Invalid field type: comment",
+    );
+  });
+
+  it("rejects when a required category field is missing", async () => {
+    await expectRejected(
+      { category: "supply_problem", fields: {} },
+      "Missing required field: supplier_or_item",
+    );
+  });
+
+  it("rejects a product category without product_id or item_name", async () => {
+    await expectRejected(
+      { category: "missing_item", fields: {} },
+      "Обери товар або введи назву",
+    );
+  });
+
+  it("rejects a product_id submission without a positive quantity", async () => {
+    await expectRejected(
+      { category: "missing_item", product_id: 1, fields: {} },
+      "Вкажи кількість",
+    );
+  });
+
+  it("rejects more than 5 photos", async () => {
+    await expectRejected(
+      {
+        category: "missing_item",
+        product_id: 1,
+        quantity: 1,
+        fields: {},
+        photo_urls: Array.from({ length: 6 }, () => "data:image/png;base64,aaaa"),
+      },
+      "Too many photos: max 5",
+    );
+  });
+
+  it("drops a non-data-URL photo instead of storing it", async () => {
+    mockSupabaseInsert.mockResolvedValue({ error: null });
+    const { POST } = await loadRoute();
+
+    const res = await POST(
+      feedbackRequest({
+        category: "missing_item",
+        product_id: 1,
+        quantity: 1,
+        fields: {},
+        photo_url: "https://evil.example.com/x.jpg",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockSupabaseInsert).toHaveBeenCalledTimes(1);
+    const record = mockSupabaseInsert.mock.calls[0][0];
+    expect(record.photo_url).toBeNull();
+  });
+
+  it("trims and length-caps store_label", async () => {
+    mockSupabaseInsert.mockResolvedValue({ error: null });
+    const { POST } = await loadRoute();
+
+    const res = await POST(
+      feedbackRequest({
+        category: "missing_item",
+        product_id: 1,
+        quantity: 1,
+        fields: {},
+        store_label: `  ${"a".repeat(100)}  `,
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const record = mockSupabaseInsert.mock.calls[0][0];
+    expect(record.store_label).toBe("a".repeat(80));
+  });
+});
