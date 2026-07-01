@@ -3,16 +3,14 @@ import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase";
 import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
 import { ipFromRequest, logAudit, uaFromRequest } from "@/lib/audit";
+import { isUuid } from "@/lib/validation";
+import { FEEDBACK_STATUSES, type FeedbackStatus } from "@/lib/feedbackStatus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const STATUSES = ["new", "in_progress", "resolved", "rejected"] as const;
-type Status = (typeof STATUSES)[number];
-
 interface PatchBody {
-  status?: Status;
+  status?: FeedbackStatus;
   assigned_to?: string | null;
   comment?: string | null;
 }
@@ -47,7 +45,7 @@ export async function PATCH(
   }
 
   const id = params.id;
-  if (!UUID_RE.test(id)) {
+  if (!isUuid(id)) {
     return NextResponse.json({ error: "bad_id" }, { status: 400 });
   }
 
@@ -61,7 +59,7 @@ export async function PATCH(
   const update: Record<string, unknown> = {};
 
   if (body.status !== undefined) {
-    if (!STATUSES.includes(body.status)) {
+    if (!FEEDBACK_STATUSES.includes(body.status)) {
       return NextResponse.json({ error: "bad_status" }, { status: 400 });
     }
     update.status = body.status;
@@ -77,7 +75,7 @@ export async function PATCH(
   }
 
   if (body.assigned_to !== undefined) {
-    if (body.assigned_to !== null && !UUID_RE.test(body.assigned_to)) {
+    if (body.assigned_to !== null && !isUuid(body.assigned_to)) {
       return NextResponse.json({ error: "bad_assignee" }, { status: 400 });
     }
     update.assigned_to = body.assigned_to;
