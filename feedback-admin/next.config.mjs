@@ -30,7 +30,7 @@ const csp = [
   // In development Next.js react-refresh needs eval; keep it disabled in production.
   `script-src ${scriptSrc}`,
   "style-src 'self' 'unsafe-inline'",
-  `connect-src 'self' ${supabaseConnect} https://telegram.org https://*.i.posthog.com https://*.posthog.com`,
+  `connect-src 'self' ${supabaseConnect} https://telegram.org https://*.i.posthog.com https://*.posthog.com https://api.open-meteo.com`,
   // Telegram Mini App runs inside an iframe from web.telegram.org / *.telegram.org.
   "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org",
   "base-uri 'self'",

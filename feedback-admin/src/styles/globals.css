@@ -223,6 +223,51 @@ body:has(.admin-shell) {
   padding: 18px 22px 28px;
 }
 
+.admin-header-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.admin-header-status--placeholder {
+  min-height: 22px;
+}
+
+.admin-header-status__clock {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.admin-header-status__date {
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.admin-header-status__weather,
+.admin-header-status__user {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.admin-header-status__sep {
+  width: 1px;
+  height: 20px;
+  background: rgb(var(--border));
+}
+
+@media (max-width: 768px) {
+  .admin-header-status {
+    justify-content: flex-start;
+  }
+  .admin-header-status__date {
+    display: none;
+  }
+}
+
 .admin-page .ant-pro-page-container-children-container {
   padding-block-start: 0;
   padding-inline: 0;
