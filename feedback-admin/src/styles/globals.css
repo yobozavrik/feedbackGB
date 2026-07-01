@@ -413,6 +413,45 @@ body {
   font-weight: 700;
 }
 
+.admin-sellers-table .ant-pro-table-list-toolbar,
+.admin-users-table .ant-pro-table-list-toolbar,
+.admin-stores-table .ant-pro-table-list-toolbar {
+  padding-inline: 16px;
+  border-bottom: 1px solid rgb(var(--border-2));
+}
+
+.admin-stores-table .ant-pro-card {
+  overflow: hidden;
+}
+
+.admin-store-drawer .ant-drawer-content {
+  box-shadow: -12px 0 40px rgba(31, 18, 18, 0.16);
+}
+
+.admin-store-drawer .ant-drawer-body {
+  padding: 18px 20px 22px;
+}
+
+.admin-store-kpi-grid .ant-pro-statistic-card {
+  min-height: 104px;
+}
+
+.admin-users-table,
+.admin-sellers-table {
+  margin-top: 12px;
+}
+
+.admin-page .ant-segmented {
+  border-radius: 10px;
+  background: rgb(var(--surface));
+  padding: 4px;
+}
+
+.admin-page .ant-segmented-item-selected {
+  color: rgb(var(--brand-600));
+  font-weight: 600;
+}
+
 @layer components {
   .card {
     @apply rounded-3xl bg-elev shadow-soft;
