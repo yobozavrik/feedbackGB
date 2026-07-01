@@ -145,6 +145,7 @@ export function AdminShell({ children, user }: AdminShellProps) {
         </span>
       }
       layout="side"
+      disableMobile
       contentWidth="Fluid"
       fixSiderbar
       fixedHeader
