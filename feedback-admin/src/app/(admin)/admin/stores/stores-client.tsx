@@ -468,6 +468,7 @@ export function StoresClient({
   return (
     <>
       <ProTable<StoreSummary>
+        className="admin-stores-table"
         rowKey={(row) => `${row.store.id}`}
         dataSource={summaries}
         columns={columns}
@@ -487,6 +488,7 @@ export function StoresClient({
       />
 
       <Drawer
+        className="admin-store-drawer"
         open={openId != null}
         onClose={() => setOpenId(null)}
         width={drawerWidth}
@@ -529,7 +531,7 @@ export function StoresClient({
               </Space>
             </Card>
 
-            <StatisticCard.Group>
+            <StatisticCard.Group className="admin-store-kpi-grid">
               <StatisticCard
                 statistic={{
                   title: `За ${KPI_WINDOW_DAYS} днів`,
