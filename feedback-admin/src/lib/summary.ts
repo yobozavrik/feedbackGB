@@ -62,6 +62,12 @@ export function buildSummary(
   }
 
   const body = parts.length ? `${head ? ";" : " —"} ${parts.join("; ")}` : "";
-  const photo = payload.photo_url ? ` [фото: ${payload.photo_url}]` : "";
+  const photoCount = payload.photo_urls?.length ?? (payload.photo_url ? 1 : 0);
+  const photo =
+    photoCount > 1
+      ? ` [фото: ${photoCount}; перше: ${payload.photo_url}]`
+      : payload.photo_url
+        ? ` [фото: ${payload.photo_url}]`
+        : "";
   return `${catLabel}${store}${who}${head}${body}${photo}`;
 }
