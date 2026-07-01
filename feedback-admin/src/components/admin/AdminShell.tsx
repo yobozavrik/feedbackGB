@@ -43,6 +43,16 @@ function roleColor(role: "admin" | "seller" | "super_admin"): string {
   return "default";
 }
 
+function userInitials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
 export function AdminShell({ children, user }: AdminShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -57,7 +67,11 @@ export function AdminShell({ children, user }: AdminShellProps) {
     if (!adminRoute?.routes) return adminRoute;
     const isSuper = user.role === "super_admin";
     const routes = adminRoute.routes.filter((r: any) => {
-      if (r.path === "/admin/analytics" || r.path === "/admin/funnel" || r.path === "/admin/audit") {
+      if (
+        r.path === "/admin/analytics" ||
+        r.path === "/admin/funnel" ||
+        r.path === "/admin/audit"
+      ) {
         return isSuper;
       }
       return true;
@@ -80,6 +94,9 @@ export function AdminShell({ children, user }: AdminShellProps) {
     return items;
   }, [pathname]);
 
+  const currentCrumb =
+    breadcrumbItems[breadcrumbItems.length - 1]?.breadcrumbName ?? "Огляд";
+
   const onLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
@@ -92,10 +109,10 @@ export function AdminShell({ children, user }: AdminShellProps) {
 
   if (!mounted) {
     return (
-      <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f5" }}>
-        <div style={{ width: 232, background: "#001529" }} />
+      <div style={{ display: "flex", minHeight: "100vh", background: "#fdf8f3" }}>
+        <div style={{ width: 236, background: "#fff", borderRight: "1px solid #f0e6dc" }} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          <div style={{ height: 56, background: "#fff", borderBottom: "1px solid #f0f0f0" }} />
+          <div style={{ height: 58, background: "#fff", borderBottom: "1px solid #f0e6dc" }} />
           <div style={{ flex: 1, padding: 24, display: "flex", justifyContent: "center", alignItems: "center" }}>
             <Spin size="large" />
           </div>
@@ -106,6 +123,7 @@ export function AdminShell({ children, user }: AdminShellProps) {
 
   return (
     <ProLayout
+      className="admin-shell"
       title="Галя слухає"
       logo={
         <span
@@ -114,25 +132,32 @@ export function AdminShell({ children, user }: AdminShellProps) {
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 28,
-            height: 28,
-            borderRadius: 8,
+            width: 30,
+            height: 30,
+            borderRadius: 9,
             background: token.colorPrimary,
             color: "#fff",
             fontSize: 16,
-            fontWeight: 600,
+            fontWeight: 700,
           }}
         >
           ♡
         </span>
       }
-      layout="mix"
+      layout="side"
       contentWidth="Fluid"
       fixSiderbar
       fixedHeader
-      siderWidth={232}
+      siderWidth={236}
       route={filteredRoute}
       location={{ pathname: pathname ?? "/admin" }}
+      headerContentRender={() => (
+        <div className="admin-shell__header-title">
+          <span className="admin-shell__breadcrumb-muted">Admin</span>
+          <span className="admin-shell__breadcrumb-separator">/</span>
+          <span className="admin-shell__breadcrumb-current">{currentCrumb}</span>
+        </div>
+      )}
       breadcrumbProps={{
         items: breadcrumbItems.map((it) => ({
           key: it.path,
@@ -150,7 +175,7 @@ export function AdminShell({ children, user }: AdminShellProps) {
         icon: <UserOutlined />,
         size: "small",
         title: user.full_name,
-        render: (_, defaultDom) => (
+        render: () => (
           <Dropdown
             menu={{
               items: [
@@ -164,24 +189,44 @@ export function AdminShell({ children, user }: AdminShellProps) {
             }}
             placement="bottomRight"
           >
-            <Space size={8} style={{ cursor: "pointer" }}>
-              {defaultDom}
-              <Text strong style={{ fontSize: 13 }}>
+            <Space className="admin-shell__user" size={8}>
+              <Avatar
+                size={30}
+                style={{
+                  background: "#fde7ee",
+                  color: "#d54a78",
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {userInitials(user.full_name)}
+              </Avatar>
+              <Text strong className="admin-shell__user-name">
                 {user.full_name}
               </Text>
-              <Tag color={roleColor(user.role)}>{roleLabel(user.role)}</Tag>
+              <Tag className="admin-shell__role-tag" color={roleColor(user.role)}>
+                {roleLabel(user.role)}
+              </Tag>
             </Space>
           </Dropdown>
         ),
       }}
       actionsRender={() => [
-        <Button key="logout" type="text" icon={<LogoutOutlined />} onClick={onLogout}>
-          Вийти
-        </Button>,
+        <span key="role" className="admin-shell__role-pill">
+          {roleLabel(user.role)}
+        </span>,
+        <Button
+          key="logout"
+          aria-label="Вийти"
+          type="text"
+          shape="circle"
+          icon={<LogoutOutlined />}
+          onClick={onLogout}
+        />,
       ]}
       menuFooterRender={(props) =>
         props?.collapsed ? null : (
-          <div style={{ padding: 12, fontSize: 12, color: token.colorTextTertiary }}>
+          <div className="admin-shell__footer">
             <div>v1 · Галя Балувана</div>
             <div style={{ marginTop: 4 }}>
               <Avatar size={6} style={{ background: token.colorSuccess }} /> Supabase OK
@@ -190,7 +235,9 @@ export function AdminShell({ children, user }: AdminShellProps) {
         )
       }
     >
-      <App>{children}</App>
+      <App>
+        <div className="admin-shell__content">{children}</div>
+      </App>
     </ProLayout>
   );
 }
