@@ -26,4 +26,8 @@ EOF
   exit 1
 fi
 
-gitleaks protect --staged --config=.gitleaks.toml --redact --verbose
+gitleaks protect --staged --config=.gitleaks.toml --redact --verbose || exit 1
+
+# Shared files must stay byte-identical between feedback-app and
+# feedback-admin (see scripts/check-shared-drift.sh at the repo root).
+sh ../scripts/check-shared-drift.sh
