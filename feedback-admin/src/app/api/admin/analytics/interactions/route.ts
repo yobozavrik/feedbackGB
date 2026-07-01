@@ -1,14 +1,13 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase";
-import { SESSION_COOKIE, isSuperAdmin, verifySession } from "@/lib/session";
+import { requireAdminSession } from "@/lib/adminAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
-  if (!sess || !isSuperAdmin(sess.role)) {
+  const sess = await requireAdminSession("super_admin");
+  if (!sess) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

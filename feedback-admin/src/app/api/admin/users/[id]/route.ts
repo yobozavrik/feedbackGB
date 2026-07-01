@@ -1,7 +1,6 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase";
-import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
+import { requireAdminSession } from "@/lib/adminAuth";
 import { logAudit } from "@/lib/audit";
 import { isUuid } from "@/lib/validation";
 
@@ -39,8 +38,8 @@ export async function PATCH(
     return NextResponse.json({ error: "Недійсний UUID користувача" }, { status: 400 });
   }
 
-  const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
-  if (!sess || !isAdminTier(sess.role)) {
+  const sess = await requireAdminSession();
+  if (!sess) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -257,8 +256,8 @@ export async function DELETE(
     return NextResponse.json({ error: "Недійсний UUID користувача" }, { status: 400 });
   }
 
-  const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
-  if (!sess || !isAdminTier(sess.role)) {
+  const sess = await requireAdminSession();
+  if (!sess) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
