@@ -11,14 +11,7 @@ import {
   HistoryOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import {
-  ModalForm,
-  ProFormText,
-  ProFormSelect,
-  ProFormSwitch,
-  ProTable,
-  type ProColumns,
-} from "@ant-design/pro-components";
+import { ProTable, type ProColumns } from "@ant-design/pro-components";
 import {
   App,
   Button,
@@ -29,13 +22,26 @@ import {
   Typography,
   theme as antdTheme,
   Form,
-  Drawer,
-  Timeline,
-  Alert,
-  Spin,
   Segmented,
 } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityDrawer } from "@/components/admin/users/ActivityDrawer";
+import { CreateUserModal } from "@/components/admin/users/CreateUserModal";
+import { EditUserModal } from "@/components/admin/users/EditUserModal";
+import {
+  ResetPinModal,
+  type ResetPinValues,
+} from "@/components/admin/users/ResetPinModal";
+import {
+  createUser,
+  fetchAdminActivity,
+  patchUser,
+  setUserPin,
+  unlockUser,
+  type ActivityLogEntry,
+  type CreateUserValues,
+  type EditUserValues,
+} from "@/lib/adminUsersApi";
 import { countryFlag, formatGeoLines } from "@/lib/geoip";
 import type { AdminUser, FeedbacksStat } from "./page";
 
@@ -79,7 +85,7 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
   const [editForm] = Form.useForm();
 
   const [activityTarget, setActivityTarget] = useState<AdminUser | null>(null);
-  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogEntry[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
 
   // Tab state
@@ -153,11 +159,9 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
     async function fetchActivity() {
       setLoadingActivity(true);
       try {
-        const res = await fetch(`/api/admin/users/${targetId}/activity`);
-        if (!res.ok) throw new Error("API error");
-        const data = await res.json();
+        const logs = await fetchAdminActivity(targetId);
         if (active) {
-          setActivityLogs(data.logs || []);
+          setActivityLogs(logs);
         }
       } catch (err) {
         message.error("Помилка при завантаженні активності");
@@ -182,10 +186,8 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
 
   const handleUnlock = useCallback(
     async (u: AdminUser) => {
-      const res = await fetch(`/api/admin/users/${u.id}/unlock`, {
-        method: "POST",
-      });
-      if (!res.ok) {
+      const result = await unlockUser(u.id);
+      if (!result.ok) {
         message.error("Не вдалося розблокувати. Спробуй ще раз.");
         return;
       }
@@ -196,20 +198,15 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
   );
 
   const handleResetPin = useCallback(
-    async (values: { pin: string; confirmPin: string }) => {
+    async (values: ResetPinValues) => {
       if (!resetTarget) return false;
       if (values.pin !== values.confirmPin) {
         message.error("Підтвердження не співпадає.");
         return false;
       }
-      const res = await fetch(`/api/admin/users/${resetTarget.id}/pin`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ pin: values.pin }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        message.error(data.error ?? "Помилка сервера");
+      const result = await setUserPin(resetTarget.id, values.pin);
+      if (!result.ok) {
+        message.error(result.error ?? "Помилка сервера");
         return false;
       }
       updateUser({
@@ -230,21 +227,13 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
   );
 
   const handleCreateUser = useCallback(
-    async (values: any) => {
-      const res = await fetch("/api/admin/users", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(values),
-      });
-
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        message.error(data.error ?? "Помилка при створенні");
+    async (values: CreateUserValues) => {
+      const result = await createUser(values);
+      if (!result.ok) {
+        message.error(result.error ?? "Помилка при створенні");
         return false;
       }
-
-      const data = await res.json();
-      setList((prev) => [...prev, data.user].sort((a, b) => a.full_name.localeCompare(b.full_name, "uk")));
+      setList((prev) => [...prev, result.user].sort((a, b) => a.full_name.localeCompare(b.full_name, "uk")));
       message.success(`Користувача ${values.full_name} успішно створено.`);
       setCreateOpen(false);
       createForm.resetFields();
@@ -254,23 +243,15 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
   );
 
   const handleEditUser = useCallback(
-    async (values: any) => {
+    async (values: EditUserValues) => {
       if (!editTarget) return false;
-      const res = await fetch(`/api/admin/users/${editTarget.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(values),
-      });
-
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        message.error(data.error ?? "Помилка при збереженні");
+      const result = await patchUser(editTarget.id, values);
+      if (!result.ok) {
+        message.error(result.error ?? "Помилка при збереженні");
         return false;
       }
-
-      const data = await res.json();
-      updateUser(data.user);
-      message.success(`Зміни для ${data.user.full_name} збережено.`);
+      updateUser(result.user);
+      message.success(`Зміни для ${result.user.full_name} збережено.`);
       setEditTarget(null);
       editForm.resetFields();
       return true;
@@ -280,20 +261,12 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
 
   const handleToggleActive = useCallback(
     async (u: AdminUser, makeActive: boolean) => {
-      const res = await fetch(`/api/admin/users/${u.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ is_active: makeActive }),
-      });
-
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        message.error(data.error ?? "Помилка при зміні статусу");
+      const result = await patchUser(u.id, { is_active: makeActive });
+      if (!result.ok) {
+        message.error(result.error ?? "Помилка при зміні статусу");
         return;
       }
-
-      const data = await res.json();
-      updateUser(data.user);
+      updateUser(result.user);
       message.success(
         `Користувача ${u.full_name} успішно ${makeActive ? "активовано" : "деактивовано"}.`,
       );
@@ -902,335 +875,37 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
         />
       )}
 
-      {/* CREATE MODAL */}
-      <ModalForm
-        form={createForm}
+      <CreateUserModal
         open={createOpen}
-        title="Створити користувача"
+        form={createForm}
+        storeOptions={storeOptions}
+        currentUserRole={currentUserRole}
         onOpenChange={setCreateOpen}
-        modalProps={{
-          destroyOnHidden: true,
-          okText: "Створити",
-          cancelText: "Скасувати",
-          maskClosable: false,
-        }}
         onFinish={handleCreateUser}
-        width={480}
-      >
-        <ProFormText
-          name="full_name"
-          label="Імʼя (ФІО)"
-          placeholder="Наприклад: Ковальчук Роман"
-          rules={[
-            { required: true, message: "Введіть ФІО" },
-            { min: 2, message: "Мінімум 2 символи" },
-          ]}
-        />
-        <ProFormText
-          name="display_label"
-          label="Відображуване ім'я (для логіну/адмінки)"
-          placeholder="Наприклад: Магазин 18 — БУЛЬВАР"
-          rules={[
-            { required: true, message: "Введіть відображуване ім'я" },
-            { min: 2, message: "Мінімум 2 символи" },
-          ]}
-        />
-        <ProFormSelect
-          name="role"
-          label="Роль"
-          initialValue="seller"
-          valueEnum={
-            currentUserRole === "super_admin"
-              ? {
-                  seller: "Продавчиня",
-                  admin: "Адмін",
-                  super_admin: "Супер-адмін",
-                }
-              : {
-                  seller: "Продавчиня",
-                }
-          }
-          rules={[{ required: true, message: "Виберіть роль" }]}
-        />
-        <ProFormText.Password
-          name="pin"
-          label="PIN-код (6 цифр)"
-          placeholder="Введіть 6-значний PIN-код"
-          rules={[
-            { required: true, message: "Введіть PIN-код" },
-            { pattern: /^\d{6}$/, message: "PIN-код має складатися рівно з 6 цифр" },
-          ]}
-        />
-        <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.role !== currentValues.role}>
-          {({ getFieldValue }) => {
-            const role = getFieldValue("role");
-            if (role === "seller") {
-              return (
-                <ProFormSelect
-                  name="store_id"
-                  label="Магазин"
-                  options={storeOptions}
-                  placeholder="Виберіть магазин для продавчині"
-                  rules={[{ required: true, message: "Виберіть магазин" }]}
-                />
-              );
-            }
-            return null;
-          }}
-        </Form.Item>
-      </ModalForm>
+      />
 
-      {/* EDIT MODAL */}
-      <ModalForm
+      <EditUserModal
+        target={editTarget}
         form={editForm}
-        open={editTarget != null}
-        title={`Редагувати користувача: ${editTarget?.full_name}`}
-        onOpenChange={(open) => {
-          if (!open) setEditTarget(null);
-        }}
-        modalProps={{
-          destroyOnHidden: true,
-          okText: "Зберегти",
-          cancelText: "Скасувати",
-          maskClosable: false,
-        }}
+        storeOptions={storeOptions}
+        currentUserId={currentUserId}
+        currentUserRole={currentUserRole}
+        onClose={() => setEditTarget(null)}
         onFinish={handleEditUser}
-        width={480}
-      >
-        <ProFormText
-          name="full_name"
-          label="Імʼя (ФІО)"
-          placeholder="Введіть ФІО"
-          rules={[
-            { required: true, message: "Введіть ФІО" },
-            { min: 2, message: "Мінімум 2 символи" },
-          ]}
-        />
-        <ProFormText
-          name="display_label"
-          label="Відображуване ім'я (для логіну/адмінки)"
-          placeholder="Введіть відображуване ім'я"
-          rules={[
-            { required: true, message: "Введіть відображуване ім'я" },
-            { min: 2, message: "Мінімум 2 символи" },
-          ]}
-        />
-        <ProFormSelect
-          name="role"
-          label="Роль"
-          valueEnum={
-            currentUserRole === "super_admin"
-              ? {
-                  seller: "Продавчиня",
-                  admin: "Адмін",
-                  super_admin: "Супер-адмін",
-                }
-              : {
-                  seller: "Продавчиня",
-                }
-          }
-          disabled={editTarget?.id === currentUserId} // Can't change own role
-          rules={[{ required: true, message: "Виберіть роль" }]}
-        />
-        <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.role !== currentValues.role}>
-          {({ getFieldValue }) => {
-            const role = getFieldValue("role");
-            if (role === "seller") {
-              return (
-                <ProFormSelect
-                  name="store_id"
-                  label="Магазин"
-                  options={storeOptions}
-                  placeholder="Виберіть магазин"
-                  rules={[{ required: true, message: "Виберіть магазин" }]}
-                />
-              );
-            }
-            return null;
-          }}
-        </Form.Item>
-        <ProFormSwitch
-          name="is_active"
-          label="Активний акаунт"
-          disabled={editTarget?.id === currentUserId} // Can't deactivate self
-        />
-      </ModalForm>
+      />
 
-      {/* RESET PIN MODAL */}
-      <ModalForm
-        open={resetTarget != null}
-        title={
-          resetTarget?.has_pin
-            ? `Перевидати PIN — ${resetTarget?.full_name}`
-            : `Встановити PIN — ${resetTarget?.full_name}`
-        }
-        onOpenChange={(open) => {
-          if (!open) setResetTarget(null);
-        }}
-        modalProps={{
-          destroyOnHidden: true,
-          okText: "Зберегти",
-          cancelText: "Скасувати",
-          maskClosable: false,
-        }}
+      <ResetPinModal
+        target={resetTarget}
+        onClose={() => setResetTarget(null)}
         onFinish={handleResetPin}
-        width={420}
-      >
-        <Text type="secondary" style={{ display: "block", marginBottom: 16 }}>
-          Новий код має складатися рівно з 6 цифр. Скажи цей код користувачці особисто — він не
-          зберігається в логах.
-        </Text>
-        <ProFormText.Password
-          name="pin"
-          label="Новий PIN"
-          placeholder="6 цифр"
-          fieldProps={{
-            inputMode: "numeric",
-            autoComplete: "off",
-            maxLength: 6,
-            visibilityToggle: true,
-          }}
-          rules={[
-            { required: true, message: "Введи новий PIN" },
-            {
-              pattern: /^\d{6}$/,
-              message: "PIN має бути ровно 6 цифр",
-            },
-          ]}
-        />
-        <ProFormText.Password
-          name="confirmPin"
-          label="Повторити PIN"
-          placeholder="Ще раз"
-          fieldProps={{
-            inputMode: "numeric",
-            autoComplete: "off",
-            maxLength: 6,
-            visibilityToggle: true,
-          }}
-          dependencies={["pin"]}
-          rules={[
-            { required: true, message: "Повтори PIN" },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
-                if (!value || getFieldValue("pin") === value) {
-                  return Promise.resolve();
-                }
-                return Promise.reject(
-                  new Error("Підтвердження не співпадає"),
-                );
-              },
-            }),
-          ]}
-        />
-      </ModalForm>
-      <Drawer
-        title={
-          activityTarget?.role === "seller"
-            ? `Відгуки співробітника: ${activityTarget?.full_name}`
-            : `Активність адміністратора: ${activityTarget?.full_name}`
-        }
-        placement="right"
-        width={480}
+      />
+
+      <ActivityDrawer
+        target={activityTarget}
+        logs={activityLogs}
+        loading={loadingActivity}
         onClose={() => setActivityTarget(null)}
-        open={activityTarget != null}
-        destroyOnClose
-      >
-        {loadingActivity ? (
-          <div style={{ textAlign: "center", padding: "40px 0" }}>
-            <Spin size="large" />
-          </div>
-        ) : activityLogs.length === 0 ? (
-          <Alert
-            message={activityTarget?.role === "seller" ? "Відгуки відсутні" : "Активність відсутня"}
-            description={
-              activityTarget?.role === "seller"
-                ? "Цей співробітник ще не надсилав відгуків."
-                : "За цим користувачем не зафіксовано жодних дій."
-            }
-            type="info"
-            showIcon
-          />
-        ) : (
-          <Timeline
-            mode="left"
-            items={activityLogs.map((log: any) => {
-              const dateStr = new Date(log.occurred_at).toLocaleString("uk-UA");
-
-              if (log.isFeedback) {
-                let statusColor = "blue";
-                let statusText = "Новий";
-                if (log.status === "in_progress") {
-                  statusColor = "orange";
-                  statusText = "В роботі";
-                } else if (log.status === "resolved") {
-                  statusColor = "green";
-                  statusText = "Вирішено";
-                } else if (log.status === "rejected") {
-                  statusColor = "red";
-                  statusText = "Відхилено";
-                }
-
-                return {
-                  label: dateStr,
-                  children: (
-                    <div style={{ paddingBottom: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                        <Text strong style={{ fontSize: 13 }}>
-                          {log.category_emoji || "📝"} {log.category_title || log.category}
-                        </Text>
-                        <Tag color={statusColor} style={{ fontSize: 10, margin: 0, paddingInline: 4 }}>
-                          {statusText}
-                        </Tag>
-                      </div>
-                      <div style={{ marginBlock: 4 }}>
-                        <Text style={{ fontSize: 12 }}>{log.summary}</Text>
-                      </div>
-                      {log.store_name && (
-                        <div style={{ fontSize: 11, color: token.colorTextDescription }}>
-                          Магазин: {log.store_name}
-                        </div>
-                      )}
-                    </div>
-                  ),
-                };
-              }
-
-              const hasMeta = log.meta && Object.keys(log.meta).length > 0;
-              const hasDiff = log.diff && Object.keys(log.diff).length > 0;
-
-              return {
-                label: dateStr,
-                children: (
-                  <>
-                    <div style={{ fontWeight: "bold" }}>{log.action_title}</div>
-                    {log.ip && (
-                      <div style={{ fontSize: 11, color: "#8c8c8c" }}>
-                        IP: {log.ip} {log.user_agent ? `| ${log.user_agent.slice(0, 40)}...` : ""}
-                      </div>
-                    )}
-                    {hasMeta && (
-                      <div style={{ marginTop: 4, background: "#f5f5f5", padding: "4px 8px", borderRadius: 4, fontSize: 11 }}>
-                        <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-                          {JSON.stringify(log.meta, null, 2)}
-                        </pre>
-                      </div>
-                    )}
-                    {hasDiff && (
-                      <div style={{ marginTop: 4, background: "#fffbe6", padding: "4px 8px", borderRadius: 4, fontSize: 11, border: "1px solid #ffe58f" }}>
-                        <div style={{ fontWeight: "bold", color: "#d4b106", marginBottom: 2 }}>Зміни:</div>
-                        <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-                          {JSON.stringify(log.diff, null, 2)}
-                        </pre>
-                      </div>
-                    )}
-                  </>
-                ),
-              };
-            })}
-          />
-        )}
-      </Drawer>
+      />
     </>
   );
 }
