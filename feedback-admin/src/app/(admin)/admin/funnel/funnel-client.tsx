@@ -177,7 +177,12 @@ export function FunnelClient({ initial }: Props) {
   }
 
   return (
-    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+    <Space
+      className="admin-funnel-page"
+      direction="vertical"
+      size="large"
+      style={{ width: "100%" }}
+    >
       {data.error ? (
         <Alert
           type="warning"
@@ -214,7 +219,7 @@ export function FunnelClient({ initial }: Props) {
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]}>
+      <Row className="admin-funnel-kpi-row" gutter={[16, 16]}>
         <Col xs={24} sm={12} md={6}>
           <StatisticCard
             statistic={{
@@ -369,6 +374,7 @@ export function FunnelClient({ initial }: Props) {
             loading={loading}
           >
             <ProTable<FunnelResponse["stuck"][number]>
+              className="admin-funnel-stuck-table"
               dataSource={data.stuck}
               columns={stuckColumns}
               rowKey="distinctId"

@@ -271,6 +271,7 @@ export function AuditClient({ rows }: Props) {
 
   return (
     <ProTable<AuditRow>
+      className="admin-audit-table"
       rowKey="id"
       dataSource={rows}
       columns={columns}
