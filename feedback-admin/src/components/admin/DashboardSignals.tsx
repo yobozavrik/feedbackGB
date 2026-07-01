@@ -100,6 +100,7 @@ export function DashboardSignals({ rows }: Props) {
 
   return (
     <Card
+      className="admin-signals-card"
       size="small"
       title={
         <Space size={8}>

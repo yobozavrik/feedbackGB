@@ -47,6 +47,7 @@ export function DashboardHeatmap({ rows, days = 14 }: Props) {
 
   return (
     <Card
+      className="admin-heatmap-card"
       size="small"
       title={
         <Space size={8}>

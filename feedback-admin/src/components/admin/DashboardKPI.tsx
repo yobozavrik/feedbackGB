@@ -168,6 +168,7 @@ export function DashboardKPI({ rows }: Props) {
 
   return (
     <StatisticCard.Group
+      className="admin-kpi-grid"
       direction="row"
       style={{ marginBottom: 16 }}
       colSpan={{ xs: 24, sm: 12, md: 12, lg: 6, xl: 6 }}

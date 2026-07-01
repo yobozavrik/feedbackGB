@@ -468,6 +468,7 @@ export function AdminClient({
   return (
     <>
       <ProTable<FeedRow>
+        className="admin-feed-table"
         rowKey="id"
         dataSource={filteredByPeriod}
         columns={columns}
@@ -686,9 +687,10 @@ function FeedDrawer({
 
   return (
     <Drawer
+      className="admin-feed-drawer"
       open
       onClose={onClose}
-      width={560}
+      width={520}
       title={
         <Space size={8} wrap>
           <Tag color={tintColor} bordered={false}>
