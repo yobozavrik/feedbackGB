@@ -228,7 +228,7 @@ class SupabaseSignedUrlBuilder implements PhotoLinkBuilder {
 class DriveLinkBuilder implements PhotoLinkBuilder {
   readonly requiresPhotosFirst = false;
   async build(ctx: PhotoLinkBuilderContext): Promise<PhotoLinkMap> {
-    if (ctx.todayRows.some((r) => r.photo_url)) {
+    if (ctx.todayRows.some(hasPhotos)) {
       try {
         const { mirrorPendingPhotos } = await import("@/lib/driveMirror");
         await mirrorPendingPhotos();
@@ -250,7 +250,7 @@ function buildRedirectMap(rows: FeedRow[]): PhotoLinkMap {
     return out;
   }
   for (const r of rows) {
-    if (!r.photo_url) continue;
+    if (!hasPhotos(r)) continue;
     out.set(r.id, `${baseUrl}${PHOTO_REDIRECT_PATH}/${r.id}`);
   }
   return out;
@@ -309,21 +309,24 @@ async function sendPhotosForRows(
 ): Promise<Map<string, number>> {
   const messageIds = new Map<string, number>();
   for (const r of rows) {
-    if (!r.photo_url) continue;
-    const url = await resolvePhotoUrl(supabase, r.photo_url);
-    if (!url) continue;
-    let caption = formatPhotoCaption(r);
-    if (caption.length > TELEGRAM_CAPTION_MAX) {
-      caption = `${caption.slice(0, TELEGRAM_CAPTION_MAX - 1)}…`;
-    }
-    try {
-      const msgId = await sendTelegramPhoto(botToken, chatId, url, caption);
-      if (options.collectMessageIds && msgId != null) {
-        messageIds.set(r.id, msgId);
+    const rawPhotos = getRowPhotoUrls(r);
+    for (let i = 0; i < rawPhotos.length; i += 1) {
+      const url = await resolvePhotoUrl(supabase, rawPhotos[i]);
+      if (!url) continue;
+      let caption = formatPhotoCaption(r);
+      if (rawPhotos.length > 1) caption += ` · фото ${i + 1}/${rawPhotos.length}`;
+      if (caption.length > TELEGRAM_CAPTION_MAX) {
+        caption = `${caption.slice(0, TELEGRAM_CAPTION_MAX - 1)}...`;
       }
-    } catch (e) {
-      // Per-row failure shouldn't poison the whole report; log and continue.
-      console.error("daily-report sendPhoto failed", { id: r.id, e });
+      try {
+        const msgId = await sendTelegramPhoto(botToken, chatId, url, caption);
+        if (options.collectMessageIds && msgId != null && !messageIds.has(r.id)) {
+          messageIds.set(r.id, msgId);
+        }
+      } catch (e) {
+        // Per-photo failure shouldn't poison the whole report; log and continue.
+        console.error("daily-report sendPhoto failed", { id: r.id, e });
+      }
     }
   }
   return messageIds;
@@ -470,7 +473,7 @@ function formatHeader(
   photoLinks: PhotoLinkMap,
 ): string {
   const stores = new Set(today.map((r) => r.store_name).filter(Boolean));
-  const photos = today.filter((r) => r.photo_url).length;
+  const photos = today.reduce((sum, r) => sum + getRowPhotoUrls(r).length, 0);
   const lines: string[] = [];
   lines.push(`📊 <b>Звіт за ${escapeHtml(dateLabel)}</b> (Київ)`);
 
@@ -924,9 +927,24 @@ function linkifyEmoji(emoji: string, url: string): string {
  *   ``                  ← no photo
  */
 function renderPhotoIcon(r: FeedRow, photoLinks: PhotoLinkMap): string {
-  if (!r.photo_url) return "";
+  const count = getRowPhotoUrls(r).length;
+  if (count === 0) return "";
   const url = photoLinks.get(r.id);
-  return ` ${url ? linkifyEmoji("📷", url) : "📷"}`;
+  const icon = count > 1 ? `📷×${count}` : "📷";
+  return ` ${url ? linkifyEmoji(icon, url) : icon}`;
+}
+
+function hasPhotos(r: FeedRow): boolean {
+  return getRowPhotoUrls(r).length > 0;
+}
+
+function getRowPhotoUrls(r: FeedRow): string[] {
+  const raw = r.fields?.["photo_urls"];
+  const urls = Array.isArray(raw)
+    ? raw.filter((v): v is string => typeof v === "string" && v.length > 0)
+    : [];
+  if (urls.length > 0) return urls;
+  return r.photo_url ? [r.photo_url] : [];
 }
 
 function catEmoji(id: string): string {

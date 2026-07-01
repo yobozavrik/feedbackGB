@@ -34,3 +34,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local workspace / agent scratch dirs
+.claude/
+.mimocode/
+.scratch/
+
+# design source archives (kept locally, not part of the codebase)
+FeedbackGB*.zip
+FeedbackGB */
