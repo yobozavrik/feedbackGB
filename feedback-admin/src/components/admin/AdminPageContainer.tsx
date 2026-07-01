@@ -32,6 +32,7 @@ export function AdminPageContainer({
 }: AdminPageContainerProps) {
   return (
     <PageContainer
+      className="admin-page"
       header={{
         title,
         subTitle,
