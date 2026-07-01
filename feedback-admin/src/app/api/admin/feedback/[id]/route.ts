@@ -98,6 +98,23 @@ export async function PATCH(
     );
   }
 
+  // Confirm the row actually exists before writing anything. Postgrest's
+  // UPDATE/INSERT are silent no-ops for a well-formed but non-existent id,
+  // so without this check we'd return 200 {ok:true} without having changed
+  // or logged anything.
+  const { data: existing, error: lookupError } = await supabase
+    .from("feedback")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
+  if (lookupError) {
+    console.error("feedback lookup error", { code: lookupError.code });
+    return NextResponse.json({ error: "db_error" }, { status: 500 });
+  }
+  if (!existing) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
   // Validate assignee exists and is an admin (defence-in-depth).
   if (
     body.assigned_to !== undefined &&
