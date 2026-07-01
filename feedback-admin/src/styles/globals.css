@@ -83,9 +83,33 @@ body {
 }
 
 .admin-shell {
+  --bg: 253 248 243;
+  --elev: 255 255 255;
+  --elev-2: 253 244 236;
+  --surface: 251 243 235;
+  --surface-2: 253 244 236;
+  --ink-900: 43 27 27;
+  --ink-700: 90 72 72;
+  --ink-500: 140 122 122;
+  --ink-300: 216 200 200;
+  --border: 240 230 220;
+  --border-2: 246 236 226;
+  --brand-500: 232 90 138;
+  --brand-600: 213 74 120;
+  --brand-50: 253 231 238;
+  --success: 22 163 74;
+  --warning: 244 162 97;
+  --error: 220 38 38;
+  color-scheme: light;
   min-height: 100vh;
   background: rgb(var(--bg));
   color: rgb(var(--ink-900));
+}
+
+html:has(.admin-shell),
+body:has(.admin-shell) {
+  background: rgb(253 248 243);
+  color-scheme: light;
 }
 
 .admin-shell .ant-layout,
