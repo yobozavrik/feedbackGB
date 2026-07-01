@@ -212,6 +212,123 @@ body {
   padding: 18px 22px 28px;
 }
 
+.admin-page .ant-pro-page-container-children-container {
+  padding-block-start: 0;
+  padding-inline: 0;
+}
+
+.admin-page .ant-page-header,
+.admin-page .ant-pro-page-container-warp-page-header {
+  padding: 0 0 16px;
+  background: transparent;
+}
+
+.admin-page .ant-page-header-heading-title {
+  color: rgb(var(--ink-900));
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.admin-page .ant-page-header-heading-sub-title {
+  color: rgb(var(--ink-500));
+  font-size: 13px;
+}
+
+.admin-shell .ant-card,
+.admin-shell .ant-pro-card {
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--admin-radius-lg);
+  background: rgb(var(--elev));
+  box-shadow: var(--admin-shadow);
+}
+
+.admin-shell .ant-card-small > .ant-card-head,
+.admin-shell .ant-card-head {
+  min-height: 44px;
+  border-bottom: 1px solid rgb(var(--border-2));
+  background: rgb(var(--surface-2));
+  border-radius: var(--admin-radius-lg) var(--admin-radius-lg) 0 0;
+}
+
+.admin-shell .ant-card-head-title,
+.admin-shell .ant-pro-card-title {
+  color: rgb(var(--ink-900));
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.admin-shell .ant-card-body,
+.admin-shell .ant-pro-card-body {
+  color: rgb(var(--ink-700));
+}
+
+.admin-shell .ant-pro-statistic-card {
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--admin-radius-lg);
+  background: rgb(var(--elev));
+  box-shadow: var(--admin-shadow);
+}
+
+.admin-shell .ant-pro-statistic-card-chart-left {
+  margin-block-start: 0;
+}
+
+.admin-shell .ant-statistic-title {
+  color: rgb(var(--ink-500));
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-shell .ant-statistic-content {
+  color: rgb(var(--ink-900));
+  font-weight: 700;
+}
+
+.admin-shell .ant-table-wrapper .ant-table {
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--admin-radius-lg);
+  overflow: hidden;
+  background: rgb(var(--elev));
+  box-shadow: var(--admin-shadow);
+}
+
+.admin-shell .ant-table-thead > tr > th {
+  border-bottom: 1px solid rgb(var(--border));
+  background: rgb(var(--surface));
+  color: rgb(var(--ink-700));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-shell .ant-table-tbody > tr > td {
+  border-bottom: 1px solid rgb(var(--border-2));
+  color: rgb(var(--ink-900));
+}
+
+.admin-shell .ant-table-tbody > tr.ant-table-row:hover > td {
+  background: rgb(var(--surface));
+}
+
+.admin-shell .ant-input,
+.admin-shell .ant-select-selector,
+.admin-shell .ant-picker,
+.admin-shell .ant-input-number {
+  border-color: rgb(var(--border)) !important;
+  border-radius: var(--admin-radius) !important;
+}
+
+.admin-shell .ant-drawer-content,
+.admin-shell .ant-modal-content {
+  background: rgb(var(--elev));
+}
+
+.admin-shell .ant-drawer-header,
+.admin-shell .ant-modal-header,
+.admin-shell .ant-modal-footer {
+  border-color: rgb(var(--border));
+}
+
 @layer components {
   .card {
     @apply rounded-3xl bg-elev shadow-soft;
