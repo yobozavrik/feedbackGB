@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase";
 import { rateLimit } from "@/lib/rateLimit";
 import { ipFromRequest } from "@/lib/audit";
+import { isUuid } from "@/lib/validation";
 
 /**
  * Photo redirect endpoint used by the daily report.
@@ -30,9 +31,6 @@ export const dynamic = "force-dynamic";
 // browser/Telegram to fetch the bytes. 10 minutes is plenty.
 const REDIRECT_SIGNED_URL_TTL_SEC = 10 * 60;
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 interface FeedbackPhotoRow {
   id: string;
   photo_url: string | null;
@@ -47,7 +45,7 @@ export async function GET(
   { params }: { params: { id: string } },
 ): Promise<Response> {
   const id = params.id;
-  if (!UUID_RE.test(id)) {
+  if (!isUuid(id)) {
     return NextResponse.json({ error: "bad_id" }, { status: 400 });
   }
 
