@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getCategory, type CategoryId, CATEGORIES } from "@/lib/categories";
+import { validateFeedbackPayload } from "@/lib/feedbackValidation";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { buildSummary } from "@/lib/summary";
 import { validateInitData } from "@/lib/telegram";
@@ -11,15 +11,9 @@ import type { FeedbackPayload } from "@/lib/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const VALID_CATEGORY_IDS = new Set<string>(CATEGORIES.map((c) => c.id));
 const MAX_BODY_BYTES = 8 * 1024 * 1024; // enough for several compressed photos
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB decoded
-const MAX_PHOTOS = 5;
 const ALLOWED_PHOTO_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
-const MAX_FIELD_LEN = 4000;
-const MAX_FIELDS = 40;
-const MAX_STORE_LABEL_LEN = 80;
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * POST /api/feedback
@@ -56,155 +50,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!payload || typeof payload !== "object") {
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
-  }
-
-  if (!payload.category || !VALID_CATEGORY_IDS.has(payload.category)) {
-    return NextResponse.json({ error: "Unknown category" }, { status: 400 });
-  }
-  const category = getCategory(payload.category)!;
-
-  // Required-field check + shape / length validation.
-  const cleanFields: Record<string, string | number | null> = {};
-  const incomingFields = (payload.fields ?? {}) as Record<string, unknown>;
-  if (typeof incomingFields !== "object" || Array.isArray(incomingFields)) {
-    return NextResponse.json({ error: "Invalid fields" }, { status: 400 });
-  }
-  const fieldKeys = Object.keys(incomingFields);
-  if (fieldKeys.length > MAX_FIELDS) {
-    return NextResponse.json({ error: "Too many fields" }, { status: 400 });
-  }
-  for (const key of fieldKeys) {
-    const v = incomingFields[key];
-    if (v === null || v === undefined) {
-      cleanFields[key] = null;
-      continue;
-    }
-    if (typeof v === "number") {
-      if (!Number.isFinite(v)) {
-        return NextResponse.json(
-          { error: `Invalid number: ${key}` },
-          { status: 400 },
-        );
-      }
-      cleanFields[key] = v;
-      continue;
-    }
-    if (typeof v === "string") {
-      if (v.length > MAX_FIELD_LEN) {
-        return NextResponse.json(
-          { error: `Field too long: ${key}` },
-          { status: 400 },
-        );
-      }
-      cleanFields[key] = v;
-      continue;
-    }
+  const validated = validateFeedbackPayload(payload);
+  if (!validated.ok) {
     return NextResponse.json(
-      { error: `Invalid field type: ${key}` },
-      { status: 400 },
+      { error: validated.error },
+      { status: validated.status },
     );
   }
-
-  for (const f of category.fields) {
-    if (f.kind === "photo" || !f.required) continue;
-    const v = cleanFields[f.id];
-    if (v === undefined || v === null || `${v}`.trim() === "") {
-      return NextResponse.json(
-        { error: `Missing required field: ${f.id}` },
-        { status: 400 },
-      );
-    }
-  }
-
-  const storeLabel =
-    typeof payload.store_label === "string" && payload.store_label.trim()
-      ? payload.store_label.trim().slice(0, MAX_STORE_LABEL_LEN)
-      : null;
-
-  let clientSubmissionId: string | null = null;
-  if (payload.client_submission_id !== undefined && payload.client_submission_id !== null) {
-    if (
-      typeof payload.client_submission_id !== "string" ||
-      !UUID_REGEX.test(payload.client_submission_id)
-    ) {
-      return NextResponse.json(
-        { error: "Invalid client_submission_id" },
-        { status: 400 },
-      );
-    }
-    clientSubmissionId = payload.client_submission_id;
-  }
-
-  let clientCreatedAt: string | null = null;
-  if (payload.client_created_at !== undefined && payload.client_created_at !== null) {
-    if (typeof payload.client_created_at !== "string") {
-      return NextResponse.json(
-        { error: "Invalid client_created_at" },
-        { status: 400 },
-      );
-    }
-    const parsedDate = Date.parse(payload.client_created_at);
-    if (Number.isNaN(parsedDate)) {
-      return NextResponse.json(
-        { error: "Неправильний формат часу створення відгуку" },
-        { status: 400 },
-      );
-    }
-    if (parsedDate > Date.now() + 5 * 60 * 1000) {
-      return NextResponse.json(
-        { error: "Час створення відгуку не може бути у майбутньому" },
-        { status: 400 },
-      );
-    }
-    clientCreatedAt = payload.client_created_at;
-  }
-
-  // v1 priority flow: structured product reference + quantity.
-  // product_id is a bigint PK from categories.products; we accept any positive
-  // integer and let Postgres reject unknown FKs.
-  const productId =
-    typeof payload.product_id === "number" &&
-    Number.isFinite(payload.product_id) &&
-    payload.product_id > 0 &&
-    Number.isInteger(payload.product_id)
-      ? payload.product_id
-      : null;
-
-  const quantity =
-    typeof payload.quantity === "number" &&
-    Number.isFinite(payload.quantity) &&
-    payload.quantity >= 0 &&
-    payload.quantity <= 1_000_000
-      ? payload.quantity
-      : null;
-
-  // v1 priority categories: new product-picker UI submits
-  //   { product_id, quantity, fields: { comment?, photo? } }
-  // while the legacy UI still submits { fields: { item_name, ... } }.
-  // We accept either shape, but when product_id is set (modern flow)
-  // we require a positive quantity to keep data clean.
-  if (category.requiresProduct) {
-    const itemName =
-      typeof cleanFields["item_name"] === "string"
-        ? (cleanFields["item_name"] as string).trim()
-        : "";
-    if (!productId && !itemName) {
-      return NextResponse.json(
-        { error: "Обери товар або введи назву" },
-        { status: 400 },
-      );
-    }
-  }
-  if (productId !== null && category.requiresQuantity) {
-    if (quantity === null || quantity <= 0) {
-      return NextResponse.json(
-        { error: "Вкажи кількість" },
-        { status: 400 },
-      );
-    }
-  }
+  const {
+    category,
+    cleanFields,
+    storeLabel,
+    clientSubmissionId,
+    clientCreatedAt,
+    productId,
+    quantity,
+    rawPhotos,
+  } = validated.data;
 
   // TG init_data is strictly optional. We only copy TG identity into the DB
   // if HMAC validation succeeded — never trust the client's claimed TG id.
@@ -231,20 +93,9 @@ export async function POST(req: Request) {
   // mime. Anything else (arbitrary http(s):// URLs, javascript:, data: with
   // non-image mime, oversized) is dropped — never stored.
   let photoUrl: string | null = null;
-  let photoUrls: string[] = [];
-  const incomingPhotos = Array.isArray(payload.photo_urls)
-    ? payload.photo_urls
-    : typeof payload.photo_url === "string"
-      ? [payload.photo_url]
-      : [];
-  if (incomingPhotos.length > MAX_PHOTOS) {
-    return NextResponse.json(
-      { error: `Too many photos: max ${MAX_PHOTOS}` },
-      { status: 400 },
-    );
-  }
-  if (supabase && incomingPhotos.length > 0) {
-    for (const rawPhoto of incomingPhotos) {
+  const photoUrls: string[] = [];
+  if (supabase && rawPhotos.length > 0) {
+    for (const rawPhoto of rawPhotos) {
       if (typeof rawPhoto !== "string") continue;
       const safePath = await sanitizeAndUploadPhoto(supabase, rawPhoto);
       if (safePath) photoUrls.push(safePath);
@@ -309,7 +160,7 @@ export async function POST(req: Request) {
   );
 
   const record = {
-    category: payload.category as CategoryId,
+    category: category.id,
     store_id: effectiveStoreId,
     store_label: storeLabel,
     user_id: sess.uid,
