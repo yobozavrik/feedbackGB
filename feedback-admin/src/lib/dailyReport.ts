@@ -72,7 +72,8 @@ export type ReportResult =
  */
 export async function buildAndSendDailyReport(): Promise<ReportResult> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_REPORT_CHAT_ID;
+  const chatId =
+    process.env.TELEGRAM_REPORT_CHAT_ID ?? process.env.TELEGRAM_CHAT_ID;
   if (!botToken || !chatId) {
     return { ok: false, error: "telegram_env_missing", status: 503 };
   }
