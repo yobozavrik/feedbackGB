@@ -30,7 +30,7 @@ interface AdminShellProps {
   };
 }
 
-function roleLabel(role: "admin" | "seller" | "super_admin"): string {
+export function roleLabel(role: "admin" | "seller" | "super_admin"): string {
   if (role === "super_admin") return "супер-адмін";
   if (role === "admin") return "адмін";
   return "продавчиня";

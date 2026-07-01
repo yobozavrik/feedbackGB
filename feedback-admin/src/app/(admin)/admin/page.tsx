@@ -7,6 +7,7 @@ import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 import { DashboardKPI, type DashboardRow } from "@/components/admin/DashboardKPI";
 import { DashboardHeatmap } from "@/components/admin/DashboardHeatmap";
 import { DashboardSignals } from "@/components/admin/DashboardSignals";
+import { AdminHeaderStatus } from "@/components/admin/AdminHeaderStatus";
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +137,13 @@ export default async function AdminPage() {
     <AdminPageContainer
       title="Огляд"
       subTitle="Стрічка фідбеку та швидкі дії адміністратора"
+      extra={
+        sess ? (
+          <AdminHeaderStatus
+            currentUser={{ fullName: sess.full_name, role: sess.role }}
+          />
+        ) : undefined
+      }
     >
       {!isSupabaseConfigured() ? (
         <div className="card mb-4 p-5 text-[14px] leading-relaxed text-ink-700">
