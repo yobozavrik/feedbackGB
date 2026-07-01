@@ -1,6 +1,5 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
+import { requireAdminSession } from "@/lib/adminAuth";
 import { buildAndSendDailyReport } from "@/lib/dailyReport";
 import { ipFromRequest, logAudit, uaFromRequest } from "@/lib/audit";
 
@@ -14,8 +13,8 @@ export const dynamic = "force-dynamic";
  * without waiting for the scheduled cron at 21:30.
  */
 export async function POST(req: Request) {
-  const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
-  if (!sess || !isAdminTier(sess.role)) {
+  const sess = await requireAdminSession();
+  if (!sess) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

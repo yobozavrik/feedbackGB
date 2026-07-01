@@ -1,7 +1,6 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase";
-import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
+import { requireAdminSession } from "@/lib/adminAuth";
 import { ipFromRequest, logAudit, uaFromRequest } from "@/lib/audit";
 import { isUuid } from "@/lib/validation";
 
@@ -18,8 +17,8 @@ export async function POST(
   req: Request,
   { params }: { params: { id: string } },
 ) {
-  const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
-  if (!sess || !isAdminTier(sess.role)) {
+  const sess = await requireAdminSession();
+  if (!sess) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
