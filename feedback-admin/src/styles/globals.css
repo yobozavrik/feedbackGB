@@ -329,6 +329,90 @@ body {
   border-color: rgb(var(--border));
 }
 
+.admin-kpi-grid {
+  gap: 12px;
+}
+
+.admin-kpi-grid .ant-pro-statistic-card {
+  min-height: 124px;
+  overflow: hidden;
+}
+
+.admin-kpi-grid .ant-pro-card-body {
+  padding: 16px !important;
+}
+
+.admin-signals-card {
+  overflow: hidden;
+  border-color: rgb(var(--warning)) !important;
+}
+
+.admin-signals-card .ant-card-head {
+  background: rgb(var(--surface-2));
+}
+
+.admin-signals-card .ant-alert {
+  border-radius: var(--admin-radius);
+}
+
+.admin-heatmap-card table {
+  border-collapse: separate;
+}
+
+.admin-heatmap-card td {
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.admin-heatmap-card td:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 0 2px rgb(var(--brand-50));
+}
+
+.admin-feed-table .ant-pro-card {
+  overflow: hidden;
+}
+
+.admin-feed-table .ant-pro-table-list-toolbar {
+  padding-inline: 16px;
+  border-bottom: 1px solid rgb(var(--border-2));
+}
+
+.admin-feed-table .ant-pro-table-list-toolbar-title {
+  color: rgb(var(--ink-900));
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.admin-feed-table .ant-segmented {
+  border-radius: 9px;
+  background: rgb(var(--surface));
+}
+
+.admin-feed-table .ant-segmented-item-selected {
+  color: rgb(var(--brand-600));
+  font-weight: 600;
+}
+
+.admin-feed-drawer .ant-drawer-content {
+  box-shadow: -12px 0 40px rgba(31, 18, 18, 0.16);
+}
+
+.admin-feed-drawer .ant-drawer-header {
+  min-height: 64px;
+  padding: 16px 20px;
+}
+
+.admin-feed-drawer .ant-drawer-body {
+  padding: 18px 20px 22px;
+}
+
+.admin-feed-drawer .ant-typography h5,
+.admin-feed-drawer h5.ant-typography {
+  color: rgb(var(--ink-900));
+  font-size: 14px;
+  font-weight: 700;
+}
+
 @layer components {
   .card {
     @apply rounded-3xl bg-elev shadow-soft;
