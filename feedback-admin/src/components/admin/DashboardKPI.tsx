@@ -170,10 +170,11 @@ export function DashboardKPI({ rows }: Props) {
     <StatisticCard.Group
       className="admin-kpi-grid"
       direction="row"
+      wrap
       style={{ marginBottom: 16 }}
-      colSpan={{ xs: 24, sm: 12, md: 12, lg: 6, xl: 6 }}
     >
       <StatisticCard
+        colSpan={{ xs: "100%", sm: "50%", md: "50%", lg: "20%", xl: "20%" }}
         statistic={{
           title: `Прострочено (>${OVERDUE_HOURS} год)`,
           value: stats.overdueCount,
@@ -188,6 +189,7 @@ export function DashboardKPI({ rows }: Props) {
         }}
       />
       <StatisticCard
+        colSpan={{ xs: "100%", sm: "50%", md: "50%", lg: "20%", xl: "20%" }}
         statistic={{
           title: "За тиждень",
           value: stats.totalThisWeek,
@@ -201,6 +203,7 @@ export function DashboardKPI({ rows }: Props) {
         }}
       />
       <StatisticCard
+        colSpan={{ xs: "100%", sm: "50%", md: "50%", lg: "20%", xl: "20%" }}
         statistic={{
           title: "Дефекти за тиждень",
           value: stats.defectsThisWeek,
@@ -214,6 +217,7 @@ export function DashboardKPI({ rows }: Props) {
         }}
       />
       <StatisticCard
+        colSpan={{ xs: "100%", sm: "50%", md: "50%", lg: "20%", xl: "20%" }}
         statistic={{
           title: "Активних магазинів",
           value: stats.storesThisWeek,
@@ -229,6 +233,7 @@ export function DashboardKPI({ rows }: Props) {
         }}
       />
       <StatisticCard
+        colSpan={{ xs: "100%", sm: "50%", md: "50%", lg: "20%", xl: "20%" }}
         statistic={{
           title: "Сьогодні",
           value: stats.todayCount,

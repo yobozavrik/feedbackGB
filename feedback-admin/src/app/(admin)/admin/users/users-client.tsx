@@ -681,6 +681,27 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
         },
       },
       {
+        title: "Останній вхід",
+        dataIndex: "last_login",
+        width: 170,
+        sorter: (a, b) => {
+          const ta = a.last_login ? new Date(a.last_login).getTime() : 0;
+          const tb = b.last_login ? new Date(b.last_login).getTime() : 0;
+          return ta - tb;
+        },
+        render: (_, row) =>
+          row.last_login ? (
+            <Space direction="vertical" size={2} style={{ lineHeight: 1.2 }}>
+              <Text style={{ fontSize: 12 }}>
+                {new Date(row.last_login).toLocaleString("uk-UA")}
+              </Text>
+              <UserLastLocation row={row} />
+            </Space>
+          ) : (
+            <Text type="secondary">жодного</Text>
+          ),
+      },
+      {
         title: "Відгуки",
         key: "feedback_cats",
         width: 300,
