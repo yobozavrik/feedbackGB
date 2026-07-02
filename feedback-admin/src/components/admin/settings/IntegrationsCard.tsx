@@ -12,9 +12,14 @@ import {
   Typography,
   theme as antdTheme,
 } from "antd";
+import {
+  CardFootnote,
+  ItemTitle,
+  MetaText,
+} from "@/components/admin/ui/typography";
 import type { IntegrationStatus } from "@/app/(admin)/admin/settings/page";
 
-const { Text, Paragraph } = Typography;
+const { Text } = Typography;
 
 interface Props {
   integrations: IntegrationStatus[];
@@ -54,13 +59,9 @@ export function IntegrationsCard({ integrations }: Props) {
               />
             )}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <Text strong style={{ fontSize: 13 }}>
-                {it.label}
-              </Text>
+              <ItemTitle>{it.label}</ItemTitle>
               <div>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {it.description}
-                </Text>
+                <MetaText>{it.description}</MetaText>
               </div>
             </div>
             <Tag
@@ -73,13 +74,10 @@ export function IntegrationsCard({ integrations }: Props) {
           </div>
         ))}
       </Space>
-      <Paragraph
-        type="secondary"
-        style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}
-      >
+      <CardFootnote>
         Значення секретів не відображаються — лише чи задано змінну в
         оточенні. Редагувати їх можна тільки в Vercel Dashboard.
-      </Paragraph>
+      </CardFootnote>
     </Card>
   );
 }

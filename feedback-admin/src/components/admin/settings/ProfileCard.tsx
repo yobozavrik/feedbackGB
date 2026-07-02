@@ -12,10 +12,11 @@ import {
   theme as antdTheme,
 } from "antd";
 import Link from "next/link";
+import { CardFootnote } from "@/components/admin/ui/typography";
 import { fmtAbs, fmtRel } from "@/lib/timeFormat";
 import type { SettingsData } from "@/app/(admin)/admin/settings/page";
 
-const { Text, Paragraph } = Typography;
+const { Text } = Typography;
 
 interface Props {
   profile: SettingsData["profile"];
@@ -119,14 +120,11 @@ export function ProfileCard({ profile, hasPin, onChangePin }: Props) {
           {hasPin ? "Змінити PIN" : "Встановити PIN"}
         </Button>
       </div>
-      <Paragraph
-        type="secondary"
-        style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}
-      >
+      <CardFootnote>
         PIN — 6 цифр. При зміні автоматично скидається лічильник
         невдалих спроб і знімається lock. Подія потрапляє в{" "}
         <Link href="/admin/audit">Журнал</Link>.
-      </Paragraph>
+      </CardFootnote>
     </Card>
   );
 }

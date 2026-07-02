@@ -8,6 +8,7 @@ import {
   Typography,
   theme as antdTheme,
 } from "antd";
+import { ItemTitle, MetaText } from "@/components/admin/ui/typography";
 
 const { Text } = Typography;
 
@@ -39,11 +40,11 @@ export function NotificationsCard({
       <Space direction="vertical" size={12} style={{ width: "100%", paddingBlock: 4 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <Text strong style={{ fontSize: 13 }}>Звукові сигнали</Text>
+            <ItemTitle>Звукові сигнали</ItemTitle>
             <div>
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <MetaText>
                 Програвати звуковий сигнал при надходженні нового браку
-              </Text>
+              </MetaText>
             </div>
           </div>
           <Switch checked={soundEnabled} onChange={onToggleSound} />
@@ -51,11 +52,11 @@ export function NotificationsCard({
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <Text strong style={{ fontSize: 13 }}>Браузерні сповіщення</Text>
+            <ItemTitle>Браузерні сповіщення</ItemTitle>
             <div>
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <MetaText>
                 Показувати спливаючі повідомлення на робочому столі
-              </Text>
+              </MetaText>
             </div>
           </div>
           <Switch checked={pushEnabled} onChange={onTogglePush} />

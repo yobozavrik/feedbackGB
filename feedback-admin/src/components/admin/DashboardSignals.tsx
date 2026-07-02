@@ -8,6 +8,7 @@ import {
   CopyOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
+import { ItemTitle, MetaText } from "@/components/admin/ui/typography";
 import type { FeedRow } from "@/app/(admin)/admin/page";
 
 const { Text } = Typography;
@@ -118,15 +119,15 @@ export function DashboardSignals({ rows }: Props) {
             showIcon
             icon={<ClockCircleOutlined />}
             message={
-              <Text strong style={{ fontSize: 13 }}>
+              <ItemTitle>
                 Завислі звернення: {signals.stuck.length} шт.
-              </Text>
+              </ItemTitle>
             }
             description={
               <div style={{ marginTop: 4 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <MetaText>
                   Звернення перебувають у статусі «Новий» більше 3 днів:
-                </Text>
+                </MetaText>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
                   {signals.stuck.map((r) => (
                     <Tag key={r.id} color="warning" bordered={false} style={{ fontSize: 11 }}>
@@ -146,15 +147,15 @@ export function DashboardSignals({ rows }: Props) {
             showIcon
             icon={<WarningOutlined />}
             message={
-              <Text strong style={{ fontSize: 13 }}>
+              <ItemTitle>
                 Повторюваний брак товарів за тиждень: {signals.repeatedDefects.length} позицій
-              </Text>
+              </ItemTitle>
             }
             description={
               <div style={{ marginTop: 4 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <MetaText>
                   Наступні товари отримали повторні скарги на брак за останні 7 днів:
-                </Text>
+                </MetaText>
                 <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
                   {signals.repeatedDefects.map((d) => (
                     <div key={d.productId} style={{ fontSize: 12 }}>
@@ -179,15 +180,15 @@ export function DashboardSignals({ rows }: Props) {
             showIcon
             icon={<CopyOutlined />}
             message={
-              <Text strong style={{ fontSize: 13 }}>
+              <ItemTitle>
                 Одночасні проблеми з товаром сьогодні: {signals.crossStoreDupes.length} позицій
-              </Text>
+              </ItemTitle>
             }
             description={
               <div style={{ marginTop: 4 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <MetaText>
                   Один і той самий товар сьогодні заявлено як проблемний у кількох магазинах одночасно:
-                </Text>
+                </MetaText>
                 <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
                   {signals.crossStoreDupes.map((d) => (
                     <div key={d.productId} style={{ fontSize: 12 }}>

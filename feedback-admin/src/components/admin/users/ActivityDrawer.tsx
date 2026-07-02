@@ -10,6 +10,7 @@ import {
   Typography,
   theme as antdTheme,
 } from "antd";
+import { ItemTitle } from "@/components/admin/ui/typography";
 import type { AdminUser } from "@/app/(admin)/admin/users/page";
 import type { ActivityLogEntry } from "@/lib/adminUsersApi";
 
@@ -78,9 +79,9 @@ export function ActivityDrawer({ target, logs, loading, onClose }: Props) {
                 children: (
                   <div style={{ paddingBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                      <Text strong style={{ fontSize: 13 }}>
+                      <ItemTitle>
                         {log.category_emoji || "📝"} {log.category_title || log.category}
-                      </Text>
+                      </ItemTitle>
                       <Tag color={statusColor} style={{ fontSize: 10, margin: 0, paddingInline: 4 }}>
                         {statusText}
                       </Tag>

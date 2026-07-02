@@ -9,6 +9,7 @@ import {
   theme as antdTheme,
 } from "antd";
 import Link from "next/link";
+import { MetaText } from "@/components/admin/ui/typography";
 import { fmtAbs, fmtRel } from "@/lib/timeFormat";
 
 const { Text, Paragraph } = Typography;
@@ -45,16 +46,14 @@ export function MirrorCard({ lastManualMirror }: Props) {
           Безпечне до повторних викликів (idempotent).
         </Paragraph>
         {lastManualMirror ? (
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <MetaText>
             Останній <em>ручний</em> запуск:{" "}
             <Tooltip title={fmtAbs(lastManualMirror.occurred_at)}>
               <Text>{fmtRel(lastManualMirror.occurred_at)}</Text>
             </Tooltip>
-          </Text>
+          </MetaText>
         ) : (
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            Ручних запусків ще не було.
-          </Text>
+          <MetaText>Ручних запусків ще не було.</MetaText>
         )}
       </Space>
     </Card>

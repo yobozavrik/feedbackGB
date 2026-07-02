@@ -29,6 +29,10 @@ import {
   type FeedbackComment,
   type FeedbackPatch,
 } from "@/lib/adminFeedbackApi";
+import {
+  MetaText,
+  SectionLabel,
+} from "@/components/admin/ui/typography";
 import { authorOf, formatRelative, TINT_COLOR, type CategoryMeta } from "@/lib/feedFormat";
 import {
   FEEDBACK_STATUSES,
@@ -194,9 +198,7 @@ export function FeedDrawer({
         </Space>
       }
       extra={
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          {new Date(row.created_at).toLocaleString("uk-UA")}
-        </Text>
+        <MetaText>{new Date(row.created_at).toLocaleString("uk-UA")}</MetaText>
       }
     >
       <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -231,12 +233,7 @@ export function FeedDrawer({
               padding: "8px 12px",
             }}
           >
-            <Text
-              type="secondary"
-              style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 }}
-            >
-              Обраний товар
-            </Text>
+            <SectionLabel>Обраний товар</SectionLabel>
             <div style={{ marginTop: 2 }}>
               <Text strong style={{ fontSize: 14 }}>
                 {row.product_name}
@@ -264,12 +261,7 @@ export function FeedDrawer({
           </Title>
           <Space direction="vertical" size={10} style={{ width: "100%" }}>
             <div>
-              <Text
-                type="secondary"
-                style={{ fontSize: 11, textTransform: "uppercase" }}
-              >
-                Статус
-              </Text>
+              <SectionLabel>Статус</SectionLabel>
               <div style={{ marginTop: 4 }}>
                 <Segmented<FeedbackStatus>
                   value={draftStatus}
@@ -282,12 +274,7 @@ export function FeedDrawer({
               </div>
             </div>
             <div>
-              <Text
-                type="secondary"
-                style={{ fontSize: 11, textTransform: "uppercase" }}
-              >
-                Призначено
-              </Text>
+              <SectionLabel>Призначено</SectionLabel>
               <div style={{ marginTop: 4 }}>
                 <Space size={6} wrap>
                   <Select
@@ -312,12 +299,7 @@ export function FeedDrawer({
               </div>
             </div>
             <div>
-              <Text
-                type="secondary"
-                style={{ fontSize: 11, textTransform: "uppercase" }}
-              >
-                Коментар (опціонально)
-              </Text>
+              <SectionLabel>Коментар (опціонально)</SectionLabel>
               <TextArea
                 style={{ marginTop: 4 }}
                 value={comment}
@@ -370,16 +352,7 @@ export function FeedDrawer({
                       borderBottom: `1px solid ${token.colorBorderSecondary}`,
                     }}
                   >
-                    <Text
-                      type="secondary"
-                      style={{
-                        fontSize: 11,
-                        textTransform: "uppercase",
-                        letterSpacing: 0.4,
-                      }}
-                    >
-                      {k}
-                    </Text>
+                    <SectionLabel>{k}</SectionLabel>
                     <Paragraph
                       style={{
                         margin: 0,
