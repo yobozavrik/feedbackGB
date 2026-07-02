@@ -49,8 +49,22 @@ export type ApiResult<T> =
   | { ok: false; error?: string };
 
 async function readError(res: Response): Promise<string | undefined> {
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
-  return data.error;
+  const text = await res.text().catch(() => "");
+  let data: { error?: string; code?: string; details?: string } = {};
+  try {
+    data = text ? (JSON.parse(text) as { error?: string; code?: string; details?: string }) : {};
+  } catch {
+    data = {};
+  }
+  console.error("[adminUsersApi] request failed", {
+    status: res.status,
+    statusText: res.statusText,
+    error: data.error,
+    code: data.code,
+    details: data.details,
+    body: text,
+  });
+  return data.details ?? data.error;
 }
 
 export async function unlockUser(id: string): Promise<{ ok: boolean }> {

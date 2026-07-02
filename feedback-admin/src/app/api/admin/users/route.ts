@@ -220,10 +220,14 @@ export async function POST(req: Request) {
       console.error("admin create user set_user_pin error", { code: pinErr.code, message: pinErr.message });
       // Rollback the created user
       await supabase.from("users").delete().eq("id", newUser.id);
-      const msg = pinErr.message?.includes("collision")
-        ? "Цей PIN-код вже використовується іншим користувачем"
-        : "Не вдалося встановити PIN-код";
-      return NextResponse.json({ error: msg }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "Не вдалося встановити PIN-код",
+          code: pinErr.code,
+          details: pinErr.message,
+        },
+        { status: 400 },
+      );
     }
   }
 

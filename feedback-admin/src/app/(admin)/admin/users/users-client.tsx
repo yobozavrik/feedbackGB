@@ -94,6 +94,12 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
   const { token } = antdTheme.useToken();
   const { message } = App.useApp();
 
+  useEffect(() => {
+    if (createOpen) {
+      createForm.resetFields();
+    }
+  }, [createForm, createOpen]);
+
   const sellerStats = useMemo(() => {
     const stats = new Map<string, { total: number; categories: Record<string, number> }>();
     for (const f of feedbacks) {
@@ -856,10 +862,7 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
               key="create"
               type="primary"
               icon={<PlusOutlined />}
-              onClick={() => {
-                createForm.resetFields();
-                setCreateOpen(true);
-              }}
+              onClick={() => setCreateOpen(true)}
             >
               Створити користувача
             </Button>,
