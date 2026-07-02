@@ -10,15 +10,21 @@ import { ProTable, type ProColumns } from "@ant-design/pro-components";
 import {
   Space,
   Tag,
-  Tooltip,
   Typography,
   theme as antdTheme,
 } from "antd";
 import { useMemo } from "react";
-import { countryFlag, formatGeoLines } from "@/lib/geoip";
+import { AuditDetails } from "@/components/admin/audit/AuditDetails";
+import { LocationCell } from "@/components/admin/audit/LocationCell";
+import { MetaText } from "@/components/admin/ui/typography";
+import {
+  appSurfaceLabel,
+  formatTime,
+  readAppSurface,
+} from "@/lib/auditFormat";
 import type { AuditRow } from "./page";
 
-const { Text, Paragraph } = Typography;
+const { Text } = Typography;
 
 interface Props {
   rows: AuditRow[];
@@ -49,43 +55,6 @@ const SECTION_META: Record<
     icon: <ApartmentOutlined />,
   },
 };
-
-function formatTime(iso: string): string {
-  const t = new Date(iso);
-  const now = new Date();
-  const sameDay =
-    t.getFullYear() === now.getFullYear() &&
-    t.getMonth() === now.getMonth() &&
-    t.getDate() === now.getDate();
-  if (sameDay) {
-    return t.toLocaleTimeString("uk-UA", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  }
-  return t.toLocaleString("uk-UA", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function readAppSurface(meta: AuditRow["meta"]): string | null {
-  if (!meta || typeof meta !== "object") return null;
-  const value = (meta as Record<string, unknown>).app_surface;
-  return typeof value === "string" ? value : null;
-}
-
-function appSurfaceLabel(surface: string | null): {
-  label: string;
-  color: string;
-} | null {
-  if (surface === "web_app") return { label: "Веб-апп", color: "green" };
-  if (surface === "admin_panel") return { label: "Адмінка", color: "magenta" };
-  return null;
-}
 
 export function AuditClient({ rows }: Props) {
   const { token } = antdTheme.useToken();
@@ -304,111 +273,10 @@ export function AuditClient({ rows }: Props) {
         </Space>
       }
       toolBarRender={() => [
-        <Text key="hint" type="secondary" style={{ fontSize: 12 }}>
+        <MetaText key="hint">
           Останні 500 подій. Розгортай рядок щоб побачити meta і diff.
-        </Text>,
+        </MetaText>,
       ]}
     />
-  );
-}
-
-interface GeoIpMeta {
-  country?: string | null;
-  city?: string | null;
-  asn?: string | null;
-  isp?: string | null;
-}
-
-function readGeo(meta: AuditRow["meta"]): GeoIpMeta | null {
-  if (!meta || typeof meta !== "object") return null;
-  const raw = (meta as Record<string, unknown>).geoip;
-  if (!raw || typeof raw !== "object") return null;
-  return raw as GeoIpMeta;
-}
-
-function LocationCell({ row }: { row: AuditRow }) {
-  const geo = readGeo(row.meta);
-  if (!row.ip && !geo) {
-    return <Text type="secondary">—</Text>;
-  }
-  const flag = countryFlag(geo?.country ?? undefined);
-  const { cityCountry, ispAsn } = formatGeoLines(geo);
-  const secondary = ispAsn || row.ip;
-  return (
-    <Space direction="vertical" size={2} style={{ lineHeight: 1.2 }}>
-      <Space size={6} wrap>
-        {flag ? <span style={{ fontSize: 14 }}>{flag}</span> : null}
-        {cityCountry ? (
-          <Text style={{ fontSize: 12 }}>{cityCountry}</Text>
-        ) : (
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            —
-          </Text>
-        )}
-      </Space>
-      {secondary ? (
-        <Tooltip title={row.ip ? `IP: ${row.ip}` : undefined}>
-          <Text type="secondary" style={{ fontSize: 11 }}>
-            {secondary}
-          </Text>
-        </Tooltip>
-      ) : null}
-    </Space>
-  );
-}
-
-function AuditDetails({ row }: { row: AuditRow }) {
-  const { token } = antdTheme.useToken();
-  return (
-    <Space direction="vertical" size={12} style={{ width: "100%" }}>
-      {row.user_agent ? (
-        <div>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            User-Agent:
-          </Text>{" "}
-          <Text style={{ fontSize: 12 }}>{row.user_agent}</Text>
-        </div>
-      ) : null}
-      {row.meta && Object.keys(row.meta).length > 0 ? (
-        <div>
-          <Text type="secondary" style={{ fontSize: 12, display: "block" }}>
-            meta:
-          </Text>
-          <Paragraph
-            style={{
-              margin: 0,
-              padding: 12,
-              background: token.colorFillTertiary,
-              borderRadius: 8,
-              fontSize: 12,
-              fontFamily: "monospace",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {JSON.stringify(row.meta, null, 2)}
-          </Paragraph>
-        </div>
-      ) : null}
-      {row.diff && Object.keys(row.diff).length > 0 ? (
-        <div>
-          <Text type="secondary" style={{ fontSize: 12, display: "block" }}>
-            diff:
-          </Text>
-          <Paragraph
-            style={{
-              margin: 0,
-              padding: 12,
-              background: token.colorFillTertiary,
-              borderRadius: 8,
-              fontSize: 12,
-              fontFamily: "monospace",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {JSON.stringify(row.diff, null, 2)}
-          </Paragraph>
-        </div>
-      ) : null}
-    </Space>
   );
 }
