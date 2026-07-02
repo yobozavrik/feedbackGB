@@ -1,5 +1,10 @@
 "use client";
 
+// NOTE: feedback-app has its own PinPad copy with deliberately different
+// styling (each app has its own brand palette since the premium-retail
+// redesign). Logic changes should be mirrored; visual divergence is intended.
+// Only use brand shades defined in tailwind.config.ts (50/500/600).
+
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { identifyUser, track } from "@/lib/analytics";
@@ -146,7 +151,7 @@ export function PinPad() {
               !k
                 ? "invisible"
                 : k === "OK"
-                  ? "bg-brand-100 text-brand-700 shadow-soft active:scale-95"
+                  ? "bg-brand-50 text-brand-600 shadow-soft active:scale-95"
                   : "bg-elev text-ink-900 shadow-soft hover:bg-brand-50 active:scale-95"
             } ${busy ? "opacity-50" : ""}`}
           >

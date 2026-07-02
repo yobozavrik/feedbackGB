@@ -1,5 +1,9 @@
 "use client";
 
+// NOTE: feedback-admin has its own PinPad copy with deliberately different
+// styling (each app has its own brand palette since the premium-retail
+// redesign). Logic changes should be mirrored; visual divergence is intended.
+
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { identifyUser, track } from "@/lib/analytics";
