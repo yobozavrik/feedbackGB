@@ -1,74 +1,26 @@
 "use client";
 
-import {
-  CheckCircleFilled,
-  ClockCircleOutlined,
-  CloudUploadOutlined,
-  KeyOutlined,
-  MinusCircleFilled,
-  NotificationOutlined,
-  SendOutlined,
-  ShopOutlined,
-  TeamOutlined,
-  UserOutlined,
-} from "@ant-design/icons";
-import {
-  ModalForm,
-  ProDescriptions,
-  ProFormText,
-} from "@ant-design/pro-components";
-import {
-  App,
-  Alert,
-  Button,
-  Card,
-  Col,
-  Row,
-  Space,
-  Switch,
-  Tag,
-  Tooltip,
-  Typography,
-  theme as antdTheme,
-} from "antd";
-import Link from "next/link";
+import { App, Col, Row } from "antd";
 import { useCallback, useState } from "react";
-import { fmtAbs, fmtRel } from "@/lib/timeFormat";
-import type { CronEntry, SettingsData } from "./page";
-
-const { Text, Paragraph } = Typography;
+import { DailyReportCard } from "@/components/admin/settings/DailyReportCard";
+import { IntegrationsCard } from "@/components/admin/settings/IntegrationsCard";
+import { MirrorCard } from "@/components/admin/settings/MirrorCard";
+import { NotificationsCard } from "@/components/admin/settings/NotificationsCard";
+import {
+  PinModal,
+  type PinModalValues,
+} from "@/components/admin/settings/PinModal";
+import { ProfileCard } from "@/components/admin/settings/ProfileCard";
+import { setUserPin } from "@/lib/adminUsersApi";
+import type { SettingsData } from "./page";
 
 const PIN_RE = /^\d{6}$/;
-
-/**
- * Перетворити cron-вираз UTC на людський опис у Києві.
- * EET = UTC+2 (зима), EEST = UTC+3 (літо), тому показуємо діапазон
- * "HH:MM_winter–HH:MM_summer" — Vercel запускає щоденний звіт двома cron-ами,
- * сервер сам обирає правильну DST-фазу.
- * Підтримує лише формат "M H * * *" (щодня).
- */
-function describeCronUtc(expr: string): string {
-  const parts = expr.split(" ").filter(Boolean);
-  if (parts.length !== 5) return expr;
-  const [m, h, dom, mon, dow] = parts;
-  if (dom !== "*" || mon !== "*" || dow !== "*") return expr;
-  const minute = parseInt(m, 10);
-  const hour = parseInt(h, 10);
-  if (Number.isNaN(minute) || Number.isNaN(hour)) return expr;
-  const utc = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} UTC`;
-  const kyivWinter = (hour + 2) % 24;
-  const kyivSummer = (hour + 3) % 24;
-  const fmt = (h2: number) =>
-    `${String(h2).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  return `щодня ${fmt(kyivWinter)}–${fmt(kyivSummer)} (Київ, зима–літо) · ${utc}`;
-}
 
 interface Props {
   data: SettingsData;
 }
 
 export function SettingsClient({ data }: Props) {
-  const { token } = antdTheme.useToken();
   const { message } = App.useApp();
   const [hasPin, setHasPin] = useState(data.profile.has_pin);
   const [pinModalOpen, setPinModalOpen] = useState(false);
@@ -109,7 +61,7 @@ export function SettingsClient({ data }: Props) {
   }, [message]);
 
   const handleSavePin = useCallback(
-    async (values: { pin: string; confirm: string }) => {
+    async (values: PinModalValues) => {
       if (values.pin !== values.confirm) {
         message.error("Підтвердження не співпадає.");
         return false;
@@ -118,19 +70,9 @@ export function SettingsClient({ data }: Props) {
         message.error("PIN має бути 6–8 цифр.");
         return false;
       }
-      const res = await fetch(
-        `/api/admin/users/${data.profile.uid}/pin`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ pin: values.pin }),
-        },
-      );
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        message.error(body.error ?? "Помилка сервера");
+      const result = await setUserPin(data.profile.uid, values.pin);
+      if (!result.ok) {
+        message.error(result.error ?? "Помилка сервера");
         return false;
       }
       setHasPin(true);
@@ -140,373 +82,46 @@ export function SettingsClient({ data }: Props) {
     [data.profile.uid, hasPin, message],
   );
 
-  const dailyReportCron: CronEntry | null =
-    data.crons.find((c) => c.path === "/api/cron/daily-report") ?? null;
-
   return (
     <Row gutter={[16, 16]}>
-      {/* === ПРОФІЛЬ === */}
       <Col xs={24} lg={12}>
-        <Card
-          size="small"
-          title={
-            <Space size={8}>
-              <UserOutlined style={{ color: token.colorPrimary }} />
-              <Text strong>Профіль</Text>
-            </Space>
-          }
-        >
-          <ProDescriptions<SettingsData["profile"]>
-            column={1}
-            size="small"
-            colon
-            dataSource={data.profile}
-            columns={[
-              {
-                title: "Імʼя",
-                dataIndex: "full_name",
-                render: (_, row) => row.full_name,
-              },
-              {
-                title: "Роль",
-                dataIndex: "role",
-                render: (_, row) => {
-                  const color =
-                    row.role === "super_admin"
-                      ? "red"
-                      : row.role === "admin"
-                        ? "magenta"
-                        : "default";
-                  const label =
-                    row.role === "super_admin"
-                      ? "Супер-адмін"
-                      : row.role === "admin"
-                        ? "Адмін"
-                        : "Продавчиня";
-                  return (
-                    <Tag color={color} bordered={false}>
-                      {label}
-                    </Tag>
-                  );
-                },
-              },
-              {
-                title: "Магазин",
-                dataIndex: "store_name",
-                render: (_, row) => {
-                  if (row.store_id == null)
-                    return <Text type="secondary">не привʼязано</Text>;
-                  return (
-                    <Space size={6}>
-                      <ShopOutlined
-                        style={{ color: token.colorTextTertiary }}
-                      />
-                      <Text>{row.store_name ?? `#${row.store_id}`}</Text>
-                    </Space>
-                  );
-                },
-              },
-              {
-                title: "PIN-код",
-                dataIndex: "has_pin",
-                render: () =>
-                  hasPin ? (
-                    <Tag color="green" bordered={false}>
-                      встановлено
-                    </Tag>
-                  ) : (
-                    <Tag color="orange" bordered={false}>
-                      не встановлено
-                    </Tag>
-                  ),
-              },
-              {
-                title: "Останній вхід",
-                dataIndex: "last_login",
-                render: (_, row) =>
-                  row.last_login ? (
-                    <Tooltip title={fmtAbs(row.last_login)}>
-                      <Text type="secondary">{fmtRel(row.last_login)}</Text>
-                    </Tooltip>
-                  ) : (
-                    <Text type="secondary">—</Text>
-                  ),
-              },
-            ]}
-          />
-          <div style={{ marginTop: 12 }}>
-            <Button
-              type="primary"
-              icon={<KeyOutlined />}
-              onClick={() => setPinModalOpen(true)}
-            >
-              {hasPin ? "Змінити PIN" : "Встановити PIN"}
-            </Button>
-          </div>
-          <Paragraph
-            type="secondary"
-            style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}
-          >
-            PIN — 6 цифр. При зміні автоматично скидається лічильник
-            невдалих спроб і знімається lock. Подія потрапляє в{" "}
-            <Link href="/admin/audit">Журнал</Link>.
-          </Paragraph>
-        </Card>
+        <ProfileCard
+          profile={data.profile}
+          hasPin={hasPin}
+          onChangePin={() => setPinModalOpen(true)}
+        />
       </Col>
 
-      {/* === ІНТЕГРАЦІЇ === */}
       <Col xs={24} lg={12}>
-        <Card
-          size="small"
-          title={
-            <Space size={8}>
-              <TeamOutlined style={{ color: token.colorPrimary }} />
-              <Text strong>Інтеграції</Text>
-            </Space>
-          }
-        >
-          <Space direction="vertical" size={6} style={{ width: "100%" }}>
-            {data.integrations.map((it) => (
-              <div
-                key={it.key}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 10,
-                  padding: "6px 0",
-                }}
-              >
-                {it.set ? (
-                  <CheckCircleFilled
-                    style={{ color: token.colorSuccess, fontSize: 16 }}
-                  />
-                ) : (
-                  <MinusCircleFilled
-                    style={{ color: token.colorTextTertiary, fontSize: 16 }}
-                  />
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <Text strong style={{ fontSize: 13 }}>
-                    {it.label}
-                  </Text>
-                  <div>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {it.description}
-                    </Text>
-                  </div>
-                </div>
-                <Tag
-                  color={it.set ? "green" : "default"}
-                  bordered={false}
-                  style={{ marginInlineEnd: 0 }}
-                >
-                  {it.set ? "ok" : "не задано"}
-                </Tag>
-              </div>
-            ))}
-          </Space>
-          <Paragraph
-            type="secondary"
-            style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}
-          >
-            Значення секретів не відображаються — лише чи задано змінну в
-            оточенні. Редагувати їх можна тільки в Vercel Dashboard.
-          </Paragraph>
-        </Card>
+        <IntegrationsCard integrations={data.integrations} />
       </Col>
 
-      {/* === CRON: ЩОДЕННИЙ ЗВІТ === */}
       <Col xs={24} lg={12}>
-        <Card
-          size="small"
-          title={
-            <Space size={8}>
-              <SendOutlined style={{ color: token.colorPrimary }} />
-              <Text strong>Щоденний звіт у Telegram</Text>
-            </Space>
-          }
-          extra={
-            <Link href="/admin/tools" style={{ fontSize: 12 }}>
-              Запустити вручну →
-            </Link>
-          }
-        >
-          {dailyReportCron ? (
-            <Space direction="vertical" size={6} style={{ width: "100%" }}>
-              <Space size={6}>
-                <ClockCircleOutlined
-                  style={{ color: token.colorTextTertiary }}
-                />
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {data.crons
-                    .filter((c) => c.path === "/api/cron/daily-report")
-                    .map((c) => describeCronUtc(c.schedule))
-                    .join(" · ")}
-                </Text>
-              </Space>
-              <Paragraph
-                type="secondary"
-                style={{ fontSize: 12, marginBottom: 0 }}
-              >
-                Vercel Cron двічі викликає ендпоінт (для EET і EEST), а
-                сервер сам пропускає невідповідну DST-фазу. У production
-                cron захищений <code>CRON_SECRET</code>.
-              </Paragraph>
-              {data.lastManualReport ? (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Останній{" "}
-                  <em>ручний</em>
-                  {" "}
-                  запуск:{" "}
-                  <Tooltip title={fmtAbs(data.lastManualReport.occurred_at)}>
-                    <Text>{fmtRel(data.lastManualReport.occurred_at)}</Text>
-                  </Tooltip>
-                </Text>
-              ) : (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Ручних запусків ще не було.
-                </Text>
-              )}
-            </Space>
-          ) : (
-            <Alert
-              type="warning"
-              showIcon
-              message="Cron у vercel.json не знайдено"
-              description="Перевір файл vercel.json — без нього щоденний звіт не запуститься автоматично."
-            />
-          )}
-        </Card>
+        <DailyReportCard
+          crons={data.crons}
+          lastManualReport={data.lastManualReport}
+        />
       </Col>
 
-      {/* === MIRROR === */}
       <Col xs={24} lg={12}>
-        <Card
-          size="small"
-          title={
-            <Space size={8}>
-              <CloudUploadOutlined
-                style={{ color: token.colorPrimary }}
-              />
-              <Text strong>Дзеркало в Google Drive</Text>
-            </Space>
-          }
-          extra={
-            <Link href="/admin/tools" style={{ fontSize: 12 }}>
-              Запустити вручну →
-            </Link>
-          }
-        >
-          <Space direction="vertical" size={6} style={{ width: "100%" }}>
-            <Paragraph
-              type="secondary"
-              style={{ fontSize: 12, marginBottom: 0 }}
-            >
-              Окремого cron-а немає — копіювання запускається{" "}
-              <em>автоматично</em> після успішного щоденного звіту.
-              Безпечне до повторних викликів (idempotent).
-            </Paragraph>
-            {data.lastManualMirror ? (
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                Останній <em>ручний</em> запуск:{" "}
-                <Tooltip title={fmtAbs(data.lastManualMirror.occurred_at)}>
-                  <Text>{fmtRel(data.lastManualMirror.occurred_at)}</Text>
-                </Tooltip>
-              </Text>
-            ) : (
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                Ручних запусків ще не було.
-              </Text>
-            )}
-          </Space>
-        </Card>
+        <MirrorCard lastManualMirror={data.lastManualMirror} />
       </Col>
 
-      {/* === СПОВІЩЕННЯ === */}
       <Col xs={24} lg={12}>
-        <Card
-          size="small"
-          title={
-            <Space size={8}>
-              <NotificationOutlined style={{ color: token.colorPrimary }} />
-              <Text strong>Звукові та Push-сповіщення (Realtime)</Text>
-            </Space>
-          }
-        >
-          <Space direction="vertical" size={12} style={{ width: "100%", paddingBlock: 4 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <Text strong style={{ fontSize: 13 }}>Звукові сигнали</Text>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    Програвати звуковий сигнал при надходженні нового браку
-                  </Text>
-                </div>
-              </div>
-              <Switch checked={soundEnabled} onChange={handleToggleSound} />
-            </div>
-            
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <Text strong style={{ fontSize: 13 }}>Браузерні сповіщення</Text>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    Показувати спливаючі повідомлення на робочому столі
-                  </Text>
-                </div>
-              </div>
-              <Switch checked={pushEnabled} onChange={handleTogglePush} />
-            </div>
-          </Space>
-        </Card>
+        <NotificationsCard
+          soundEnabled={soundEnabled}
+          pushEnabled={pushEnabled}
+          onToggleSound={handleToggleSound}
+          onTogglePush={handleTogglePush}
+        />
       </Col>
 
-      <ModalForm<{ pin: string; confirm: string }>
-        title={hasPin ? "Змінити PIN" : "Встановити PIN"}
+      <PinModal
         open={pinModalOpen}
+        hasPin={hasPin}
         onOpenChange={setPinModalOpen}
-        modalProps={{
-          destroyOnClose: true,
-          okText: "Зберегти",
-          cancelText: "Скасувати",
-        }}
         onFinish={handleSavePin}
-        layout="vertical"
-        width={420}
-      >
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="PIN — 6 цифр. Він автоматично хешується bcrypt-ом і ніколи не зберігається у відкритому вигляді."
-        />
-        <ProFormText.Password
-          name="pin"
-          label="Новий PIN"
-          placeholder="6 цифр"
-          fieldProps={{ inputMode: "numeric", maxLength: 6 }}
-          rules={[
-            { required: true, message: "Введіть PIN" },
-            {
-              pattern: PIN_RE,
-              message: "PIN має бути 6 цифр",
-            },
-          ]}
-        />
-        <ProFormText.Password
-          name="confirm"
-          label="Підтвердити PIN"
-          placeholder="Повторіть"
-          fieldProps={{ inputMode: "numeric", maxLength: 6 }}
-          rules={[
-            { required: true, message: "Підтвердіть PIN" },
-            {
-              pattern: PIN_RE,
-              message: "PIN має бути 6 цифр",
-            },
-          ]}
-        />
-      </ModalForm>
+      />
     </Row>
   );
 }
