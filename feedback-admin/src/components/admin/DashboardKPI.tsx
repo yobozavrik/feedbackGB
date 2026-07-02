@@ -12,6 +12,7 @@ import {
 import { StatisticCard } from "@ant-design/pro-components";
 import { Tag, Typography, theme as antdTheme } from "antd";
 import { useMemo } from "react";
+import { MetaText } from "@/components/admin/ui/typography";
 import { HOUR_MS, OVERDUE_HOURS, ageMs, formatAge, isOpen } from "@/lib/sla";
 
 const { Text } = Typography;
@@ -136,11 +137,7 @@ export function DashboardKPI({ rows }: Props) {
     invertColors = false,
   ) => {
     if (d.direction === "flat") {
-      return (
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          без змін
-        </Text>
-      );
+      return <MetaText>без змін</MetaText>;
     }
     const goodIsUp = !invertColors;
     const isGood = d.direction === "up" ? goodIsUp : !goodIsUp;
@@ -161,9 +158,7 @@ export function DashboardKPI({ rows }: Props) {
         найстаріший відкритий: {formatAge(stats.oldestOpenMs)}
       </Text>
     ) : (
-      <Text type="secondary" style={{ fontSize: 12 }}>
-        усе під контролем
-      </Text>
+      <MetaText>усе під контролем</MetaText>
     );
 
   return (
@@ -225,9 +220,7 @@ export function DashboardKPI({ rows }: Props) {
             <ShopOutlined style={{ color: token.colorInfo, fontSize: 22 }} />
           ),
           description: (
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              минулий тиждень: {stats.storesLastWeek}
-            </Text>
+            <MetaText>минулий тиждень: {stats.storesLastWeek}</MetaText>
           ),
           suffix: "точок",
         }}
@@ -250,9 +243,7 @@ export function DashboardKPI({ rows }: Props) {
               </Tag>
             </Text>
           ) : (
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              ще нема даних
-            </Text>
+            <MetaText>ще нема даних</MetaText>
           ),
           suffix: stats.todayCount === 1 ? "запис" : "записів",
         }}

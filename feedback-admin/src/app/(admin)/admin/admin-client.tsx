@@ -446,7 +446,7 @@ export function AdminClient({
         }
         toolBarRender={() => [
           currentAdminId && !assignedToMeOnly ? (
-            <Space key="my-queue" size={6}>
+            <Space key="my-queue" size={6} style={{ whiteSpace: "nowrap" }}>
               <Switch
                 checked={myQueueOnly}
                 onChange={setMyQueueOnly}

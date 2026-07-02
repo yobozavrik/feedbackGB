@@ -18,6 +18,7 @@ import {
 } from "antd";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { MetaText } from "@/components/admin/ui/typography";
 import {
   categoryTagColor,
   fmtRel,
@@ -294,9 +295,7 @@ export function StoreDrawer({ summary, detail, onClose }: Props) {
                         </Space>
                       }
                       description={
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          Останній вхід: {fmtRel(s.last_login)}
-                        </Text>
+                        <MetaText>Останній вхід: {fmtRel(s.last_login)}</MetaText>
                       }
                     />
                   </List.Item>

@@ -10,6 +10,7 @@ import {
   theme as antdTheme,
 } from "antd";
 import Link from "next/link";
+import { MetaText } from "@/components/admin/ui/typography";
 import { describeCronUtc } from "@/lib/cronSchedule";
 import { fmtAbs, fmtRel } from "@/lib/timeFormat";
 import type { CronEntry } from "@/app/(admin)/admin/settings/page";
@@ -48,9 +49,9 @@ export function DailyReportCard({ crons, lastManualReport }: Props) {
             <ClockCircleOutlined
               style={{ color: token.colorTextTertiary }}
             />
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <MetaText>
               {reportCrons.map((c) => describeCronUtc(c.schedule)).join(" · ")}
-            </Text>
+            </MetaText>
           </Space>
           <Paragraph
             type="secondary"
@@ -61,7 +62,7 @@ export function DailyReportCard({ crons, lastManualReport }: Props) {
             cron захищений <code>CRON_SECRET</code>.
           </Paragraph>
           {lastManualReport ? (
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <MetaText>
               Останній{" "}
               <em>ручний</em>
               {" "}
@@ -69,11 +70,9 @@ export function DailyReportCard({ crons, lastManualReport }: Props) {
               <Tooltip title={fmtAbs(lastManualReport.occurred_at)}>
                 <Text>{fmtRel(lastManualReport.occurred_at)}</Text>
               </Tooltip>
-            </Text>
+            </MetaText>
           ) : (
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              Ручних запусків ще не було.
-            </Text>
+            <MetaText>Ручних запусків ще не було.</MetaText>
           )}
         </Space>
       ) : (
