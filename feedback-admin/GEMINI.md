@@ -24,8 +24,10 @@ The repository is a monorepo with **two independent Next.js apps deployed as sep
 - `src/app/(admin)/`: The Management Dashboard. Uses Ant Design Pro for complex tables and charts.
 - `src/app/api/`: API routes (Auth, Admin CRUD, Cron, Public Redirects). Feedback **submission** lives in `feedback-app`, not here.
 
-### ⚠️ Shared code duplicated across both apps
-Most of `src/lib/` (e.g. `categories.ts`, `session.ts`, `rateLimit.ts`, `telegram.ts`, `supabase.ts`, `dailyReport.ts`, `summary.ts`, `geoip.ts`, `cronAuth.ts`, `validation.ts`, `types.ts`) and `src/middleware.ts` exist as **copies in both `feedback-app` and `feedback-admin`**. When you change one of these files, apply the identical change to the sibling app and keep the copies byte-identical — drift here has already caused a security fix to land in only one app.
+### ⚠️ Shared code lives in `../shared/lib`
+Most of `src/lib/` (`categories.ts`, `session.ts`, `rateLimit.ts`, `telegram.ts`, `dailyReport.ts`, `summary.ts`, `geoip.ts`, `cronAuth.ts`, `validation.ts`, `types.ts`, `posthog/*`, …) are thin `export *` stubs pointing at the **single implementation in the repo-level `shared/lib/`** — edit the shared file, never the stub. Shared files may import `@/lib/supabase`; the alias resolves to the compiling app's own copy.
+
+Still deliberate **per-app copies** (they import packages from the app's own `node_modules`): `supabase.ts`, `analytics.ts`, plus `middleware.ts` and the auth/cron/photo API routes. When changing one of those, apply the identical change to the sibling app — the pre-commit drift check (`scripts/check-shared-drift.sh`) fails the commit otherwise.
 
 ### 2. Domain & Logic (`src/lib/`)
 Follows a "Clean Architecture" inspired approach:

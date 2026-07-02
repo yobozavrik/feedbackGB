@@ -41,6 +41,9 @@ const csp = [
 const nextConfig = {
   experimental: {
     typedRoutes: false,
+    // Compile imports from the repo-level shared/ directory (single source
+    // for lib code duplicated across both apps).
+    externalDir: true,
   },
   poweredByHeader: false,
   async headers() {
