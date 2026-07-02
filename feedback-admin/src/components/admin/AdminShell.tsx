@@ -108,10 +108,10 @@ export function AdminShell({ children, user }: AdminShellProps) {
 
   if (!mounted) {
     return (
-      <div style={{ display: "flex", minHeight: "100vh", background: "#fdf8f3" }}>
-        <div style={{ width: 236, background: "#fff", borderRight: "1px solid #f0e6dc" }} />
+      <div style={{ display: "flex", minHeight: "100vh", background: token.colorBgLayout }}>
+        <div style={{ width: 236, background: token.colorBgContainer, borderRight: `1px solid ${token.colorBorder}` }} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          <div style={{ height: 58, background: "#fff", borderBottom: "1px solid #f0e6dc" }} />
+          <div style={{ height: 58, background: token.colorBgContainer, borderBottom: `1px solid ${token.colorBorder}` }} />
           <div style={{ flex: 1, padding: 24, display: "flex", justifyContent: "center", alignItems: "center" }}>
             <Spin size="large" />
           </div>
@@ -135,7 +135,7 @@ export function AdminShell({ children, user }: AdminShellProps) {
             height: 30,
             borderRadius: 9,
             background: token.colorPrimary,
-            color: "#fff",
+            color: token.colorWhite,
             fontSize: 16,
             fontWeight: 700,
           }}
@@ -192,8 +192,8 @@ export function AdminShell({ children, user }: AdminShellProps) {
               <Avatar
                 size={30}
                 style={{
-                  background: "#fde7ee",
-                  color: "#d54a78",
+                  background: token.colorPrimaryBg,
+                  color: token.colorPrimary,
                   fontSize: 12,
                   fontWeight: 700,
                 }}
