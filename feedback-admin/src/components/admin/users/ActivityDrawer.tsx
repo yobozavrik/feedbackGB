@@ -107,20 +107,20 @@ export function ActivityDrawer({ target, logs, loading, onClose }: Props) {
                 <>
                   <div style={{ fontWeight: "bold" }}>{log.action_title}</div>
                   {log.ip && (
-                    <div style={{ fontSize: 11, color: "#8c8c8c" }}>
+                    <div style={{ fontSize: 11, color: token.colorTextTertiary }}>
                       IP: {log.ip} {log.user_agent ? `| ${log.user_agent.slice(0, 40)}...` : ""}
                     </div>
                   )}
                   {hasMeta && (
-                    <div style={{ marginTop: 4, background: "#f5f5f5", padding: "4px 8px", borderRadius: 4, fontSize: 11 }}>
+                    <div style={{ marginTop: 4, background: token.colorFillAlter, padding: "4px 8px", borderRadius: token.borderRadiusSM, fontSize: 11 }}>
                       <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
                         {JSON.stringify(log.meta, null, 2)}
                       </pre>
                     </div>
                   )}
                   {hasDiff && (
-                    <div style={{ marginTop: 4, background: "#fffbe6", padding: "4px 8px", borderRadius: 4, fontSize: 11, border: "1px solid #ffe58f" }}>
-                      <div style={{ fontWeight: "bold", color: "#d4b106", marginBottom: 2 }}>Зміни:</div>
+                    <div style={{ marginTop: 4, background: token.colorWarningBg, padding: "4px 8px", borderRadius: token.borderRadiusSM, fontSize: 11, border: `1px solid ${token.colorWarningBorder}` }}>
+                      <div style={{ fontWeight: "bold", color: token.colorWarningText, marginBottom: 2 }}>Зміни:</div>
                       <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
                         {JSON.stringify(log.diff, null, 2)}
                       </pre>
