@@ -53,9 +53,34 @@ export function CategoryGrid() {
       {/* 3. Consumables request */}
       {consumables && <PriorityCard c={consumables} idx={2} />}
 
-      {/* 4. Secondary categories directly rendered in a 2-column grid */}
+      {/* 4. HR questions flow button */}
+      <Link
+        href="/hr-menu"
+        onClick={() => track("home_category_open", { category: "hr_menu", section: "priority" })}
+        className="group relative flex h-[118px] animate-fade-up items-center overflow-hidden rounded-xl border border-ink-300/20 bg-elev p-4 shadow-soft transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] active:bg-elev2"
+        style={{ animationDelay: "180ms" }}
+      >
+        <div className="relative flex w-full items-center gap-4">
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-[30px] leading-none text-brand-500">
+            🧑‍💼
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-[19px] font-semibold leading-tight text-ink-900">
+              Питання по HR
+            </h3>
+            <p className="mt-1 text-[13px] leading-snug text-ink-500">
+              Відпустка, вихідні, лікарняний, звільнення
+            </p>
+          </div>
+          <span aria-hidden className="text-[22px] text-brand-500">
+            →
+          </span>
+        </div>
+      </Link>
+
+      {/* 5. Secondary categories directly rendered in a 2-column grid */}
       {secondary.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 pt-1 animate-fade-up" style={{ animationDelay: "180ms" }}>
+        <div className="grid grid-cols-2 gap-2 pt-1 animate-fade-up" style={{ animationDelay: "240ms" }}>
           {secondary.map((c) => (
             <SecondaryCard key={c.id} c={c} />
           ))}
