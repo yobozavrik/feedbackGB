@@ -16,6 +16,51 @@ interface PatchBody {
 }
 
 /**
+ * GET /api/admin/feedback/<uuid>
+ * Admin-only. Returns just enough of a single feedback row to enrich a
+ * realtime notification (category + summary) — the realtime broadcast
+ * itself only carries `{ id, event }` (see 018_feedback_realtime_broadcast.sql),
+ * deliberately never the row content, since Realtime broadcast channels are
+ * reachable with the public anon key and `feedback` has no RLS policies
+ * granting anon/authenticated any access. This endpoint is the
+ * authenticated follow-up fetch instead.
+ */
+export async function GET(
+  _req: Request,
+  { params }: { params: { id: string } },
+) {
+  const sess = await requireAdminSession();
+  if (!sess) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const id = params.id;
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: "bad_id" }, { status: 400 });
+  }
+
+  const supabase = getServerSupabase();
+  if (!supabase) {
+    return NextResponse.json({ error: "supabase_not_configured" }, { status: 503 });
+  }
+
+  const { data, error } = await supabase
+    .from("feedback_feed")
+    .select("id, category, category_emoji, category_title, summary")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) {
+    console.error("feedback lookup error", { code: error.code });
+    return NextResponse.json({ error: "db_error" }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ feedback: data });
+}
+
+/**
  * PATCH /api/admin/feedback/<uuid>
  *   { status?, assigned_to?, comment? }
  *

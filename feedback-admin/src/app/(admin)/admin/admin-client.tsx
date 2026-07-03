@@ -123,46 +123,53 @@ export function AdminClient({
     const supabase = getClientSupabase();
     if (!supabase) return;
 
+    // Live updates use Realtime Broadcast (feedbackgb.notify_feedback_change
+    // trigger, 018_feedback_realtime_broadcast.sql) instead of Postgres
+    // Changes. `feedback` has RLS enabled with no anon/authenticated
+    // policies, so a Postgres Changes subscription on the anon-key browser
+    // client would never receive anything — Broadcast doesn't have that
+    // requirement. The broadcast payload deliberately carries only
+    // `{ id, event }`, never row content (this channel is reachable with
+    // the public anon key), so an INSERT does an authenticated follow-up
+    // fetch to get category/summary for the notification.
     const channel = supabase
-      .channel("admin_feedback_realtime")
+      .channel("admin-feedback-changes")
       .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "feedbackgb",
-          table: "feedback",
-        },
-        async (payload) => {
-          // Trigger next.js server-side revalidation
+        "broadcast",
+        { event: "feedback_changed" },
+        async ({ payload }: { payload: { id: string; event: "INSERT" | "UPDATE" | "DELETE" } }) => {
           router.refresh();
 
-          if (payload.eventType === "INSERT") {
-            const rowData = payload.new;
-            const categoryId = rowData.category_id;
-            const summary = rowData.summary || "Нове звернення";
+          if (payload.event !== "INSERT") return;
 
-            const soundEnabled = localStorage.getItem("fbgb_sound_enabled") !== "false";
-            const pushEnabled = localStorage.getItem("fbgb_push_enabled") === "true";
+          const res = await fetch(`/api/admin/feedback/${payload.id}`);
+          if (!res.ok) return;
+          const { feedback } = (await res.json()) as {
+            feedback: { category: string; category_emoji: string | null; summary: string };
+          };
 
-            if (categoryId === "defect" && soundEnabled) {
-              playNotificationSound();
-            }
+          const summary = feedback.summary || "Нове звернення";
+          const soundEnabled = localStorage.getItem("fbgb_sound_enabled") !== "false";
+          const pushEnabled = localStorage.getItem("fbgb_push_enabled") === "true";
 
-            notification.info({
-              message: "Нове звернення",
-              description: summary,
-              placement: "bottomRight",
-            });
+          if (feedback.category === "defect" && soundEnabled) {
+            playNotificationSound();
+          }
 
-            if (pushEnabled && typeof window !== "undefined" && "Notification" in window) {
-              if (Notification.permission === "granted") {
-                new Notification("FeedbackGB: Нове звернення", {
-                  body: summary,
-                });
-              }
+          notification.info({
+            message: "Нове звернення",
+            description: summary,
+            placement: "bottomRight",
+          });
+
+          if (pushEnabled && typeof window !== "undefined" && "Notification" in window) {
+            if (Notification.permission === "granted") {
+              new Notification("FeedbackGB: Нове звернення", {
+                body: summary,
+              });
             }
           }
-        }
+        },
       )
       .subscribe();
 
