@@ -357,6 +357,7 @@ export const CATEGORIES: Category[] = [
         placeholder: "Деталі (необов'язково)",
         kind: "textarea",
       },
+      { id: "photo", label: "Фото довідки (лікарняний)", kind: "photo" },
     ],
   },
 ];

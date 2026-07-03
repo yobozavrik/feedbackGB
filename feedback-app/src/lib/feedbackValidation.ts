@@ -215,6 +215,34 @@ export function validateFeedbackPayload(
         };
       }
     }
+
+    // Sick leave: no advance-notice rule (illness isn't scheduled), and the
+    // end date is optional — duration is often unknown at filing time.
+    if (hrTopic === "sick-leave") {
+      const dateFrom =
+        typeof cleanFields["date_from"] === "string" ? cleanFields["date_from"] : "";
+      if (!DATE_ONLY_REGEX.test(dateFrom)) {
+        return { ok: false, error: "Невірний формат дати", status: 400 };
+      }
+      const dateTo = cleanFields["date_to"];
+      if (typeof dateTo === "string" && dateTo) {
+        if (!DATE_ONLY_REGEX.test(dateTo)) {
+          return { ok: false, error: "Невірний формат дати", status: 400 };
+        }
+        const from = new Date(`${dateFrom}T00:00:00Z`);
+        const to = new Date(`${dateTo}T00:00:00Z`);
+        if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+          return { ok: false, error: "Невірна дата", status: 400 };
+        }
+        if (to < from) {
+          return {
+            ok: false,
+            error: "Дата закінчення не може бути раніше дати початку",
+            status: 400,
+          };
+        }
+      }
+    }
   }
 
   const rawPhotos: unknown[] = Array.isArray(payload.photo_urls)
