@@ -19,7 +19,10 @@ export type AuditAction =
   | "admin.user.create"
   | "admin.user.update"
   | "admin.user.deactivate"
-  | "admin.user.activate";
+  | "admin.user.activate"
+  | "admin.direction.create"
+  | "admin.direction.update"
+  | "admin.direction.deactivate";
 
 interface AuditOptions {
   /** UUID of the user who performed the action (null for failed logins). */

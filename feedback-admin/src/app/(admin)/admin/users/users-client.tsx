@@ -10,6 +10,7 @@ import {
   CheckCircleOutlined,
   HistoryOutlined,
   TeamOutlined,
+  CompassOutlined,
 } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
 import {
@@ -25,8 +26,10 @@ import {
   Segmented,
 } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ActivityDrawer } from "@/components/admin/users/ActivityDrawer";
 import { CreateUserModal } from "@/components/admin/users/CreateUserModal";
+import { DirectionsDrawer } from "@/components/admin/users/DirectionsDrawer";
 import { EditUserModal } from "@/components/admin/users/EditUserModal";
 import {
   ResetPinModal,
@@ -43,7 +46,8 @@ import {
   type EditUserValues,
 } from "@/lib/adminUsersApi";
 import { countryFlag, formatGeoLines } from "@/lib/geoip";
-import type { AdminUser, FeedbacksStat } from "./page";
+import { CATEGORIES } from "@/lib/categories";
+import type { AdminDirectionSummary, AdminUser, FeedbacksStat } from "./page";
 
 const { Text } = Typography;
 
@@ -51,9 +55,12 @@ interface Props {
   users: AdminUser[];
   stores: Array<{ id: number; name: string }>;
   feedbacks: FeedbacksStat[];
+  directions: AdminDirectionSummary[];
   currentUserId: string;
   currentUserRole: "admin" | "super_admin";
 }
+
+const MAX_DIRECTION_EMOJI = 4;
 
 type RowState = "active" | "locked" | "inactive" | "no_pin";
 
@@ -76,7 +83,8 @@ const STATE_META: Record<
   no_pin: { text: "Без PIN", status: "Warning" },
 };
 
-export function UsersClient({ users, stores, feedbacks, currentUserId, currentUserRole }: Props) {
+export function UsersClient({ users, stores, feedbacks, directions, currentUserId, currentUserRole }: Props) {
+  const router = useRouter();
   const [list, setList] = useState<AdminUser[]>(users);
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -87,6 +95,38 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
   const [activityTarget, setActivityTarget] = useState<AdminUser | null>(null);
   const [activityLogs, setActivityLogs] = useState<ActivityLogEntry[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
+  const [directionsTarget, setDirectionsTarget] = useState<AdminUser | null>(null);
+
+  // Emoji-at-a-glance next to each admin's name (Ім'я column, fixed left —
+  // always visible regardless of horizontal scroll). Sourced from the
+  // server-fetched `directions` prop; refreshed via router.refresh() after
+  // edits in DirectionsDrawer, same pattern as every other mutation here.
+  const categoryMetaById = useMemo(() => {
+    const m = new Map<string, { emoji: string; title: string }>();
+    for (const c of CATEGORIES) m.set(c.id, { emoji: c.emoji, title: c.title });
+    return m;
+  }, []);
+
+  const directionsByAdmin = useMemo(() => {
+    // Dedupe by category per admin: the same category can now have
+    // multiple rows (one per store scope, or shared with other admins) —
+    // this badge is a "which categories" summary, not a store breakdown
+    // (that detail lives in the DirectionsDrawer itself).
+    const seenByAdmin = new Map<string, Set<string>>();
+    const m = new Map<string, Array<{ emoji: string; title: string }>>();
+    for (const d of directions) {
+      const meta = categoryMetaById.get(d.category);
+      if (!meta) continue;
+      const seen = seenByAdmin.get(d.admin_id) ?? new Set<string>();
+      if (seen.has(d.category)) continue;
+      seen.add(d.category);
+      seenByAdmin.set(d.admin_id, seen);
+      const arr = m.get(d.admin_id) ?? [];
+      arr.push(meta);
+      m.set(d.admin_id, arr);
+    }
+    return m;
+  }, [directions, categoryMetaById]);
 
   // Tab state
   const [activeTab, setActiveTab] = useState<"sellers" | "admin">("sellers");
@@ -305,22 +345,45 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
         width: 220,
         ellipsis: true,
         sorter: (a, b) => a.full_name.localeCompare(b.full_name, "uk"),
-        render: (_, row) => (
-          <Space size={6} wrap>
-            <Text strong style={{ color: row.is_active ? undefined : token.colorTextDisabled }}>
-              {row.full_name}
-            </Text>
-            {!row.is_active ? (
-              <Tag color="default" bordered={false}>
-                неактивна
-              </Tag>
-            ) : !row.has_pin ? (
-              <Tag color="orange" bordered={false}>
-                без PIN
-              </Tag>
-            ) : null}
-          </Space>
-        ),
+        render: (_, row) => {
+          const adminDirections = row.role !== "seller" ? directionsByAdmin.get(row.id) ?? [] : [];
+          const visible = adminDirections.slice(0, MAX_DIRECTION_EMOJI);
+          const overflow = adminDirections.length - MAX_DIRECTION_EMOJI;
+          return (
+            <Space size={6} wrap>
+              <Text strong style={{ color: row.is_active ? undefined : token.colorTextDisabled }}>
+                {row.full_name}
+              </Text>
+              {!row.is_active ? (
+                <Tag color="default" bordered={false}>
+                  неактивна
+                </Tag>
+              ) : !row.has_pin ? (
+                <Tag color="orange" bordered={false}>
+                  без PIN
+                </Tag>
+              ) : null}
+              {visible.length > 0 ? (
+                <Tooltip
+                  title={
+                    <div>
+                      {adminDirections.map((d, i) => (
+                        <div key={i}>
+                          {d.emoji} {d.title}
+                        </div>
+                      ))}
+                    </div>
+                  }
+                >
+                  <span aria-hidden style={{ fontSize: 13 }}>
+                    {visible.map((d) => d.emoji).join(" ")}
+                    {overflow > 0 ? ` +${overflow}` : ""}
+                  </span>
+                </Tooltip>
+              ) : null}
+            </Space>
+          );
+        },
       },
       {
         title: "Отображуване ім'я",
@@ -474,6 +537,25 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
         },
       },
       {
+        title: "Напрямки",
+        key: "directions",
+        width: 130,
+        render: (_, row) => {
+          if (row.role === "seller") return null;
+          const canView = currentUserRole === "super_admin" || row.id === currentUserId;
+          if (!canView) return <Text type="secondary">—</Text>;
+          return (
+            <Button
+              size="small"
+              icon={<CompassOutlined />}
+              onClick={() => setDirectionsTarget(row)}
+            >
+              Напрямки
+            </Button>
+          );
+        },
+      },
+      {
         title: "Дії",
         key: "actions",
         valueType: "option",
@@ -583,7 +665,7 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
         },
       },
     ],
-    [filterStoreOptions, token, handleUnlock, handleToggleActive, currentUserRole, currentUserId, editForm],
+    [filterStoreOptions, token, handleUnlock, handleToggleActive, currentUserRole, currentUserId, editForm, directionsByAdmin],
   );
 
   const sellerFilterStoreOptions = useMemo(() => {
@@ -856,7 +938,7 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
             showSizeChanger: true,
             showTotal: (total) => `${total} записів`,
           }}
-          scroll={{ x: 1454 }}
+          scroll={{ x: 1584 }}
           toolBarRender={() => [
             <Button
               key="create"
@@ -908,6 +990,14 @@ export function UsersClient({ users, stores, feedbacks, currentUserId, currentUs
         logs={activityLogs}
         loading={loadingActivity}
         onClose={() => setActivityTarget(null)}
+      />
+
+      <DirectionsDrawer
+        target={directionsTarget}
+        stores={stores}
+        currentUserRole={currentUserRole}
+        onClose={() => setDirectionsTarget(null)}
+        onChanged={() => router.refresh()}
       />
     </>
   );

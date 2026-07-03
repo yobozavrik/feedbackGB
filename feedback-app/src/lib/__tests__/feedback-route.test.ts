@@ -43,6 +43,10 @@ vi.mock("@/lib/session", () => ({
 const mockSupabaseRpc = vi.fn(async () => ({ error: null }));
 const mockSupabaseInsert = vi.fn();
 const mockSupabaseSelect = vi.fn();
+// Controls what admin_directions "resolves" to for resolveAssignedAdmin().
+// null = no direction configured (default, matches pre-auto-assignment
+// behavior). Set per-test to simulate a configured direction.
+let mockAdminDirectionAdminId: string | null = null;
 
 vi.mock("@/lib/supabase", () => ({
   isSupabaseConfigured: vi.fn(() => true),
@@ -73,6 +77,27 @@ vi.mock("@/lib/supabase", () => ({
           select: mockSupabaseSelect,
         };
       }
+      if (table === "admin_directions") {
+        // resolveAssignedAdmin() awaits the .eq()/.is() chain directly (no
+        // terminal .maybeSingle()/.single() call, since a scope can now
+        // return 0, 1, or several rows). Both the exact-store and
+        // all-stores branches resolve from mockAdminDirectionAdminId so
+        // tests can simulate "a direction is configured" without caring
+        // which branch matched (that distinction is covered by
+        // assignment.test.ts already).
+        const chain: any = {
+          select: () => chain,
+          eq: () => chain,
+          is: () => chain,
+          then: (resolve: (v: unknown) => void) => {
+            resolve({
+              data: mockAdminDirectionAdminId ? [{ admin_id: mockAdminDirectionAdminId }] : [],
+              error: null,
+            });
+          },
+        };
+        return chain;
+      }
       return {};
     }),
   })),
@@ -96,6 +121,7 @@ describe("POST /api/feedback", () => {
     mockSupabaseSelect.mockReset();
     mockSupabaseRpc.mockReset();
     mockSessionCookieValue = "valid-seller-token";
+    mockAdminDirectionAdminId = null;
   });
 
   afterEach(() => {
@@ -268,6 +294,7 @@ describe("POST /api/feedback — payload validation", () => {
     mockSupabaseSelect.mockReset();
     mockSupabaseRpc.mockReset();
     mockSessionCookieValue = "valid-seller-token";
+    mockAdminDirectionAdminId = null;
   });
 
   afterEach(() => {
@@ -395,5 +422,64 @@ describe("POST /api/feedback — payload validation", () => {
     expect(res.status).toBe(200);
     const record = mockSupabaseInsert.mock.calls[0][0];
     expect(record.store_label).toBe("a".repeat(80));
+  });
+});
+
+describe("POST /api/feedback — auto-assignment", () => {
+  beforeEach(async () => {
+    vi.resetModules();
+    mockSupabaseInsert.mockReset();
+    mockSupabaseSelect.mockReset();
+    mockSupabaseRpc.mockReset();
+    mockSessionCookieValue = "valid-seller-token";
+    mockAdminDirectionAdminId = null;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function loadRoute() {
+    return await import("@/app/api/feedback/route");
+  }
+
+  it("stamps assigned_to from the resolved admin direction", async () => {
+    mockSupabaseInsert.mockResolvedValue({ error: null });
+    mockAdminDirectionAdminId = "admin-uuid-123";
+
+    const { POST } = await loadRoute();
+    const res = await POST(
+      feedbackRequest({
+        category: "defect",
+        store_id: 11,
+        product_id: 1,
+        quantity: 1,
+        fields: { defect_type: "broken", comment: "cracked" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const record = mockSupabaseInsert.mock.calls[0][0];
+    expect(record.assigned_to).toBe("admin-uuid-123");
+  });
+
+  it("leaves assigned_to null when no direction is configured for the category", async () => {
+    mockSupabaseInsert.mockResolvedValue({ error: null });
+    mockAdminDirectionAdminId = null;
+
+    const { POST } = await loadRoute();
+    const res = await POST(
+      feedbackRequest({
+        category: "missing_item",
+        store_id: 11,
+        product_id: 1,
+        quantity: 1,
+        fields: {},
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const record = mockSupabaseInsert.mock.calls[0][0];
+    expect(record.assigned_to).toBeNull();
   });
 });
