@@ -349,7 +349,11 @@ export const CATEGORIES: Category[] = [
     priority: true,
     fields: [
       { id: "hr_topic", label: "Тема", kind: "text", required: true },
-      { id: "date_from", label: "Дата початку", kind: "date", required: true },
+      // Not marked required here: whether date_from applies (and is
+      // mandatory) depends on hr_topic — enforced per-topic in
+      // feedbackValidation.ts instead of via this blanket flag, since
+      // "transfer" doesn't use a date at all.
+      { id: "date_from", label: "Дата початку", kind: "date" },
       { id: "date_to", label: "Дата закінчення", kind: "date" },
       {
         id: "comment",
@@ -358,6 +362,8 @@ export const CATEGORIES: Category[] = [
         kind: "textarea",
       },
       { id: "photo", label: "Фото довідки (лікарняний)", kind: "photo" },
+      { id: "target_store_id", label: "Бажаний магазин (ID)", kind: "number" },
+      { id: "target_store_name", label: "Бажаний магазин", kind: "text" },
     ],
   },
 ];

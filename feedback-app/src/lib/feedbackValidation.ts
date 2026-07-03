@@ -269,6 +269,17 @@ export function validateFeedbackPayload(
         };
       }
     }
+
+    if (hrTopic === "transfer") {
+      const targetStoreId = cleanFields["target_store_id"];
+      if (
+        typeof targetStoreId !== "number" ||
+        !Number.isInteger(targetStoreId) ||
+        targetStoreId <= 0
+      ) {
+        return { ok: false, error: "Обери магазин/цех для переведення", status: 400 };
+      }
+    }
   }
 
   const rawPhotos: unknown[] = Array.isArray(payload.photo_urls)
