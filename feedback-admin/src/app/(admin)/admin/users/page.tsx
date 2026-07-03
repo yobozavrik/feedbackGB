@@ -36,25 +36,31 @@ export interface FeedbacksStat {
   created_at: string;
 }
 
+export interface AdminDirectionSummary {
+  admin_id: string;
+  category: string;
+}
+
 async function fetchData(): Promise<{
   users: AdminUser[];
   stores: Array<{ id: number; name: string }>;
   feedbacks: FeedbacksStat[];
+  directions: AdminDirectionSummary[];
   currentUserId: string;
   currentUserRole: "admin" | "super_admin";
   error: string | null;
 }> {
   const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
   if (!sess || (sess.role !== "admin" && sess.role !== "super_admin")) {
-    return { users: [], stores: [], feedbacks: [], currentUserId: "", currentUserRole: "admin", error: "Недостатньо прав" };
+    return { users: [], stores: [], feedbacks: [], directions: [], currentUserId: "", currentUserRole: "admin", error: "Недостатньо прав" };
   }
 
   const supabase = getServerSupabase();
   if (!supabase) {
-    return { users: [], stores: [], feedbacks: [], currentUserId: sess.uid, currentUserRole: sess.role, error: "Supabase ще не налаштовано" };
+    return { users: [], stores: [], feedbacks: [], directions: [], currentUserId: sess.uid, currentUserRole: sess.role, error: "Supabase ще не налаштовано" };
   }
 
-  const [{ data: userRows, error: userErr }, { data: storeRows }, { data: feedbackRows }] =
+  const [{ data: userRows, error: userErr }, { data: storeRows }, { data: feedbackRows }, { data: directionRows }] =
     await Promise.all([
       supabase
         .from("users")
@@ -64,9 +70,14 @@ async function fetchData(): Promise<{
         .order("full_name", { ascending: true }),
       supabase.from("v_stores").select("id, name"),
       supabase.from("feedback_feed").select("id, user_id, category, category_emoji, category_title, store_name, summary, status, created_at"),
+      // Only active rules matter for the at-a-glance emoji next to each
+      // admin's name — see feedback-admin/docs/ADMIN_DIRECTIONS_PLAN.md.
+      supabase.from("admin_directions").select("admin_id, category").eq("is_active", true),
     ]);
 
-  if (userErr) return { users: [], stores: [], feedbacks: [], currentUserId: sess.uid, currentUserRole: sess.role, error: userErr.message };
+  if (userErr) return { users: [], stores: [], feedbacks: [], directions: [], currentUserId: sess.uid, currentUserRole: sess.role, error: userErr.message };
+
+  const directions = (directionRows as AdminDirectionSummary[] | null) ?? [];
 
   const stores = (storeRows ?? []) as Array<{ id: number; name: string }>;
   const storeMap = new Map<number, string>();
@@ -113,11 +124,11 @@ async function fetchData(): Promise<{
     last_login_isp: u.last_login_isp,
   }));
 
-  return { users, stores, feedbacks, currentUserId: sess.uid, currentUserRole: sess.role, error: null };
+  return { users, stores, feedbacks, directions, currentUserId: sess.uid, currentUserRole: sess.role, error: null };
 }
 
 export default async function AdminUsersPage() {
-  const { users, stores, feedbacks, currentUserId, currentUserRole, error } = await fetchData();
+  const { users, stores, feedbacks, directions, currentUserId, currentUserRole, error } = await fetchData();
 
   return (
     <AdminPageContainer
@@ -134,6 +145,7 @@ export default async function AdminUsersPage() {
           users={users}
           stores={stores}
           feedbacks={feedbacks}
+          directions={directions}
           currentUserId={currentUserId}
           currentUserRole={currentUserRole}
         />

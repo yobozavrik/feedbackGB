@@ -6,6 +6,7 @@ import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { buildSummary } from "@/lib/summary";
 import { validateInitData } from "@/lib/telegram";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
+import { resolveAssignedAdmin } from "@/lib/assignment";
 import type { FeedbackPayload } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -159,6 +160,14 @@ export async function POST(req: Request) {
     storeName,
   );
 
+  // Auto-assign the responsible admin based on feedbackgb.admin_directions
+  // (see feedback-admin/docs/ADMIN_DIRECTIONS_PLAN.md). Never blocks
+  // submission: resolveAssignedAdmin swallows its own errors and falls
+  // back to null (unassigned), same as today's behavior.
+  const assignedTo = supabase
+    ? await resolveAssignedAdmin(supabase, category.id, effectiveStoreId)
+    : null;
+
   const record = {
     category: category.id,
     store_id: effectiveStoreId,
@@ -176,6 +185,7 @@ export async function POST(req: Request) {
     tg_display_name: tgValid ? display : null,
     tg_verified: tgValid,
     summary,
+    assigned_to: assignedTo,
     client_submission_id: clientSubmissionId,
     client_created_at: clientCreatedAt,
   };
