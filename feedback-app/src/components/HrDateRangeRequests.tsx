@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-interface VacationRequestRow {
+interface HrDateRangeRow {
   id: string;
   created_at: string;
   status: "new" | "in_progress" | "resolved" | "rejected";
@@ -14,7 +14,7 @@ interface VacationRequestRow {
 }
 
 const STATUS_META: Record<
-  VacationRequestRow["status"],
+  HrDateRangeRow["status"],
   { label: string; className: string }
 > = {
   new: { label: "На розгляді", className: "bg-elev2 text-ink-700" },
@@ -31,15 +31,21 @@ function formatDate(iso: string): string {
   });
 }
 
-export function MyVacationRequests() {
-  const [rows, setRows] = useState<VacationRequestRow[] | null>(null);
+interface Props {
+  /** Path segment identifying the topic-scoped list endpoint, e.g. "vacation-requests". */
+  endpoint: string;
+  title: string;
+}
+
+export function HrDateRangeRequests({ endpoint, title }: Props) {
+  const [rows, setRows] = useState<HrDateRangeRow[] | null>(null);
 
   useEffect(() => {
-    fetch("/api/hr/vacation-requests")
+    fetch(`/api/hr/${endpoint}`)
       .then((r) => (r.ok ? r.json() : { rows: [] }))
-      .then((j: { rows?: VacationRequestRow[] }) => setRows(j.rows ?? []))
+      .then((j: { rows?: HrDateRangeRow[] }) => setRows(j.rows ?? []))
       .catch(() => setRows([]));
-  }, []);
+  }, [endpoint]);
 
   if (rows === null) {
     return (
@@ -53,9 +59,7 @@ export function MyVacationRequests() {
 
   return (
     <div className="mt-6 space-y-2">
-      <h3 className="px-1 font-display text-[14px] font-semibold text-ink-900">
-        Мої заявки на відпустку
-      </h3>
+      <h3 className="px-1 font-display text-[14px] font-semibold text-ink-900">{title}</h3>
       {rows.map((r) => {
         const meta = STATUS_META[r.status] ?? STATUS_META.new;
         return (
@@ -70,9 +74,7 @@ export function MyVacationRequests() {
                 {r.fields.date_to ? formatDate(r.fields.date_to) : "?"}
               </p>
               {r.fields.comment ? (
-                <p className="mt-0.5 truncate text-[12px] text-ink-500">
-                  {r.fields.comment}
-                </p>
+                <p className="mt-0.5 truncate text-[12px] text-ink-500">{r.fields.comment}</p>
               ) : null}
             </div>
             <span className={`pill flex-shrink-0 ${meta.className}`}>{meta.label}</span>
