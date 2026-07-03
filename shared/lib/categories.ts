@@ -14,9 +14,10 @@ export type CategoryId =
   | "spotted_elsewhere"
   | "tech_issue"
   | "customer_voice"
-  | "consumables_request";
+  | "consumables_request"
+  | "hr_question";
 
-export type FieldKind = "text" | "textarea" | "number" | "photo";
+export type FieldKind = "text" | "textarea" | "number" | "photo" | "date";
 
 export interface CategoryField {
   id: string;
@@ -46,7 +47,8 @@ export interface Category {
     | "idea"
     | "spotted"
     | "tech"
-    | "voice";
+    | "voice"
+    | "hr";
   /**
    * v1 priority flow: this category captures a structured product
    * reference (product_id from the POS catalog). The UI renders a
@@ -325,6 +327,34 @@ export const CATEGORIES: Category[] = [
         id: "comment",
         label: "Коментар / примітки (необов'язково)",
         placeholder: "Коли потрібно привезти, особливі побажання",
+        kind: "textarea",
+      },
+    ],
+  },
+  {
+    id: "hr_question",
+    emoji: "🧑‍💼",
+    title: "Питання по HR",
+    short: "Відпустка, вихідні, лікарняний, звільнення",
+    description:
+      "Відпустка, вихідні, лікарняний, звільнення або переведення в інший магазин/цех.",
+    gradient: "bg-cat-supply/40",
+    accent: "text-brand-600",
+    tint: "hr",
+    // Not rendered by the generic CategoryGrid secondary list — the home
+    // screen has its own hand-built card linking to /hr-menu, and each
+    // topic (vacation, day-off, ...) gets its own dedicated form/page
+    // instead of the generic field renderer below. `priority: true` here
+    // only keeps this category out of the auto-rendered "+ Інше" grid.
+    priority: true,
+    fields: [
+      { id: "hr_topic", label: "Тема", kind: "text", required: true },
+      { id: "date_from", label: "Дата початку", kind: "date", required: true },
+      { id: "date_to", label: "Дата закінчення", kind: "date" },
+      {
+        id: "comment",
+        label: "Коментар",
+        placeholder: "Деталі (необов'язково)",
         kind: "textarea",
       },
     ],

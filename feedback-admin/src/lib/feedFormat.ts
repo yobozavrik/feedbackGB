@@ -19,6 +19,7 @@ export const TINT_COLOR: Record<string, string> = {
   spotted: "cyan",
   tech: "gold",
   voice: "magenta",
+  hr: "green",
 };
 
 export function formatRelative(iso: string): string {
