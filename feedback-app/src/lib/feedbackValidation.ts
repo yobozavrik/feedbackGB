@@ -243,6 +243,32 @@ export function validateFeedbackPayload(
         }
       }
     }
+
+    // Resignation: the 2-week statutory notice is a soft, client-side-only
+    // warning (per product decision) — server only rejects a resignation
+    // date that's already in the past, not a short-notice date.
+    if (hrTopic === "resignation") {
+      const dateFrom =
+        typeof cleanFields["date_from"] === "string" ? cleanFields["date_from"] : "";
+      if (!DATE_ONLY_REGEX.test(dateFrom)) {
+        return { ok: false, error: "Невірний формат дати", status: 400 };
+      }
+      const from = new Date(`${dateFrom}T00:00:00Z`);
+      if (Number.isNaN(from.getTime())) {
+        return { ok: false, error: "Невірна дата", status: 400 };
+      }
+      const now = new Date();
+      const todayUtc = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+      );
+      if (from < todayUtc) {
+        return {
+          ok: false,
+          error: "Дата звільнення не може бути в минулому",
+          status: 400,
+        };
+      }
+    }
   }
 
   const rawPhotos: unknown[] = Array.isArray(payload.photo_urls)
