@@ -4,8 +4,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTelegram } from "./TelegramProvider";
 
-const MIN_NOTICE_DAYS = 7;
-
 interface SessionUser {
   uid: string;
   full_name: string;
@@ -17,10 +15,19 @@ interface MeResponse {
   user: SessionUser | null;
 }
 
-/** Earliest allowed vacation start date, as a yyyy-mm-dd string (local date, min attr). */
-function earliestAllowedStart(): string {
+interface Props {
+  /** hr_topic value stored on the feedback row. */
+  topicId: string;
+  /** e.g. "відпустку" / "вихідні" — used to build error/offline copy. */
+  requestNoun: string;
+  /** e.g. "першого дня відпустки" / "дати вихідного" — used in the notice banner. */
+  noticeAnchor: string;
+  minNoticeDays: number;
+}
+
+function earliestAllowedStart(minNoticeDays: number): string {
   const d = new Date();
-  d.setDate(d.getDate() + MIN_NOTICE_DAYS);
+  d.setDate(d.getDate() + minNoticeDays);
   return d.toISOString().slice(0, 10);
 }
 
@@ -31,7 +38,12 @@ function daysUntil(dateStr: string): number {
   return Math.round((target - todayUtc) / 86_400_000);
 }
 
-export function VacationRequestForm() {
+export function HrDateRangeRequestForm({
+  topicId,
+  requestNoun,
+  noticeAnchor,
+  minNoticeDays,
+}: Props) {
   const router = useRouter();
   const { initData, webApp } = useTelegram();
   const [me, setMe] = useState<SessionUser | null>(null);
@@ -51,14 +63,14 @@ export function VacationRequestForm() {
       .finally(() => setMeReady(true));
   }, []);
 
-  const minStart = earliestAllowedStart();
+  const minStart = earliestAllowedStart(minNoticeDays);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
     if (!dateFrom || !dateTo) {
-      setError("Вкажи дату початку і закінчення відпустки");
+      setError(`Вкажи дату початку і закінчення (${requestNoun})`);
       webApp?.HapticFeedback?.notificationOccurred("error");
       return;
     }
@@ -67,9 +79,9 @@ export function VacationRequestForm() {
       webApp?.HapticFeedback?.notificationOccurred("error");
       return;
     }
-    if (daysUntil(dateFrom) < MIN_NOTICE_DAYS) {
+    if (daysUntil(dateFrom) < minNoticeDays) {
       setError(
-        `Заявку на відпустку потрібно подавати щонайменше за ${MIN_NOTICE_DAYS} днів до першого дня відпустки`,
+        `Заявку на ${requestNoun} потрібно подавати щонайменше за ${minNoticeDays} днів до ${noticeAnchor}`,
       );
       webApp?.HapticFeedback?.notificationOccurred("error");
       return;
@@ -83,7 +95,7 @@ export function VacationRequestForm() {
       category: "hr_question" as const,
       store_id: me?.store_id ?? null,
       fields: {
-        hr_topic: "vacation",
+        hr_topic: topicId,
         date_from: dateFrom,
         date_to: dateTo,
         comment: comment.trim() || null,
@@ -170,7 +182,7 @@ export function VacationRequestForm() {
             Збережено офлайн
           </h2>
           <p className="text-[14px] leading-relaxed text-ink-700">
-            Наразі немає зв&apos;язку. Заявку на відпустку збережено в пам&apos;яті пристрою.
+            Наразі немає зв&apos;язку. Заявку на {requestNoun} збережено в пам&apos;яті пристрою.
           </p>
           <p className="text-[13px] font-medium text-brand-600">
             Вона буде надіслана автоматично, коли з&apos;явиться інтернет і додаток буде відкритим.
@@ -209,8 +221,8 @@ export function VacationRequestForm() {
             ℹ️
           </span>
           <p className="text-[12px] leading-normal text-amber-700">
-            Заявку на відпустку можна подати не пізніше ніж за {MIN_NOTICE_DAYS} днів до
-            першого дня відпустки.
+            Заявку на {requestNoun} можна подати не пізніше ніж за {minNoticeDays} днів до{" "}
+            {noticeAnchor}.
           </p>
         </div>
       </div>

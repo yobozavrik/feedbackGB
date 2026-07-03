@@ -15,7 +15,11 @@ const MAX_STORE_LABEL_LEN = 80;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const HR_TOPIC_IDS = new Set(HR_TOPICS.map((t) => t.id));
-const VACATION_MIN_NOTICE_DAYS = 7;
+// HR topics that collect a date_from/date_to range and require the same
+// "at least N days notice" rule (vacation, day off). Other topics
+// (sick leave, resignation, transfer) don't use this shape.
+const HR_DATE_RANGE_TOPICS = new Set(["vacation", "day-off"]);
+const HR_DATE_RANGE_MIN_NOTICE_DAYS = 7;
 
 export interface ValidatedFeedback {
   category: Category;
@@ -177,7 +181,7 @@ export function validateFeedbackPayload(
       return { ok: false, error: "Невідома тема HR-питання", status: 400 };
     }
 
-    if (hrTopic === "vacation") {
+    if (HR_DATE_RANGE_TOPICS.has(hrTopic)) {
       const dateFrom =
         typeof cleanFields["date_from"] === "string" ? cleanFields["date_from"] : "";
       const dateTo =
@@ -202,11 +206,11 @@ export function validateFeedbackPayload(
         Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
       );
       const minStart = new Date(todayUtc);
-      minStart.setUTCDate(minStart.getUTCDate() + VACATION_MIN_NOTICE_DAYS);
+      minStart.setUTCDate(minStart.getUTCDate() + HR_DATE_RANGE_MIN_NOTICE_DAYS);
       if (from < minStart) {
         return {
           ok: false,
-          error: `Заявку на відпустку потрібно подавати щонайменше за ${VACATION_MIN_NOTICE_DAYS} днів до першого дня відпустки`,
+          error: `Заявку потрібно подавати щонайменше за ${HR_DATE_RANGE_MIN_NOTICE_DAYS} днів до дати початку`,
           status: 400,
         };
       }
