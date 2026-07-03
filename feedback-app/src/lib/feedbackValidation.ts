@@ -1,4 +1,5 @@
 import { getCategory, CATEGORIES, type Category } from "@/lib/categories";
+import { HR_TOPICS } from "@/lib/hrTopics";
 import type { FeedbackPayload } from "@/lib/types";
 
 // Pure payload validation for POST /api/feedback. No I/O, no framework
@@ -12,6 +13,9 @@ const MAX_FIELD_LEN = 4000;
 const MAX_FIELDS = 40;
 const MAX_STORE_LABEL_LEN = 80;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const HR_TOPIC_IDS = new Set(HR_TOPICS.map((t) => t.id));
+const VACATION_MIN_NOTICE_DAYS = 7;
 
 export interface ValidatedFeedback {
   category: Category;
@@ -161,6 +165,51 @@ export function validateFeedbackPayload(
   if (productId !== null && category.requiresQuantity) {
     if (quantity === null || quantity <= 0) {
       return { ok: false, error: "Вкажи кількість", status: 400 };
+    }
+  }
+
+  if (category.id === "hr_question") {
+    const hrTopic =
+      typeof cleanFields["hr_topic"] === "string"
+        ? (cleanFields["hr_topic"] as string).trim()
+        : "";
+    if (!HR_TOPIC_IDS.has(hrTopic)) {
+      return { ok: false, error: "Невідома тема HR-питання", status: 400 };
+    }
+
+    if (hrTopic === "vacation") {
+      const dateFrom =
+        typeof cleanFields["date_from"] === "string" ? cleanFields["date_from"] : "";
+      const dateTo =
+        typeof cleanFields["date_to"] === "string" ? cleanFields["date_to"] : "";
+      if (!DATE_ONLY_REGEX.test(dateFrom) || !DATE_ONLY_REGEX.test(dateTo)) {
+        return { ok: false, error: "Невірний формат дати", status: 400 };
+      }
+      const from = new Date(`${dateFrom}T00:00:00Z`);
+      const to = new Date(`${dateTo}T00:00:00Z`);
+      if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+        return { ok: false, error: "Невірна дата", status: 400 };
+      }
+      if (to < from) {
+        return {
+          ok: false,
+          error: "Дата закінчення не може бути раніше дати початку",
+          status: 400,
+        };
+      }
+      const now = new Date();
+      const todayUtc = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+      );
+      const minStart = new Date(todayUtc);
+      minStart.setUTCDate(minStart.getUTCDate() + VACATION_MIN_NOTICE_DAYS);
+      if (from < minStart) {
+        return {
+          ok: false,
+          error: `Заявку на відпустку потрібно подавати щонайменше за ${VACATION_MIN_NOTICE_DAYS} днів до першого дня відпустки`,
+          status: 400,
+        };
+      }
     }
   }
 
