@@ -5,6 +5,7 @@ import { requireAdminSession } from "@/lib/adminAuth";
 import { ipFromRequest, logAudit, uaFromRequest } from "@/lib/audit";
 import { isUuid } from "@/lib/validation";
 import { FEEDBACK_STATUSES, type FeedbackStatus } from "@/lib/feedbackStatus";
+import { createNotification } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -149,7 +150,7 @@ export async function PATCH(
   // or logged anything.
   const { data: existing, error: lookupError } = await supabase
     .from("feedback")
-    .select("id")
+    .select("id, status, user_id")
     .eq("id", id)
     .maybeSingle();
   if (lookupError) {
@@ -195,6 +196,41 @@ export async function PATCH(
       console.error("feedback patch error", { code: error.code });
       return NextResponse.json({ error: "db_error" }, { status: 500 });
     }
+  }
+
+  // Notify the seller only on a real new -> in_progress transition, never on
+  // a re-save of an already in_progress row. Never blocks the response.
+  if (
+    body.status === "in_progress" &&
+    existing.status === "new" &&
+    existing.user_id
+  ) {
+    await createNotification(supabase, {
+      recipientUserId: existing.user_id,
+      feedbackId: id,
+      type: "feedback.status_in_progress_for_seller",
+      title: "Заявку взято в роботу",
+      body: "Вашу заявку прийняли та взяли в роботу.",
+      payload: { old_status: existing.status, new_status: "in_progress", admin_user_id: sess.uid },
+    });
+  }
+
+  // Notify the seller when the request is resolved, but only on a real
+  // transition into `resolved` — never on a re-save of an already-resolved
+  // row. Rejections stay silent for now (out of MVP scope).
+  if (
+    body.status === "resolved" &&
+    existing.status !== "resolved" &&
+    existing.user_id
+  ) {
+    await createNotification(supabase, {
+      recipientUserId: existing.user_id,
+      feedbackId: id,
+      type: "feedback.status_resolved_for_seller",
+      title: "Заявку виконано",
+      body: "Вашу заявку розглянули та погодили.",
+      payload: { old_status: existing.status, new_status: "resolved", admin_user_id: sess.uid },
+    });
   }
 
   if (comment.length > 0) {

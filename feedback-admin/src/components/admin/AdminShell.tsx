@@ -19,6 +19,7 @@ import {
   adminBreadcrumbNames,
   adminRoute,
 } from "@/lib/admin/menu";
+import { NotificationsBell } from "@/components/admin/NotificationsBell";
 
 const { Text } = Typography;
 
@@ -157,6 +158,7 @@ export function AdminShell({ children, user }: AdminShellProps) {
           <span className="admin-shell__breadcrumb-current">{currentCrumb}</span>
         </div>
       )}
+      actionsRender={() => [<NotificationsBell key="notifications" />]}
       breadcrumbProps={{
         items: breadcrumbItems.map((it) => ({
           key: it.path,

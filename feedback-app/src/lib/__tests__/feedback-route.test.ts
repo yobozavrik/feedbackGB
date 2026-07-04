@@ -103,6 +103,17 @@ vi.mock("@/lib/supabase", () => ({
   })),
 }));
 
+// The route now does `.insert(record).select("id").single()` (it needs the
+// inserted id back to attach it to the admin notification), so the mock
+// insert must return a chainable object rather than resolving directly.
+function mockInsertResolves(result: { data?: unknown; error?: unknown }) {
+  mockSupabaseInsert.mockImplementation(() => ({
+    select: () => ({
+      single: async () => result,
+    }),
+  }));
+}
+
 function feedbackRequest(body: unknown, token = "valid-seller-token") {
   mockSessionCookieValue = token;
   return new Request("http://localhost/api/feedback", {
@@ -133,7 +144,7 @@ describe("POST /api/feedback", () => {
   }
 
   it("successfully inserts feedback with client_submission_id and client_created_at", async () => {
-    mockSupabaseInsert.mockResolvedValue({ error: null });
+    mockInsertResolves({ data: { id: "feedback-id" }, error: null });
 
     const { POST } = await loadRoute();
     const uuid = "4a187a5b-59c4-42b7-a36c-2f4161a15ea2";
@@ -208,7 +219,7 @@ describe("POST /api/feedback", () => {
 
   it("handles duplicate key (23505) and returns 200 OK if owner matches", async () => {
     // DB returns unique key violation
-    mockSupabaseInsert.mockResolvedValue({
+    mockInsertResolves({
       error: { code: "23505", message: "duplicate key value violates unique constraint" },
     });
 
@@ -246,7 +257,7 @@ describe("POST /api/feedback", () => {
 
   it("handles duplicate key (23505) and returns 409 Conflict if owner does not match", async () => {
     // DB returns unique key violation
-    mockSupabaseInsert.mockResolvedValue({
+    mockInsertResolves({
       error: { code: "23505", message: "duplicate key value violates unique constraint" },
     });
 
@@ -386,7 +397,7 @@ describe("POST /api/feedback — payload validation", () => {
   });
 
   it("drops a non-data-URL photo instead of storing it", async () => {
-    mockSupabaseInsert.mockResolvedValue({ error: null });
+    mockInsertResolves({ data: { id: "feedback-id" }, error: null });
     const { POST } = await loadRoute();
 
     const res = await POST(
@@ -406,7 +417,7 @@ describe("POST /api/feedback — payload validation", () => {
   });
 
   it("trims and length-caps store_label", async () => {
-    mockSupabaseInsert.mockResolvedValue({ error: null });
+    mockInsertResolves({ data: { id: "feedback-id" }, error: null });
     const { POST } = await loadRoute();
 
     const res = await POST(
@@ -444,7 +455,7 @@ describe("POST /api/feedback — auto-assignment", () => {
   }
 
   it("stamps assigned_to from the resolved admin direction", async () => {
-    mockSupabaseInsert.mockResolvedValue({ error: null });
+    mockInsertResolves({ data: { id: "feedback-id" }, error: null });
     mockAdminDirectionAdminId = "admin-uuid-123";
 
     const { POST } = await loadRoute();
@@ -464,7 +475,7 @@ describe("POST /api/feedback — auto-assignment", () => {
   });
 
   it("leaves assigned_to null when no direction is configured for the category", async () => {
-    mockSupabaseInsert.mockResolvedValue({ error: null });
+    mockInsertResolves({ data: { id: "feedback-id" }, error: null });
     mockAdminDirectionAdminId = null;
 
     const { POST } = await loadRoute();

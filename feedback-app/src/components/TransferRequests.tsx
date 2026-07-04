@@ -1,26 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { STATUS_META, type FeedbackStatus } from "@/lib/feedbackStatusMeta";
 
 interface TransferRequestRow {
   id: string;
   created_at: string;
-  status: "new" | "in_progress" | "resolved" | "rejected";
+  status: FeedbackStatus;
   fields: {
     target_store_name?: string | null;
     comment?: string | null;
   };
 }
-
-const STATUS_META: Record<
-  TransferRequestRow["status"],
-  { label: string; className: string }
-> = {
-  new: { label: "На розгляді", className: "bg-elev2 text-ink-700" },
-  in_progress: { label: "В роботі", className: "bg-brand-50 text-brand-600" },
-  resolved: { label: "Погоджено", className: "bg-success/15 text-success" },
-  rejected: { label: "Не погоджено", className: "bg-danger/15 text-danger" },
-};
 
 export function TransferRequests() {
   const [rows, setRows] = useState<TransferRequestRow[] | null>(null);

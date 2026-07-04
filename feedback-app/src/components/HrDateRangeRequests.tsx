@@ -1,27 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { STATUS_META, type FeedbackStatus } from "@/lib/feedbackStatusMeta";
 
 interface HrDateRangeRow {
   id: string;
   created_at: string;
-  status: "new" | "in_progress" | "resolved" | "rejected";
+  status: FeedbackStatus;
   fields: {
     date_from?: string;
     date_to?: string;
     comment?: string | null;
   };
 }
-
-const STATUS_META: Record<
-  HrDateRangeRow["status"],
-  { label: string; className: string }
-> = {
-  new: { label: "На розгляді", className: "bg-elev2 text-ink-700" },
-  in_progress: { label: "В роботі", className: "bg-brand-50 text-brand-600" },
-  resolved: { label: "Погоджено", className: "bg-success/15 text-success" },
-  rejected: { label: "Не погоджено", className: "bg-danger/15 text-danger" },
-};
 
 function formatDate(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("uk-UA", {
