@@ -7,6 +7,7 @@ import { buildSummary } from "@/lib/summary";
 import { validateInitData } from "@/lib/telegram";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 import { resolveAssignedAdmin } from "@/lib/assignment";
+import { createNotification } from "@/lib/notifications";
 import type { FeedbackPayload } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -208,7 +209,11 @@ export async function POST(req: Request) {
     // Non-fatal: audit trigger falls back to 'service_role'.
   }
 
-  const { error } = await supabase.from("feedback").insert(record);
+  const { data: inserted, error } = await supabase
+    .from("feedback")
+    .insert(record)
+    .select("id")
+    .single();
   if (error) {
     console.error("supabase insert error", { code: error.code });
     // Check for unique constraint violation (code 23505)
@@ -235,6 +240,22 @@ export async function POST(req: Request) {
     }
     return NextResponse.json({ error: "Помилка збереження" }, { status: 500 });
   }
+
+  // Notify the auto-assigned admin. Never blocks the response: createNotification
+  // swallows its own errors, same as resolveAssignedAdmin above.
+  if (assignedTo && inserted) {
+    await createNotification(supabase, {
+      recipientUserId: assignedTo,
+      feedbackId: inserted.id,
+      type: "feedback.assigned_to_admin",
+      title: `Нова заявка: ${category.title}`,
+      body: storeName
+        ? `Магазин ${storeName} створив нову заявку.`
+        : "Створено нову заявку.",
+      payload: { status: "new", category: category.id, store_id: effectiveStoreId, store_name: storeName },
+    });
+  }
+
   return NextResponse.json({ ok: true, persisted: true });
 }
 

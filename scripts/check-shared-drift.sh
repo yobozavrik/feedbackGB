@@ -30,6 +30,7 @@ lib/dailyReport.ts
 lib/driveMirror.ts
 lib/geoip.ts
 lib/googleDrive.ts
+lib/notifications.ts
 lib/posthog/api.ts
 lib/posthog/funnel.ts
 lib/posthog/types.ts

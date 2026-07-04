@@ -1,5 +1,54 @@
 # In-App Notifications Implementation Plan
 
+## Implementation Status (current branch: `feature/hr-questions-menu`)
+
+MVP is coded, not yet live. Built so far:
+
+- Migration `feedback-admin/supabase/021_notifications.sql` (not yet applied
+  to the real database — table doesn't exist there yet, confirmed via
+  `[notifications] list failed { code: '42P01' }` in dev logs).
+- `shared/lib/notifications.ts` + stubs in both apps.
+- Admin API: `/api/admin/notifications`, `/api/admin/notifications/[id]/read`,
+  `/api/admin/notifications/read-all`.
+- Seller API: same set without the `/admin` prefix.
+- Trigger 1: seller creates feedback -> notifies the auto-assigned admin
+  (`feedback-app/src/app/api/feedback/route.ts`).
+- Trigger 2: admin moves `new -> in_progress` -> notifies the seller
+  (`feedback-admin/src/app/api/admin/feedback/[id]/route.ts`).
+- Trigger 3 (added beyond original MVP scope, on request): admin moves any
+  status `-> resolved` -> notifies the seller ("Заявку виконано"). `rejected`
+  still sends nothing — revisit if needed.
+- UI: `NotificationsBell.tsx` in the admin header (`AdminShell.tsx`
+  `actionsRender`) and in the seller app's `Header.tsx`, plus a
+  `/notifications` list page in the seller app.
+
+### Why nobody sees a bell yet when testing the real app
+
+Two blockers, both environmental, not code bugs:
+
+1. This work lives on `feature/hr-questions-menu`, not yet merged into
+   `devin/1777397957-feedback-mini-app` (the branch each Vercel project
+   deploys from).
+2. The `021_notifications.sql` migration hasn't been run against the real
+   Supabase project, so even a deployed build would hit `42P01` on every
+   notifications query (the app degrades gracefully to an empty list/badge,
+   it doesn't crash — but nobody gets pinged).
+
+### Rollout checklist to go live
+
+1. Apply `feedback-admin/supabase/021_notifications.sql` to the real
+   Supabase database (both apps share it).
+2. Merge `feature/hr-questions-menu` -> `devin/1777397957-feedback-mini-app`.
+3. Confirm both Vercel projects redeploy from the merged branch.
+4. Smoke test end to end: submit an HR request as a seller whose category
+   has exactly one active `admin_directions` entry -> confirm that admin's
+   bell shows it; move it `new -> in_progress` -> confirm the seller's bell
+   lights up; move it to `resolved` -> confirm the seller's bell lights up
+   again.
+5. See [PERSONAL_CABINET_PLAN.md](PERSONAL_CABINET_PLAN.md) for the
+   complementary "Мої заявки" page the bell should eventually deep-link
+   into (not required to ship notifications, but planned as the next step).
+
 ## Goal
 
 Build an internal notification system for admins and sellers.

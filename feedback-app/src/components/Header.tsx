@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NotificationsBell } from "@/components/NotificationsBell";
 
 interface HeaderProps {
   subtitle?: string;
@@ -25,12 +26,24 @@ export function Header({ subtitle, back }: HeaderProps) {
           {back.label}
         </Link>
       ) : null}
-      <Link href="/" className="inline-flex items-center gap-3">
-        <span className="text-xl">💖</span>
-        <span className="font-display text-[20px] font-bold tracking-tight text-brand-500">
-          Галя слухає
-        </span>
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link href="/" className="inline-flex items-center gap-3">
+          <span className="text-xl">💖</span>
+          <span className="font-display text-[20px] font-bold tracking-tight text-brand-500">
+            Галя слухає
+          </span>
+        </Link>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/my-requests"
+            aria-label="Мої заявки"
+            className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-lg hover:bg-elev2"
+          >
+            <span aria-hidden>🗂️</span>
+          </Link>
+          <NotificationsBell />
+        </div>
+      </div>
       {subtitle ? (
         <p className="ml-8 mt-0.5 text-[13px] text-ink-500">{subtitle}</p>
       ) : null}
