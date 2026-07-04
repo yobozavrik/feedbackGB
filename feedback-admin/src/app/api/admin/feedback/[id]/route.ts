@@ -176,18 +176,26 @@ export async function PATCH(
     }
   }
 
-  // Stamp app.actor so the trigger-written audit rows are attributed to us.
-  try {
-    await supabase.rpc("set_config", {
-      setting_name: "app.actor",
-      new_value: sess.uid,
-      is_local: true,
-    });
-  } catch {
-    // Non-fatal: trigger falls back to 'service_role'.
-  }
-
   if (Object.keys(update).length > 0) {
+    // Each supabase-js call is its own PostgREST request/transaction, so a
+    // GUC set via a prior `set_config`-style RPC never survives to this
+    // UPDATE -- that approach was tried and confirmed dead (each request is
+    // its own transaction). Instead: let `audit_feedback()` write its row as
+    // actor='service_role' like always, note the latest audit_log id for
+    // this feedback_id *before* the update, then correct only the row that
+    // appeared *after* it (by bigserial id, not wall-clock time -- avoids
+    // any app/DB clock-skew issues). The trigger only inserts a row when
+    // status or summary actually changed, so a metadata-only change (e.g.
+    // assigned_to alone) legitimately produces no new row to correct.
+    const { data: beforeAudit } = await supabase
+      .from("audit_log")
+      .select("id")
+      .eq("feedback_id", id)
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const beforeAuditId = (beforeAudit as { id: number } | null)?.id ?? 0;
+
     const { error } = await supabase
       .from("feedback")
       .update(update)
@@ -195,6 +203,21 @@ export async function PATCH(
     if (error) {
       console.error("feedback patch error", { code: error.code });
       return NextResponse.json({ error: "db_error" }, { status: 500 });
+    }
+
+    const { data: afterAudit } = await supabase
+      .from("audit_log")
+      .select("id")
+      .eq("feedback_id", id)
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const afterAuditId = (afterAudit as { id: number } | null)?.id ?? 0;
+    if (afterAuditId > beforeAuditId) {
+      await supabase
+        .from("audit_log")
+        .update({ actor: sess.uid, actor_user_id: sess.uid })
+        .eq("id", afterAuditId);
     }
   }
 

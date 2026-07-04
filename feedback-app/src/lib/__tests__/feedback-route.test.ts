@@ -98,6 +98,15 @@ vi.mock("@/lib/supabase", () => ({
         };
         return chain;
       }
+      if (table === "audit_log") {
+        return {
+          update: () => ({
+            eq: () => ({
+              is: async () => ({ error: null }),
+            }),
+          }),
+        };
+      }
       return {};
     }),
   })),

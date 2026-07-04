@@ -144,6 +144,29 @@ describe("PATCH /api/admin/feedback/[id]", () => {
       if (table === "feedback_comments") {
         return { insert: async () => ({ data: null, error: null }) };
       }
+      if (table === "audit_log") {
+        let callCount = 0;
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({
+                  // First call (before the feedback update) sees id 1; second
+                  // call (after) sees id 2, simulating the trigger having
+                  // inserted a fresh row for this PATCH.
+                  maybeSingle: async () => {
+                    callCount += 1;
+                    return { data: { id: callCount }, error: null };
+                  },
+                }),
+              }),
+            }),
+          }),
+          update: () => ({
+            eq: async () => ({ error: null }),
+          }),
+        };
+      }
       return {};
     });
 

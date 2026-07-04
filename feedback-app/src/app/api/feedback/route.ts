@@ -197,18 +197,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, persisted: false });
   }
 
-  // Tell the DB audit trigger who the actor is, so audit_log isn't
-  // permanently stamped with "service_role".
-  try {
-    await supabase.rpc("set_config", {
-      setting_name: "app.actor",
-      new_value: sess.uid,
-      is_local: true,
-    });
-  } catch {
-    // Non-fatal: audit trigger falls back to 'service_role'.
-  }
-
   const { data: inserted, error } = await supabase
     .from("feedback")
     .insert(record)
@@ -239,6 +227,19 @@ export async function POST(req: Request) {
       }
     }
     return NextResponse.json({ error: "Помилка збереження" }, { status: 500 });
+  }
+
+  // Stamp the trigger-written audit_log row with the real actor. A prior
+  // set_config-RPC-then-separate-insert approach was tried and confirmed
+  // dead: each supabase-js call is its own PostgREST request/transaction, so
+  // a transaction-local GUC never survives to the next request. inserted.id
+  // is a brand new row, so matching by feedback_id alone is unambiguous.
+  if (inserted) {
+    await supabase
+      .from("audit_log")
+      .update({ actor: sess.uid, actor_user_id: sess.uid })
+      .eq("feedback_id", inserted.id)
+      .is("actor_user_id", null);
   }
 
   // Notify the auto-assigned admin. Never blocks the response: createNotification
