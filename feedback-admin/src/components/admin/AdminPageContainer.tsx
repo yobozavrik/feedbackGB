@@ -2,6 +2,7 @@
 
 import { PageContainer } from "@ant-design/pro-components";
 import type { ReactNode } from "react";
+import { NotificationsBell } from "@/components/admin/NotificationsBell";
 
 interface AdminPageContainerProps {
   title: string;
@@ -37,7 +38,12 @@ export function AdminPageContainer({
         title,
         subTitle,
         breadcrumb: undefined, // ProLayout сам рендерить breadcrumbs
-        extra,
+        extra: (
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {extra}
+            <NotificationsBell />
+          </div>
+        ),
       }}
       tabList={tabs?.items.map((it) => ({ tab: it.label, key: it.key }))}
       tabActiveKey={tabs?.activeKey}
