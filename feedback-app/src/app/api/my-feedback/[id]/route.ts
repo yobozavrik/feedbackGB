@@ -79,7 +79,12 @@ export async function GET(
   // timeline timestamps behind it.
   let consumables: Awaited<ReturnType<typeof getConsumablesOrderDetail>> = null;
   if ((feedback as { category?: string }).category === "consumables_request") {
-    consumables = await getConsumablesOrderDetail(params.id);
+    try {
+      consumables = await getConsumablesOrderDetail(params.id);
+    } catch (cause) {
+      // Warehouse-CRM hiccup must not break the detail view.
+      console.error("my-feedback consumables detail failed", cause);
+    }
   }
 
   return NextResponse.json({ feedback, comments: flattenedComments, consumables });

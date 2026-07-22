@@ -33,14 +33,22 @@ interface ContributionRow {
   quantity_requested: number;
 }
 
+export interface ConsumablesSummary {
+  status: ConsumablesStatus;
+  itemCount: number;
+}
+
 /**
- * Batch-resolve the consumables status for a set of feedback ids. Returns a
- * Map keyed by feedback_id; ids with no CRM order are simply absent.
+ * Batch-resolve the consumables status + item count for a set of feedback ids.
+ * Returns a Map keyed by feedback_id; ids with no CRM order are simply absent.
+ * The item count is the number of product lines this feedback contributed
+ * (one contribution row per product) — sourced from the CRM, not the feedback
+ * journal (feedback_feed does not expose cart_items).
  */
-export async function getConsumablesStatuses(
+export async function getConsumablesSummaries(
   feedbackIds: string[],
-): Promise<Map<string, ConsumablesStatus>> {
-  const result = new Map<string, ConsumablesStatus>();
+): Promise<Map<string, ConsumablesSummary>> {
+  const result = new Map<string, ConsumablesSummary>();
   const db = getWarehouseCrmSupabase();
   if (!db || feedbackIds.length === 0) return result;
 
@@ -52,9 +60,11 @@ export async function getConsumablesStatuses(
   if (rows.length === 0) return result;
 
   const feedbackToOrder = new Map<string, string>();
+  const itemCounts = new Map<string, number>();
   const orderIds = new Set<string>();
   for (const r of rows) {
     if (!feedbackToOrder.has(r.feedback_id)) feedbackToOrder.set(r.feedback_id, r.order_id);
+    itemCounts.set(r.feedback_id, (itemCounts.get(r.feedback_id) ?? 0) + 1);
     orderIds.add(r.order_id);
   }
 
@@ -75,7 +85,10 @@ export async function getConsumablesStatuses(
   }
 
   for (const [feedbackId, orderId] of feedbackToOrder) {
-    result.set(feedbackId, deriveStatus(latestTransfer.get(orderId), orderStatus.get(orderId)));
+    result.set(feedbackId, {
+      status: deriveStatus(latestTransfer.get(orderId), orderStatus.get(orderId)),
+      itemCount: itemCounts.get(feedbackId) ?? 0,
+    });
   }
   return result;
 }
