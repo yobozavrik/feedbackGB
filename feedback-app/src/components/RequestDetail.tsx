@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { STATUS_META, type FeedbackStatus } from "@/lib/feedbackStatusMeta";
+import { MessageIcon, PackageIcon } from "@/components/icons";
 
 interface FeedbackDetail {
   id: string;
@@ -19,6 +20,13 @@ interface CommentItem {
   body: string;
   author_full_name: string;
   created_at: string;
+}
+
+interface OrderItem {
+  product_id: number;
+  name: string;
+  unit: string | null;
+  quantity: number;
 }
 
 const HIDDEN_FIELD_KEYS = new Set(["photo_urls", "hr_topic"]);
@@ -53,7 +61,7 @@ interface Props {
 }
 
 export function RequestDetail({ id }: Props) {
-  const [data, setData] = useState<{ feedback: FeedbackDetail; comments: CommentItem[] } | null>(
+  const [data, setData] = useState<{ feedback: FeedbackDetail; comments: CommentItem[]; items?: OrderItem[] } | null>(
     null,
   );
   const [notFound, setNotFound] = useState(false);
@@ -95,10 +103,17 @@ export function RequestDetail({ id }: Props) {
     );
   }
 
-  const { feedback, comments } = data;
+  const { feedback, comments, items } = data;
   const meta = STATUS_META[feedback.status] ?? STATUS_META.new;
+  const isConsumables = feedback.category === "consumables_request";
+  const orderComment = typeof feedback.fields?.comment === "string" ? feedback.fields.comment : null;
+  // For consumables the order line-items + comment are rendered as dedicated
+  // blocks below, so drop them from the generic per-field dump.
   const fieldEntries = Object.entries(feedback.fields ?? {}).filter(
-    ([key, value]) => !HIDDEN_FIELD_KEYS.has(key) && value !== null && value !== undefined && value !== "",
+    ([key, value]) =>
+      !HIDDEN_FIELD_KEYS.has(key) &&
+      !(isConsumables && key === "comment") &&
+      value !== null && value !== undefined && value !== "",
   );
 
   return (
@@ -109,6 +124,37 @@ export function RequestDetail({ id }: Props) {
           подано {formatDateTime(feedback.created_at)}
         </span>
       </div>
+
+      {isConsumables && items && items.length > 0 ? (
+        <div>
+          <p className="mb-2 ml-1 text-[12px] font-semibold uppercase tracking-[0.03em] text-ink-500">
+            Товари у замовленні
+          </p>
+          <div className="overflow-hidden rounded-xl border border-ink-300/20 bg-elev shadow-soft">
+            {items.map((item) => (
+              <div key={item.product_id} className="flex items-center gap-3 border-b border-ink-300/15 p-3.5 last:border-b-0">
+                <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                  <PackageIcon size={20} />
+                </span>
+                <p className="min-w-0 flex-1 truncate text-[15px] font-medium text-ink-900">{item.name}</p>
+                <p className="flex-shrink-0 text-[15px] font-semibold text-brand-600">
+                  {item.quantity} {item.unit ?? "шт"}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {isConsumables && orderComment ? (
+        <div className="flex gap-3 rounded-xl border border-brand-500/20 bg-brand-50/40 p-3.5">
+          <span className="mt-0.5 flex-shrink-0 text-brand-600"><MessageIcon size={18} /></span>
+          <div>
+            <p className="text-[12px] font-semibold text-brand-600">Коментар для комірника</p>
+            <p className="mt-1 text-[14px] leading-relaxed text-ink-900">{orderComment}</p>
+          </div>
+        </div>
+      ) : null}
 
       {fieldEntries.length > 0 ? (
         <div className="rounded-xl border border-ink-300/20 bg-elev p-3 shadow-soft">

@@ -1,137 +1,51 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { STATUS_META, type FeedbackStatus } from "@/lib/feedbackStatusMeta";
+import { ChevronRightIcon, PackageIcon, SearchIcon } from "@/components/icons";
 
 interface MyFeedbackRow {
   id: string;
   category: string;
-  category_emoji: string | null;
   category_title: string | null;
   summary: string | null;
   status: FeedbackStatus;
-  assigned_full_name: string | null;
   created_at: string;
-  resolved_at: string | null;
 }
 
-function formatRelative(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diffMs / 60_000);
-  if (min < 1) return "щойно";
-  if (min < 60) return `${min} хв тому`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} год тому`;
-  return `${Math.floor(hr / 24)} дн тому`;
+function formatDate(iso: string): string {
+  const date = new Date(iso);
+  const today = new Date();
+  const sameDay = date.toDateString() === today.toDateString();
+  return sameDay
+    ? `Сьогодні, ${date.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}`
+    : date.toLocaleDateString("uk-UA", { day: "numeric", month: "long" });
 }
 
-const ARCHIVE_STATUSES = new Set<FeedbackStatus>(["resolved", "rejected"]);
-
-type Tab = "active" | "archive";
+function statusClass(status: FeedbackStatus): string {
+  if (status === "resolved") return "bg-green-100 text-green-700";
+  if (status === "in_progress") return "bg-orange-100 text-orange-700";
+  if (status === "rejected") return "bg-red-100 text-red-700";
+  return "bg-[#d8e2ff] text-[#004493]";
+}
 
 export function MyRequestsList() {
   const [rows, setRows] = useState<MyFeedbackRow[] | null>(null);
+  const [search, setSearch] = useState("");
   const [error, setError] = useState(false);
-  const [tab, setTab] = useState<Tab>("active");
 
   useEffect(() => {
     fetch("/api/my-feedback?limit=50")
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((j: { rows?: MyFeedbackRow[] }) => {
-        setRows(j.rows ?? []);
-        setError(false);
-      })
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data: { rows?: MyFeedbackRow[] }) => { setRows(data.rows ?? []); setError(false); })
       .catch(() => setError(true));
   }, []);
 
-  if (rows === null) {
-    return (
-      <div className="mt-4 space-y-2">
-        <div className="skeleton h-16 w-full rounded-xl" />
-        <div className="skeleton h-16 w-full rounded-xl" />
-      </div>
-    );
-  }
+  const filtered = useMemo(() => (rows ?? []).filter((row) => `${row.category_title ?? ""} ${row.summary ?? ""}`.toLocaleLowerCase("uk-UA").includes(search.toLocaleLowerCase("uk-UA"))), [rows, search]);
 
-  if (error) {
-    return (
-      <p className="mt-4 text-[13px] text-ink-500">
-        Не вдалося завантажити заявки.
-      </p>
-    );
-  }
+  if (rows === null) return <div className="space-y-4 px-4 pt-4"><div className="skeleton h-12 rounded-lg" /><div className="skeleton h-32 rounded-xl" /><div className="skeleton h-32 rounded-xl" /></div>;
+  if (error) return <p className="px-4 pt-6 text-center text-sm text-[#414755]">Не вдалося завантажити заявки.</p>;
 
-  const visibleRows = rows.filter((r) =>
-    tab === "archive" ? ARCHIVE_STATUSES.has(r.status) : !ARCHIVE_STATUSES.has(r.status),
-  );
-
-  return (
-    <div className="mt-4">
-      <div className="mb-3 flex gap-1 rounded-full bg-elev2 p-1">
-        <button
-          type="button"
-          onClick={() => setTab("active")}
-          className={`flex-1 rounded-full py-1.5 text-[12px] font-semibold transition ${
-            tab === "active" ? "bg-elev text-ink-900 shadow-soft" : "text-ink-500"
-          }`}
-        >
-          Активні
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("archive")}
-          className={`flex-1 rounded-full py-1.5 text-[12px] font-semibold transition ${
-            tab === "archive" ? "bg-elev text-ink-900 shadow-soft" : "text-ink-500"
-          }`}
-        >
-          Архів
-        </button>
-      </div>
-
-      {visibleRows.length === 0 ? (
-        <p className="mt-8 text-center text-[13px] text-ink-500">
-          {tab === "archive" ? "Архів порожній" : "Немає активних заявок"}
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {visibleRows.map((r) => {
-            const meta = STATUS_META[r.status] ?? STATUS_META.new;
-            return (
-              <Link
-                key={r.id}
-                href={`/my-requests/${r.id}`}
-                className="block rounded-xl border border-ink-300/20 bg-elev p-3 shadow-soft"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex min-w-0 gap-2">
-                    <span className="flex-shrink-0 text-base" aria-hidden>
-                      {r.category_emoji ?? "📝"}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-medium text-ink-900">
-                        {r.category_title ?? r.category}
-                      </p>
-                      {r.summary ? (
-                        <p className="mt-0.5 truncate text-[12px] text-ink-500">{r.summary}</p>
-                      ) : null}
-                    </div>
-                  </div>
-                  <span className={`pill flex-shrink-0 ${meta.className}`}>{meta.label}</span>
-                </div>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="text-[11px] text-ink-500">
-                    {r.assigned_full_name
-                      ? `Відповідальний: ${r.assigned_full_name}`
-                      : "Ще не призначено"}
-                  </span>
-                  <span className="text-[11px] text-ink-500">{formatRelative(r.created_at)}</span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+  return <main className="min-h-[calc(100svh-4rem)] bg-[#f2f2f7] px-4 pb-24 pt-4"><div className="mb-4 flex items-center rounded-lg border border-[#c1c6d7]/40 bg-[#f6f3f5] px-3 py-2"><span className="mr-2 text-[#414755]"><SearchIcon size={20} /></span><label className="sr-only" htmlFor="requests-search">Пошук заявок</label><input id="requests-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Пошук заявок…" className="w-full border-0 bg-transparent p-0 text-[15px] text-[#1b1b1d] outline-none placeholder:text-[#717786]" /></div><div className="space-y-4">{filtered.map((row) => { const meta = STATUS_META[row.status] ?? STATUS_META.new; return <Link key={row.id} href={`/my-requests/${row.id}`} className="block rounded-xl border border-[#d1d1d6] bg-white p-4 shadow-sm active:scale-[0.98]"><div className="flex items-start justify-between gap-3"><div><h2 className="text-[17px] font-semibold leading-[22px] text-[#1b1b1d]">{row.category_title ?? "Заявка"}</h2><p className="mt-1 text-[13px] text-[#414755]">{formatDate(row.created_at)}</p></div><span className={`shrink-0 rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.02em] ${statusClass(row.status)}`}>{meta.label}</span></div>{row.summary ? <div className="mt-4 flex items-center gap-2 text-[15px] text-[#414755]"><span className="shrink-0 text-[#717786]"><PackageIcon size={16} /></span><span className="line-clamp-1">{row.summary}</span></div> : null}<div className="mt-4 flex justify-end border-t border-[#c1c6d7]/30 pt-3"><span className="inline-flex items-center gap-1 text-[13px] font-medium text-[#0058bc]">Деталі <ChevronRightIcon size={14} /></span></div></Link>; })}</div>{filtered.length === 0 ? <div className="pt-16 text-center text-[#414755]"><p className="text-[15px]">Заявок не знайдено</p></div> : null}</main>;
 }

@@ -72,5 +72,34 @@ export async function GET(
     };
   });
 
-  return NextResponse.json({ feedback, comments: flattenedComments });
+  // Consumables store cart_items as [{product_id, quantity}] with no names.
+  // Resolve product names/units from v_products so the detail screen can render
+  // a readable order line-item list instead of raw ids.
+  let items: Array<{ product_id: number; name: string; unit: string | null; quantity: number }> | undefined;
+  const fb = feedback as { category?: string; cart_items?: unknown };
+  if (fb.category === "consumables_request" && Array.isArray(fb.cart_items) && fb.cart_items.length > 0) {
+    const cart = fb.cart_items.filter(
+      (c): c is { product_id: number; quantity: number } =>
+        !!c && typeof (c as { product_id?: unknown }).product_id === "number",
+    );
+    const ids = [...new Set(cart.map((c) => c.product_id))];
+    const { data: products } = await supabase
+      .from("v_products")
+      .select("id, name, unit")
+      .in("id", ids);
+    const byId = new Map(
+      ((products ?? []) as Array<{ id: number; name: string | null; unit: string | null }>).map((p) => [p.id, p]),
+    );
+    items = cart.map((c) => {
+      const p = byId.get(c.product_id);
+      return {
+        product_id: c.product_id,
+        name: p?.name ?? `Товар #${c.product_id}`,
+        unit: p?.unit ?? null,
+        quantity: c.quantity,
+      };
+    });
+  }
+
+  return NextResponse.json({ feedback, comments: flattenedComments, items });
 }
