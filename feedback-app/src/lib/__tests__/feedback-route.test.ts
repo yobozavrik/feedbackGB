@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const { mockWarehouseRpc } = vi.hoisted(() => ({ mockWarehouseRpc: vi.fn() }));
+
+vi.mock("@/lib/warehouseCrm", () => ({
+  getWarehouseCrmSupabase: () => ({ rpc: mockWarehouseRpc }),
+}));
+
 // Mutable mock value for cookies
 let mockSessionCookieValue = "valid-seller-token";
 
@@ -140,6 +146,11 @@ describe("POST /api/feedback", () => {
     mockSupabaseInsert.mockReset();
     mockSupabaseSelect.mockReset();
     mockSupabaseRpc.mockReset();
+    mockWarehouseRpc.mockReset();
+    mockWarehouseRpc.mockResolvedValue({
+      data: { success: true, order_id: "crm-order-id", order_number: "ЗМ-1" },
+      error: null,
+    });
     mockSessionCookieValue = "valid-seller-token";
     mockAdminDirectionAdminId = null;
   });
@@ -313,6 +324,11 @@ describe("POST /api/feedback — payload validation", () => {
     mockSupabaseInsert.mockReset();
     mockSupabaseSelect.mockReset();
     mockSupabaseRpc.mockReset();
+    mockWarehouseRpc.mockReset();
+    mockWarehouseRpc.mockResolvedValue({
+      data: { success: true, order_id: "crm-order-id", order_number: "ЗМ-1" },
+      error: null,
+    });
     mockSessionCookieValue = "valid-seller-token";
     mockAdminDirectionAdminId = null;
   });
@@ -376,6 +392,24 @@ describe("POST /api/feedback — payload validation", () => {
       { category: "supply_problem", fields: {} },
       "Missing required field: supplier_or_item",
     );
+  });
+
+  it("accepts a consumables cart without the legacy materials_list field", async () => {
+    mockInsertResolves({ data: { id: "feedback-id" }, error: null });
+    const { POST } = await loadRoute();
+
+    const res = await POST(
+      feedbackRequest({
+        category: "consumables_request",
+        fields: { comment: "" },
+        cart_items: [{ product_id: 101, quantity: 2 }],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockSupabaseInsert.mock.calls[0][0].cart_items).toEqual([
+      { product_id: 101, quantity: 2 },
+    ]);
   });
 
   it("rejects a product category without product_id or item_name", async () => {

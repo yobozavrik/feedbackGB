@@ -8,6 +8,7 @@ import { validateInitData } from "@/lib/telegram";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 import { resolveAssignedAdmin } from "@/lib/assignment";
 import { createNotification } from "@/lib/notifications";
+import { getWarehouseCrmSupabase } from "@/lib/warehouseCrm";
 import type { FeedbackPayload } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -67,6 +68,7 @@ export async function POST(req: Request) {
     clientCreatedAt,
     productId,
     quantity,
+    cartItems,
     rawPhotos,
   } = validated.data;
 
@@ -90,6 +92,25 @@ export async function POST(req: Request) {
         : null;
 
   const supabase = getServerSupabase();
+
+  // HR transfer requests: never trust the client's target_store_name label —
+  // look the real name up by target_store_id, same as effectiveStoreId below,
+  // and reject outright if the id doesn't correspond to a real store.
+  if (supabase && category.id === "hr_question" && cleanFields["hr_topic"] === "transfer") {
+    const targetStoreId = cleanFields["target_store_id"];
+    const { data: targetStore, error: targetStoreErr } = await supabase
+      .from("v_stores")
+      .select("name")
+      .eq("id", targetStoreId)
+      .maybeSingle();
+    if (targetStoreErr || !targetStore) {
+      return NextResponse.json(
+        { error: "Обраний магазин/цех для переведення не знайдено" },
+        { status: 400 },
+      );
+    }
+    cleanFields["target_store_name"] = (targetStore as { name: string }).name;
+  }
 
   // photo handling: accept ONLY a base64 data: URL for a whitelisted image
   // mime. Anything else (arbitrary http(s):// URLs, javascript:, data: with
@@ -170,12 +191,16 @@ export async function POST(req: Request) {
     : null;
 
   const record = {
+    ...(category.id === "consumables_request"
+      ? { id: clientSubmissionId ?? randomUUID() }
+      : {}),
     category: category.id,
     store_id: effectiveStoreId,
     store_label: storeLabel,
     user_id: sess.uid,
     product_id: productId,
     quantity: quantity,
+    cart_items: cartItems,
     fields: {
       ...cleanFields,
       ...(photoUrls.length > 1 ? { photo_urls: photoUrls } : {}),
@@ -195,6 +220,37 @@ export async function POST(req: Request) {
     // Do NOT log PII — just report that the backend isn't configured.
     console.warn("[feedback] Supabase not configured; record dropped");
     return NextResponse.json({ ok: true, persisted: false });
+  }
+
+  // Consumables are a direct server-to-server call to the warehouse CRM.
+  // Do this before persisting the FeedbackGB journal record: a user must not
+  // see a successful submission if the warehouse has not accepted the order.
+  if (category.id === "consumables_request") {
+    if (!effectiveStoreId || !cartItems) {
+      return NextResponse.json({ error: "Не визначено магазин для заявки" }, { status: 400 });
+    }
+    const warehouse = getWarehouseCrmSupabase();
+    if (!warehouse) {
+      return NextResponse.json({ error: "Складський модуль недоступний" }, { status: 503 });
+    }
+    const { data: crmResult, error: crmError } = await warehouse.rpc(
+      "rpc_create_feedbackgb_consumables_order",
+      {
+        p_feedback_id: record.id,
+        p_feedback_user_id: sess.uid,
+        p_feedback_store_id: effectiveStoreId,
+        p_notes: typeof cleanFields.comment === "string" ? cleanFields.comment : null,
+        p_items: cartItems,
+      },
+    );
+    const crm = crmResult as { success?: boolean; error?: string; order_id?: string; order_number?: string } | null;
+    if (crmError || !crm?.success || !crm.order_id) {
+      console.error("[feedback] warehouse consumables request failed", { code: crmError?.code });
+      return NextResponse.json(
+        { error: "Складський модуль не прийняв заявку" },
+        { status: 502 },
+      );
+    }
   }
 
   const { data: inserted, error } = await supabase

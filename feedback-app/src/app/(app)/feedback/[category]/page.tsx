@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Header } from "@/components/Header";
 import { FeedbackForm } from "@/components/FeedbackForm";
+import { ConsumablesCartForm } from "@/components/ConsumablesCartForm";
 import { PriorityFeedbackForm } from "@/components/PriorityFeedbackForm";
 import { CATEGORIES, getCategory } from "@/lib/categories";
 
@@ -42,7 +43,7 @@ export default function FeedbackCategoryPage({
       {category.requiresProduct ? (
         <PriorityFeedbackForm category={category} />
       ) : (
-        <FeedbackForm category={category} />
+        category.id === "consumables_request" ? <ConsumablesCartForm /> : <FeedbackForm category={category} />
       )}
     </main>
   );

@@ -267,6 +267,8 @@ create table if not exists feedbackgb.feedback (
   -- (missing_item / overstock / defect). NULL for non-product categories.
   product_id      bigint references categories.products(id) on delete set null,
   quantity        numeric,
+  -- Structured consumables basket. NULL for all other feedback categories.
+  cart_items      jsonb,
 
   -- structured per-category answers (extras beyond product + quantity)
   fields          jsonb not null default '{}'::jsonb,

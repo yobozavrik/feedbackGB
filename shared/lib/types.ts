@@ -22,6 +22,8 @@ export interface FeedbackPayload {
   product_id?: number | null;
   /** v1 priority flow: numeric quantity (units of the product). */
   quantity?: number | null;
+  /** Structured consumables cart. Valid only for consumables_request. */
+  cart_items?: Array<{ product_id: number; quantity: number }>;
   fields: Record<string, string | number | string[] | null>;
   photo_url?: string | null;
   photo_urls?: string[];

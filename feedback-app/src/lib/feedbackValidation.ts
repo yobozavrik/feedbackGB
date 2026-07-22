@@ -20,6 +20,7 @@ const HR_TOPIC_IDS = new Set(HR_TOPICS.map((t) => t.id));
 // (sick leave, resignation, transfer) don't use this shape.
 const HR_DATE_RANGE_TOPICS = new Set(["vacation", "day-off"]);
 const HR_DATE_RANGE_MIN_NOTICE_DAYS = 7;
+const MAX_CART_ITEMS = 100;
 
 export interface ValidatedFeedback {
   category: Category;
@@ -29,6 +30,7 @@ export interface ValidatedFeedback {
   clientCreatedAt: string | null;
   productId: number | null;
   quantity: number | null;
+  cartItems: Array<{ product_id: number; quantity: number }> | null;
   /** Raw photo candidates; per-entry sanitisation happens at upload time. */
   rawPhotos: unknown[];
 }
@@ -84,6 +86,9 @@ export function validateFeedbackPayload(
 
   for (const f of category.fields) {
     if (f.kind === "photo" || !f.required) continue;
+    // Consumables now use the structured cart, not the legacy free-text
+    // materials_list field kept in the category definition for old records.
+    if (category.id === "consumables_request" && f.id === "materials_list") continue;
     const v = cleanFields[f.id];
     if (v === undefined || v === null || `${v}`.trim() === "") {
       return {
@@ -170,6 +175,32 @@ export function validateFeedbackPayload(
     if (quantity === null || quantity <= 0) {
       return { ok: false, error: "Вкажи кількість", status: 400 };
     }
+  }
+
+  let cartItems: Array<{ product_id: number; quantity: number }> | null = null;
+  if (category.id === "consumables_request") {
+    if (!Array.isArray(payload.cart_items) || payload.cart_items.length === 0) {
+      return { ok: false, error: "Додай хоча б один розхідний матеріал", status: 400 };
+    }
+    if (payload.cart_items.length > MAX_CART_ITEMS) {
+      return { ok: false, error: `Забагато позицій: максимум ${MAX_CART_ITEMS}`, status: 400 };
+    }
+    const seen = new Set<number>();
+    cartItems = [];
+    for (const item of payload.cart_items) {
+      const productId = item?.product_id;
+      const quantity = item?.quantity;
+      if (!Number.isInteger(productId) || productId <= 0 || !Number.isFinite(quantity) || quantity <= 0 || quantity > 1_000_000) {
+        return { ok: false, error: "Некоректна позиція кошика", status: 400 };
+      }
+      if (seen.has(productId)) {
+        return { ok: false, error: "Одна позиція не може бути в кошику двічі", status: 400 };
+      }
+      seen.add(productId);
+      cartItems.push({ product_id: productId, quantity: Math.round(quantity * 1000) / 1000 });
+    }
+  } else if (payload.cart_items !== undefined) {
+    return { ok: false, error: "Кошик доступний лише для заявки на розхідні матеріали", status: 400 };
   }
 
   if (category.id === "hr_question") {
@@ -305,6 +336,7 @@ export function validateFeedbackPayload(
       clientCreatedAt,
       productId,
       quantity,
+      cartItems,
       rawPhotos,
     },
   };
