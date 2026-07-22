@@ -84,6 +84,7 @@ export interface ConsumablesOrderItem {
   product_id: number;
   name: string;
   unit: string | null;
+  category_name: string | null;
   quantity: number;
   photo_url: string | null;
 }
@@ -122,15 +123,22 @@ export async function getConsumablesOrderDetail(
 
   const [{ data: products }, { data: photos }, { data: order }, { data: transfers }] =
     await Promise.all([
-      db.from("products").select("id, name, unit").in("id", productIds),
+      db.from("products").select("id, name, unit, category_id").in("id", productIds),
       db.from("product_photos").select("product_id, url, sort_order").in("product_id", productIds).order("sort_order", { ascending: true }),
       db.from("orders").select("order_number, status, submitted_at, shipped_at").eq("id", orderId).maybeSingle(),
       db.from("transfers").select("status, created_at, completed_at").eq("order_id", orderId).order("created_at", { ascending: false }),
     ]);
 
-  const productById = new Map(
-    ((products ?? []) as Array<{ id: number; name: string; unit: string | null }>).map((p) => [p.id, p]),
-  );
+  const productRows = (products ?? []) as Array<{ id: number; name: string; unit: string | null; category_id: number | null }>;
+  const productById = new Map(productRows.map((p) => [p.id, p]));
+
+  const categoryIds = [...new Set(productRows.map((p) => p.category_id).filter((c): c is number => c != null))];
+  const categoryById = new Map<number, string>();
+  if (categoryIds.length > 0) {
+    const { data: categories } = await db.from("product_categories").select("id, name").in("id", categoryIds);
+    for (const c of (categories ?? []) as Array<{ id: number; name: string }>) categoryById.set(c.id, c.name);
+  }
+
   const photoByProduct = new Map<number, string>();
   for (const p of (photos ?? []) as Array<{ product_id: number; url: string }>) {
     if (!photoByProduct.has(p.product_id)) photoByProduct.set(p.product_id, p.url);
@@ -142,6 +150,7 @@ export async function getConsumablesOrderDetail(
       product_id: r.product_id,
       name: p?.name ?? `Товар #${r.product_id}`,
       unit: p?.unit ?? null,
+      category_name: p?.category_id != null ? categoryById.get(p.category_id) ?? null : null,
       quantity: Number(r.quantity_requested),
       photo_url: photoByProduct.get(r.product_id) ?? null,
     };

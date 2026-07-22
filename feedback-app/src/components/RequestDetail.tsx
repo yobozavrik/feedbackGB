@@ -31,6 +31,7 @@ interface OrderItem {
   product_id: number;
   name: string;
   unit: string | null;
+  category_name: string | null;
   quantity: number;
   photo_url: string | null;
 }
@@ -139,20 +140,24 @@ export function RequestDetail({ id }: Props) {
   );
 
   return (
-    <div className="mt-4 space-y-4">
+    <>
+    <div className={`mt-4 space-y-4 ${isConsumables ? "pb-24" : ""}`}>
       {isConsumables && cMeta ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-ink-300/20 bg-elev p-3.5 shadow-soft">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
-              <ClipboardCheckIcon size={20} />
-            </span>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">Поточний статус</p>
-              <p className="text-[15px] font-semibold text-ink-900">{cMeta.label}</p>
+        <div className="rounded-xl border border-ink-300/20 bg-elev p-3.5 shadow-soft">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+                <ClipboardCheckIcon size={20} />
+              </span>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">Поточний статус</p>
+                <p className="text-[15px] font-semibold text-ink-900">{cMeta.label}</p>
+              </div>
             </div>
+            <span className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold ${cMeta.chipClass}`}>{cMeta.label}</span>
           </div>
           {consumables?.order_number ? (
-            <span className="shrink-0 text-[11px] text-ink-500">{consumables.order_number}</span>
+            <p className="mt-2 border-t border-ink-300/15 pt-2 text-[11px] text-ink-500">Замовлення {consumables.order_number}</p>
           ) : null}
         </div>
       ) : (
@@ -169,18 +174,21 @@ export function RequestDetail({ id }: Props) {
           <p className="mb-2 ml-1 text-[12px] font-semibold uppercase tracking-[0.03em] text-ink-500">
             Товари у замовленні
           </p>
-          <div className="overflow-hidden rounded-xl border border-ink-300/20 bg-elev shadow-soft">
+          <div className="space-y-2">
             {consumables.items.map((item) => (
-              <div key={item.product_id} className="flex items-center gap-3 border-b border-ink-300/15 p-3.5 last:border-b-0">
+              <div key={item.product_id} className="flex items-center gap-4 rounded-xl border border-ink-300/20 bg-elev p-3 shadow-soft">
                 {item.photo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.photo_url} alt="" loading="lazy" className="h-12 w-12 flex-shrink-0 rounded-lg border border-ink-300/20 object-cover" />
+                  <img src={item.photo_url} alt="" loading="lazy" className="h-16 w-16 flex-shrink-0 rounded-lg border border-ink-300/20 object-cover" />
                 ) : (
-                  <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-                    <PackageIcon size={20} />
+                  <span className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                    <PackageIcon size={24} />
                   </span>
                 )}
-                <p className="min-w-0 flex-1 truncate text-[15px] font-medium text-ink-900">{item.name}</p>
+                <div className="min-w-0 flex-1">
+                  <h4 className="truncate text-[15px] font-semibold text-ink-900">{item.name}</h4>
+                  {item.category_name ? <p className="mt-0.5 truncate text-[13px] text-ink-500">{item.category_name}</p> : null}
+                </div>
                 <p className="flex-shrink-0 text-[15px] font-semibold text-brand-600">
                   {item.quantity} {item.unit ?? "шт"}
                 </p>
@@ -229,21 +237,10 @@ export function RequestDetail({ id }: Props) {
         </div>
       ) : null}
 
-      {isConsumables ? (
-        <div>
-          <button
-            type="button"
-            onClick={() => setEditNote((v) => !v)}
-            className="btn-ghost h-12 w-full gap-2"
-          >
-            <EditIcon size={18} /> Змінити
-          </button>
-          {editNote ? (
-            <p className="mt-2 text-center text-[12px] text-ink-500">
-              Редагування поданої заявки буде доступне згодом. Щоб змінити — створіть нову заявку.
-            </p>
-          ) : null}
-        </div>
+      {isConsumables && editNote ? (
+        <p className="text-center text-[12px] text-ink-500">
+          Редагування поданої заявки буде доступне згодом. Щоб змінити — створіть нову заявку.
+        </p>
       ) : null}
 
       {fieldEntries.length > 0 ? (
@@ -282,28 +279,41 @@ export function RequestDetail({ id }: Props) {
         </div>
       ) : null}
 
-      <div>
-        <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.03em] text-ink-500">
-          Коментарі
-        </p>
-        {comments.length === 0 ? (
-          <p className="text-[13px] text-ink-500">Ще немає коментарів</p>
-        ) : (
-          <div className="space-y-2">
-            {comments.map((c) => (
-              <div key={c.id} className="rounded-xl bg-elev2 p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-semibold text-brand-600">
-                    {c.author_full_name}
-                  </span>
-                  <span className="text-[11px] text-ink-500">{formatDateTime(c.created_at)}</span>
+      {!isConsumables || comments.length > 0 ? (
+        <div>
+          <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.03em] text-ink-500">
+            Коментарі
+          </p>
+          {comments.length === 0 ? (
+            <p className="text-[13px] text-ink-500">Ще немає коментарів</p>
+          ) : (
+            <div className="space-y-2">
+              {comments.map((c) => (
+                <div key={c.id} className="rounded-xl bg-elev2 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-semibold text-brand-600">
+                      {c.author_full_name}
+                    </span>
+                    <span className="text-[11px] text-ink-500">{formatDateTime(c.created_at)}</span>
+                  </div>
+                  <p className="mt-1 text-[13px] leading-relaxed text-ink-900">{c.body}</p>
                 </div>
-                <p className="mt-1 text-[13px] leading-relaxed text-ink-900">{c.body}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
+
+    {isConsumables ? (
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink-300/20 bg-bg/95 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 backdrop-blur-md sm:px-6">
+        <div className="mx-auto max-w-md">
+          <button type="button" onClick={() => setEditNote((v) => !v)} className="btn-ghost h-12 w-full gap-2">
+            <EditIcon size={18} /> Змінити
+          </button>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }
