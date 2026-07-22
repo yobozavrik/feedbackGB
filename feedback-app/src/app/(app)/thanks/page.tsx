@@ -1,17 +1,30 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { getCategory } from "@/lib/categories";
-import { CONSUMABLES_TIMELINE } from "@/lib/consumablesStatusMeta";
+import { CONSUMABLES_STATUS_META, CONSUMABLES_TIMELINE } from "@/lib/consumablesStatusMeta";
+import { getConsumablesOrderDetail } from "@/lib/consumablesOrder";
+import { isUuid } from "@/lib/validation";
 import { CheckCircleIcon } from "@/components/icons";
 
-export default function ThanksPage({ searchParams }: { searchParams: { cat?: string } }) {
+export const dynamic = "force-dynamic";
+
+export default async function ThanksPage({ searchParams }: { searchParams: { cat?: string; id?: string } }) {
   const cat = searchParams.cat ? getCategory(searchParams.cat) : undefined;
   const isConsumables = cat?.id === "consumables_request";
 
-  // Just-submitted orders are at stage 0 ("Прийнята") of the real warehouse
-  // pipeline (Прийнята → Збирається → Відправлена). The steps advance as the
-  // CRM order/transfer state changes — see the live status on «Мої заявки».
-  const currentStep = 0;
+  // Bridge to the real warehouse pipeline: look up the just-created order's
+  // stage by feedback id (the client's submission id). Orders can merge into an
+  // already-in-progress CRM order, so this may already be past «Прийнята».
+  // Falls back to stage 0 if the lookup isn't available yet.
+  let currentStep = 0;
+  if (isConsumables && searchParams.id && isUuid(searchParams.id)) {
+    try {
+      const detail = await getConsumablesOrderDetail(searchParams.id);
+      if (detail) currentStep = CONSUMABLES_STATUS_META[detail.status].step;
+    } catch {
+      // CRM hiccup — keep the default «Прийнята» stage.
+    }
+  }
 
   if (isConsumables) return (
     <main className="flex min-h-[100svh] flex-col items-center bg-[#f2f2f7] px-6 pt-[14vh] text-center">

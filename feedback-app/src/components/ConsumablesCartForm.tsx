@@ -88,6 +88,9 @@ export function ConsumablesCartForm() {
     if (!cart.length) { setInlineError("Додайте хоча б один розхідний матеріал"); setView("catalog"); return; }
     setSubmitting(true);
     setSubmitError(null);
+    // The client-generated submission id becomes the feedback record id for
+    // consumables, so we can hand it to /thanks to look up the real order stage.
+    const submissionId = crypto.randomUUID();
     try {
       const response = await fetch("/api/feedback", {
         method: "POST",
@@ -97,13 +100,13 @@ export function ConsumablesCartForm() {
           fields: { comment: comment.trim() || null },
           cart_items: cart.map(({ id, quantity }) => ({ product_id: id, quantity })),
           init_data: initData || undefined,
-          client_submission_id: crypto.randomUUID(),
+          client_submission_id: submissionId,
           client_created_at: new Date().toISOString(),
         }),
       });
       if (!response.ok) { const body = await response.json().catch(() => null); throw new Error(body?.error || "Не вдалося відправити заявку"); }
       webApp?.HapticFeedback?.notificationOccurred("success");
-      router.push("/thanks?cat=consumables_request");
+      router.push(`/thanks?cat=consumables_request&id=${submissionId}`);
     } catch (cause) {
       setSubmitError(cause instanceof Error ? cause.message : "Не вдалося відправити заявку");
       webApp?.HapticFeedback?.notificationOccurred("error");
