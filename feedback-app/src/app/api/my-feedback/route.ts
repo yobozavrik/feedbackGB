@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
+import { getConsumablesStatuses } from "@/lib/consumablesOrder";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ export async function GET(req: Request) {
   const { data, error } = await supabase
     .from("feedback_feed")
     .select(
-      "id, category, category_emoji, category_title, summary, status, assigned_full_name, created_at, resolved_at",
+      "id, category, category_emoji, category_title, summary, status, assigned_full_name, created_at, resolved_at, cart_items",
     )
     .eq("user_id", sess.uid)
     .order("created_at", { ascending: false })
@@ -40,5 +41,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "db_error" }, { status: 500 });
   }
 
-  return NextResponse.json({ rows: data ?? [] });
+  // Enrich consumables rows: item count (from the stored cart) + the live
+  // seller-facing status derived from the warehouse CRM order/transfer state.
+  const rows = (data ?? []) as Array<{ id: string; category: string; cart_items?: unknown }>;
+  const consumablesIds = rows.filter((r) => r.category === "consumables_request").map((r) => r.id);
+  const statuses = consumablesIds.length > 0 ? await getConsumablesStatuses(consumablesIds) : null;
+
+  const enriched = rows.map((r) => {
+    if (r.category !== "consumables_request") return r;
+    const itemCount = Array.isArray(r.cart_items) ? r.cart_items.length : 0;
+    return { ...r, item_count: itemCount, consumables_status: statuses?.get(r.id) ?? null };
+  });
+
+  return NextResponse.json({ rows: enriched });
 }

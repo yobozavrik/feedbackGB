@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { STATUS_META, type FeedbackStatus } from "@/lib/feedbackStatusMeta";
-import { MessageIcon, PackageIcon } from "@/components/icons";
+import {
+  CONSUMABLES_STATUS_META,
+  CONSUMABLES_TIMELINE,
+  type ConsumablesStatus,
+} from "@/lib/consumablesStatusMeta";
+import { CheckCircleIcon, ClipboardCheckIcon, EditIcon, MessageIcon, PackageIcon } from "@/components/icons";
 
 interface FeedbackDetail {
   id: string;
@@ -27,6 +32,18 @@ interface OrderItem {
   name: string;
   unit: string | null;
   quantity: number;
+  photo_url: string | null;
+}
+
+interface ConsumablesOrder {
+  status: ConsumablesStatus;
+  order_number: string | null;
+  items: OrderItem[];
+  timeline: {
+    submitted_at: string | null;
+    picking_at: string | null;
+    shipped_at: string | null;
+  };
 }
 
 const HIDDEN_FIELD_KEYS = new Set(["photo_urls", "hr_topic"]);
@@ -61,11 +78,12 @@ interface Props {
 }
 
 export function RequestDetail({ id }: Props) {
-  const [data, setData] = useState<{ feedback: FeedbackDetail; comments: CommentItem[]; items?: OrderItem[] } | null>(
+  const [data, setData] = useState<{ feedback: FeedbackDetail; comments: CommentItem[]; consumables?: ConsumablesOrder | null } | null>(
     null,
   );
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState(false);
+  const [editNote, setEditNote] = useState(false);
 
   useEffect(() => {
     fetch(`/api/my-feedback/${id}`)
@@ -103,10 +121,14 @@ export function RequestDetail({ id }: Props) {
     );
   }
 
-  const { feedback, comments, items } = data;
+  const { feedback, comments, consumables } = data;
   const meta = STATUS_META[feedback.status] ?? STATUS_META.new;
   const isConsumables = feedback.category === "consumables_request";
   const orderComment = typeof feedback.fields?.comment === "string" ? feedback.fields.comment : null;
+  const cMeta = consumables ? CONSUMABLES_STATUS_META[consumables.status] : null;
+  const timelineTimes = consumables
+    ? [consumables.timeline.submitted_at, consumables.timeline.picking_at, consumables.timeline.shipped_at]
+    : [];
   // For consumables the order line-items + comment are rendered as dedicated
   // blocks below, so drop them from the generic per-field dump.
   const fieldEntries = Object.entries(feedback.fields ?? {}).filter(
@@ -118,24 +140,46 @@ export function RequestDetail({ id }: Props) {
 
   return (
     <div className="mt-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <span className={`pill ${meta.className}`}>{meta.label}</span>
-        <span className="text-[11px] text-ink-500">
-          подано {formatDateTime(feedback.created_at)}
-        </span>
-      </div>
+      {isConsumables && cMeta ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-ink-300/20 bg-elev p-3.5 shadow-soft">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+              <ClipboardCheckIcon size={20} />
+            </span>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">Поточний статус</p>
+              <p className="text-[15px] font-semibold text-ink-900">{cMeta.label}</p>
+            </div>
+          </div>
+          {consumables?.order_number ? (
+            <span className="shrink-0 text-[11px] text-ink-500">{consumables.order_number}</span>
+          ) : null}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className={`pill ${meta.className}`}>{meta.label}</span>
+          <span className="text-[11px] text-ink-500">
+            подано {formatDateTime(feedback.created_at)}
+          </span>
+        </div>
+      )}
 
-      {isConsumables && items && items.length > 0 ? (
+      {isConsumables && consumables && consumables.items.length > 0 ? (
         <div>
           <p className="mb-2 ml-1 text-[12px] font-semibold uppercase tracking-[0.03em] text-ink-500">
             Товари у замовленні
           </p>
           <div className="overflow-hidden rounded-xl border border-ink-300/20 bg-elev shadow-soft">
-            {items.map((item) => (
+            {consumables.items.map((item) => (
               <div key={item.product_id} className="flex items-center gap-3 border-b border-ink-300/15 p-3.5 last:border-b-0">
-                <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-                  <PackageIcon size={20} />
-                </span>
+                {item.photo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.photo_url} alt="" loading="lazy" className="h-12 w-12 flex-shrink-0 rounded-lg border border-ink-300/20 object-cover" />
+                ) : (
+                  <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                    <PackageIcon size={20} />
+                  </span>
+                )}
                 <p className="min-w-0 flex-1 truncate text-[15px] font-medium text-ink-900">{item.name}</p>
                 <p className="flex-shrink-0 text-[15px] font-semibold text-brand-600">
                   {item.quantity} {item.unit ?? "шт"}
@@ -156,6 +200,52 @@ export function RequestDetail({ id }: Props) {
         </div>
       ) : null}
 
+      {isConsumables && consumables ? (
+        <div>
+          <p className="mb-2 ml-1 text-[12px] font-semibold uppercase tracking-[0.03em] text-ink-500">
+            Історія обробки
+          </p>
+          <div className="rounded-xl border border-ink-300/20 bg-elev p-4 shadow-soft">
+            {CONSUMABLES_TIMELINE.map((step, i) => {
+              const done = i <= cMeta!.step;
+              const isLast = i === CONSUMABLES_TIMELINE.length - 1;
+              const at = timelineTimes[i];
+              return (
+                <div key={step.label} className={`relative ml-2 pl-8 ${isLast ? "" : "border-l-2 pb-5"} ${i < cMeta!.step ? "border-brand-500" : "border-ink-300/40"}`}>
+                  <span className={`absolute -left-[11px] top-0 flex h-5 w-5 items-center justify-center rounded-full ${done ? "bg-brand-500 text-white" : "border-2 border-ink-300 bg-elev"}`}>
+                    {done ? <CheckCircleIcon size={13} /> : <span className="h-1.5 w-1.5 rounded-full bg-ink-300" />}
+                  </span>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className={`text-[14px] font-semibold ${done ? "text-ink-900" : "text-ink-500"}`}>{step.label}</p>
+                      <p className="text-[12px] text-ink-500">{step.description}</p>
+                    </div>
+                    {at ? <span className="shrink-0 text-[11px] text-ink-500">{formatDateTime(at)}</span> : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {isConsumables ? (
+        <div>
+          <button
+            type="button"
+            onClick={() => setEditNote((v) => !v)}
+            className="btn-ghost h-12 w-full gap-2"
+          >
+            <EditIcon size={18} /> Змінити
+          </button>
+          {editNote ? (
+            <p className="mt-2 text-center text-[12px] text-ink-500">
+              Редагування поданої заявки буде доступне згодом. Щоб змінити — створіть нову заявку.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {fieldEntries.length > 0 ? (
         <div className="rounded-xl border border-ink-300/20 bg-elev p-3 shadow-soft">
           <table className="w-full text-[13px]">
@@ -171,24 +261,26 @@ export function RequestDetail({ id }: Props) {
         </div>
       ) : null}
 
-      <div className="flex items-center gap-2 rounded-xl px-1 py-1">
-        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-brand-50 text-[11px] font-semibold text-brand-600">
-          {feedback.assigned_full_name
-            ? feedback.assigned_full_name
-                .split(/\s+/)
-                .slice(0, 2)
-                .map((p) => p[0])
-                .join("")
-                .toUpperCase()
-            : "?"}
+      {!isConsumables ? (
+        <div className="flex items-center gap-2 rounded-xl px-1 py-1">
+          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-brand-50 text-[11px] font-semibold text-brand-600">
+            {feedback.assigned_full_name
+              ? feedback.assigned_full_name
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((p) => p[0])
+                  .join("")
+                  .toUpperCase()
+              : "?"}
+          </div>
+          <div>
+            <p className="text-[12px] text-ink-500">Відповідальний</p>
+            <p className="text-[13px] font-medium text-ink-900">
+              {feedback.assigned_full_name ?? "Ще не призначено"}
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="text-[12px] text-ink-500">Відповідальний</p>
-          <p className="text-[13px] font-medium text-ink-900">
-            {feedback.assigned_full_name ?? "Ще не призначено"}
-          </p>
-        </div>
-      </div>
+      ) : null}
 
       <div>
         <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.03em] text-ink-500">

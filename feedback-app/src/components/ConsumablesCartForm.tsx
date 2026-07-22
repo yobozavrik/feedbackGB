@@ -9,6 +9,7 @@ import {
   CartIcon,
   EditIcon,
   MinusIcon,
+  PackageIcon,
   PlusCircleIcon,
   PlusIcon,
   RefreshIcon,
@@ -17,8 +18,21 @@ import {
   TrashIcon,
 } from "./icons";
 
-type CatalogItem = { id: number; name: string; unit: string | null; category_name: string | null };
+type CatalogItem = { id: number; name: string; unit: string | null; category_name: string | null; photo_url: string | null };
 type CartItem = CatalogItem & { quantity: number };
+
+/** Product thumbnail with a graceful icon fallback when there's no photo. */
+function Thumb({ url, name, size = "h-12 w-12" }: { url: string | null; name: string; size?: string }) {
+  if (!url) {
+    return (
+      <span className={`${size} flex flex-shrink-0 items-center justify-center rounded-lg bg-[#f0edef] text-ink-500`}>
+        <PackageIcon size={22} />
+      </span>
+    );
+  }
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={url} alt="" className={`${size} flex-shrink-0 rounded-lg border border-ink-300/20 object-cover`} loading="lazy" />;
+}
 
 export function ConsumablesCartForm() {
   const router = useRouter();
@@ -195,6 +209,7 @@ export function ConsumablesCartForm() {
               const selected = cartItem(item.id);
               return (
                 <article key={item.id} className="card flex min-h-[76px] items-center gap-3 p-3.5">
+                  <Thumb url={item.photo_url} name={item.name} />
                   <div className="min-w-0 flex-1">
                     <h2 className="truncate font-medium text-ink-900">{item.name}</h2>
                     <p className="mt-1 text-xs text-ink-500">
@@ -256,9 +271,12 @@ export function ConsumablesCartForm() {
           {cart.map((item) => (
             <article key={item.id} className="border-b border-[#d1d1d6] p-4 last:border-b-0">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="text-[17px] font-semibold leading-[22px] text-[#1b1b1d]">{item.name}</h2>
-                  <p className="mt-1 text-[13px] text-[#414755]">Одиниця: {item.unit ?? "шт"}</p>
+                <div className="flex min-w-0 items-start gap-3">
+                  <Thumb url={item.photo_url} name={item.name} />
+                  <div className="min-w-0">
+                    <h2 className="text-[17px] font-semibold leading-[22px] text-[#1b1b1d]">{item.name}</h2>
+                    <p className="mt-1 text-[13px] text-[#414755]">Одиниця: {item.unit ?? "шт"}</p>
+                  </div>
                 </div>
                 <button type="button" onClick={() => remove(item.id)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[#ba1a1a] active:scale-95" aria-label={`Видалити ${item.name}`}>
                   <TrashIcon size={20} />
