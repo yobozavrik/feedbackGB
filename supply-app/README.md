@@ -9,3 +9,17 @@ does not share browser sessions or routes with `feedback-app` or
 
 Implementation is gated by `docs/supply-app/` and the live CRM audit recorded
 in `docs/supply-app/INTEGRATIONS.md`.
+
+## Local run
+
+One time, create a separate ignored local env file from the existing Admin
+Supabase connection. The script generates a distinct `SUPPLY_SESSION_SECRET`:
+
+```powershell
+npm.cmd run bootstrap:local-env
+npm.cmd run dev -- -p 3002
+```
+
+`POST /api/auth/pin` currently accepts only global `admin` and `super_admin`.
+Supply-worker login remains blocked until the reviewed Supply migration and
+app-access checks are applied.

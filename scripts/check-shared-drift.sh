@@ -1,21 +1,29 @@
 #!/usr/bin/env sh
-# Guard against drift between the duplicated "shared" files of the two apps.
+# Guard against drift between the duplicated "shared" files of the apps.
 #
-# feedback-app/ and feedback-admin/ are independent Vercel deployments that
-# deliberately carry copies of the same lib/route files. History shows the
-# copies drift (a constant-time CRON_SECRET fix once landed in only one app),
-# so this script fails the commit when any file in the list below differs
-# between the two packages.
+# feedback-app/, feedback-admin/ and supply-app/ are independent Vercel
+# deployments. Two guards run:
 #
-# If you changed one copy on purpose, apply the same change to the sibling
-# app. If a file legitimately stops being shared, remove it from the list.
+#   1. COPY_FILES — files feedback-app and feedback-admin carry as byte-
+#      identical copies (they import app-local packages, so they can't move to
+#      shared/lib). History shows these drift (a constant-time CRON_SECRET fix
+#      once landed in only one app), so any difference fails the commit.
+#
+#   2. PURE_SHARED_FILES — pure logic single-sourced in shared/lib. Any app
+#      (including supply-app, which compiles shared/lib via externalDir) may
+#      carry a copy, but it MUST be a thin `export *` re-export of shared/lib,
+#      never a re-implementation. This catches the "edited the copy, not the
+#      source" failure across all three apps.
+#
+# If you changed one COPY on purpose, apply the same change to the sibling app.
+# If a file legitimately stops being shared, remove it from the list.
 #
 # Run from anywhere inside the repo; resolves paths from the repo root.
 
 ROOT="$(git rev-parse --show-toplevel)" || exit 1
 cd "$ROOT" || exit 1
 
-SHARED_FILES="
+COPY_FILES="
 middleware.ts
 app/api/auth/me/route.ts
 app/api/cron/daily-report/route.ts
@@ -50,7 +58,7 @@ lib/__tests__/telegram-escape.test.ts
 "
 
 status=0
-for f in $SHARED_FILES; do
+for f in $COPY_FILES; do
   a="feedback-app/src/$f"
   b="feedback-admin/src/$f"
   if [ ! -f "$a" ] || [ ! -f "$b" ]; then
@@ -62,6 +70,30 @@ for f in $SHARED_FILES; do
     echo "[shared-drift] DRIFT: $f differs between feedback-app and feedback-admin" >&2
     status=1
   fi
+done
+
+# Pure logic single-sourced in shared/lib: any app-local copy must be a thin
+# re-export, never a re-implementation. Missing copies are fine (an app just
+# doesn't use that module); a present copy that doesn't reference shared/lib is
+# a re-implementation and fails.
+PURE_SHARED_FILES="
+lib/categories.ts
+lib/types.ts
+lib/validation.ts
+lib/hrTopics.ts
+lib/feedbackValidation.ts
+lib/sla.ts
+lib/summary.ts
+"
+for f in $PURE_SHARED_FILES; do
+  for app in feedback-app feedback-admin supply-app; do
+    p="$app/src/$f"
+    [ -f "$p" ] || continue
+    if ! grep -q 'shared/lib/' "$p"; then
+      echo "[shared-drift] RE-IMPL: $p is a local copy; must \`export * from shared/lib/...\`" >&2
+      status=1
+    fi
+  done
 done
 
 if [ "$status" -ne 0 ]; then

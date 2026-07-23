@@ -11,9 +11,12 @@ erDiagram
   USERS ||--o{ SUPPLY_REQUESTS : creates
 ```
 
-- `facilities`: production/warehouse location and CRM location ID.
+- `facilities`: `production`/`warehouse` location and CRM location ID.
 - `user_app_access`: explicit `seller_app` or `supply_app` access.
-- `user_facility_memberships`: active facility scope and supply permission.
+- `user_facility_memberships`: active facility scope and the single
+  operational role: `supply_worker`, `supply_manager`, `receiver` or
+  `quality_controller`. PIN remains only as bcrypt `users.pin_hash` and is
+  exposed to admin UI only as `has_pin`.
 - Documents: `supply_requests`, `raw_material_defects`, `incoming_documents`
   with their line-item tables.
 - Shared support: `supply_status_history`, `supply_attachments`,

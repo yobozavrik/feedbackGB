@@ -1,6 +1,27 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-:root { color-scheme: light; --bg: 249 249 255; --elev: 255 255 255; --ink-900: 20 27 43; --ink-500: 115 118 134; --ink-300: 195 197 215; --brand-500: 19 83 216; --brand-600: 0 63 177; --brand-50: 219 225 255; }
+:root { color-scheme: light; --bg: 249 249 255; --elev: 255 255 255; --elev-2: 241 243 255; --ink-900: 20 27 43; --ink-700: 67 70 84; --ink-500: 115 118 134; --ink-300: 195 197 215; --brand-500: 19 83 216; --brand-600: 0 63 177; --brand-50: 219 225 255; }
 html, body { background: rgb(var(--bg)); color: rgb(var(--ink-900)); -webkit-font-smoothing: antialiased; }
 .grad-text { background-image: linear-gradient(90deg, rgb(var(--brand-600)), rgb(var(--brand-500))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+@layer components {
+  .card { @apply rounded-xl border border-ink-300/20 bg-elev shadow-soft; }
+  .field-label { @apply mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.03em] text-ink-700; }
+  .field-input {
+    @apply h-[52px] w-full rounded-lg border border-ink-300/45 bg-elev px-4 text-[15px]
+           text-ink-900 placeholder:text-ink-300
+           focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/15 transition;
+  }
+  .field-textarea { @apply field-input h-auto min-h-[112px] resize-y py-3 leading-relaxed; }
+  .pill { @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold; }
+  .btn-primary {
+    @apply inline-flex h-[52px] items-center justify-center gap-2 rounded-lg bg-brand-500 px-6
+           font-medium text-white hover:bg-brand-600 active:scale-[0.97]
+           disabled:opacity-50 disabled:pointer-events-none transition-all duration-200;
+  }
+  .btn-ghost {
+    @apply inline-flex h-[52px] items-center justify-center gap-2 rounded-lg border border-ink-300/45
+           bg-elev px-5 text-ink-900 hover:bg-elev2 active:scale-[0.97] transition-all duration-200;
+  }
+}

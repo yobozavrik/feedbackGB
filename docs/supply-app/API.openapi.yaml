@@ -23,9 +23,17 @@ paths:
                   type: string
                   pattern: '^[0-9]{6}$'
       responses:
-        '204': { description: Supply session cookie was set }
+        '200': { description: Supply session cookie was set }
+        '400': { description: Invalid request body or PIN format }
         '401': { description: Neutral authentication failure }
         '429': { description: Rate limit exceeded }
+        '503': { description: Authentication service is unavailable }
+  /api/auth/logout:
+    post:
+      summary: Clear the app-scoped Supply session
+      security: [{ supplySession: [] }]
+      responses:
+        '200': { description: Supply session cookie was cleared }
   /api/documents:
     post:
       summary: Create an idempotent supply document
