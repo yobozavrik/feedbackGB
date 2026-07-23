@@ -45,6 +45,24 @@ export async function GET(req: Request) {
   // both derived from the warehouse CRM (feedback_feed has no cart column).
   const rows = (data ?? []) as Array<{ id: string; category: string }>;
   const consumablesIds = rows.filter((r) => r.category === "consumables_request").map((r) => r.id);
+  // The FeedbackGB journal is the durable source for the user's own cart.
+  // CRM enrichment is useful for the current warehouse status, but a read
+  // permission/configuration issue there must never turn a real cart into
+  // "0 positions" in the seller UI.
+  const journalItemCounts = new Map<string, number>();
+  if (consumablesIds.length > 0) {
+    const { data: carts, error: cartsError } = await supabase
+      .from("feedback")
+      .select("id, cart_items")
+      .in("id", consumablesIds);
+    if (cartsError) {
+      console.error("my-feedback consumables cart read failed", { code: cartsError.code });
+    } else {
+      for (const cart of (carts ?? []) as Array<{ id: string; cart_items: unknown }>) {
+        journalItemCounts.set(cart.id, Array.isArray(cart.cart_items) ? cart.cart_items.length : 0);
+      }
+    }
+  }
   let summaries: Awaited<ReturnType<typeof getConsumablesSummaries>> | null = null;
   if (consumablesIds.length > 0) {
     try {
@@ -59,7 +77,11 @@ export async function GET(req: Request) {
   const enriched = rows.map((r) => {
     if (r.category !== "consumables_request") return r;
     const s = summaries?.get(r.id);
-    return { ...r, item_count: s?.itemCount ?? 0, consumables_status: s?.status ?? null };
+    return {
+      ...r,
+      item_count: s?.itemCount ?? journalItemCounts.get(r.id) ?? 0,
+      consumables_status: s?.status ?? null,
+    };
   });
 
   return NextResponse.json({ rows: enriched });

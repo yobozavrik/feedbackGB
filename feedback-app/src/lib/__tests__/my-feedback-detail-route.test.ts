@@ -23,11 +23,19 @@ vi.mock("@/lib/session", () => ({
 
 const OWNED_ID = "4a187a5b-59c4-42b7-a36c-2f4161a15ea2";
 const OTHERS_ID = "5b298b6c-6ad5-53c8-b47d-3f5272b26fb3";
+const CONSUMABLES_ID = "6c3a9c7d-7be6-64d9-c58e-4063836370c5";
 
-const FEEDBACK_ROWS: Record<string, { id: string; user_id: string; status: string }> = {
-  [OWNED_ID]: { id: OWNED_ID, user_id: "seller-a-uid", status: "in_progress" },
-  [OTHERS_ID]: { id: OTHERS_ID, user_id: "seller-b-uid", status: "new" },
+const FEEDBACK_ROWS: Record<string, { id: string; user_id: string; category: string; status: string }> = {
+  [OWNED_ID]: { id: OWNED_ID, user_id: "seller-a-uid", category: "in_progress", status: "in_progress" },
+  [OTHERS_ID]: { id: OTHERS_ID, user_id: "seller-b-uid", category: "missing_item", status: "new" },
+  [CONSUMABLES_ID]: { id: CONSUMABLES_ID, user_id: "seller-a-uid", category: "consumables_request", status: "new" },
 };
+
+const mockGetConsumablesOrderDetail = vi.fn(async (_id: string) => null as unknown);
+
+vi.mock("@/lib/consumablesOrder", () => ({
+  getConsumablesOrderDetail: mockGetConsumablesOrderDetail,
+}));
 
 vi.mock("@/lib/supabase", () => ({
   isSupabaseConfigured: vi.fn(() => true),
@@ -75,6 +83,8 @@ describe("GET /api/my-feedback/[id]", () => {
   beforeEach(() => {
     vi.resetModules();
     mockSessionCookieValue = "seller-a-token";
+    mockGetConsumablesOrderDetail.mockReset();
+    mockGetConsumablesOrderDetail.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -118,5 +128,41 @@ describe("GET /api/my-feedback/[id]", () => {
     const { GET } = await loadRoute();
     const res = await GET(detailRequest("bad-token"), { params: { id: OWNED_ID } });
     expect(res.status).toBe(401);
+  });
+
+  it("does not query the warehouse CRM for a non-consumables category", async () => {
+    const { GET } = await loadRoute();
+    const res = await GET(detailRequest(), { params: { id: OWNED_ID } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.consumables).toBeNull();
+    expect(mockGetConsumablesOrderDetail).not.toHaveBeenCalled();
+  });
+
+  it("attaches the resolved consumables order for a consumables_request row", async () => {
+    mockGetConsumablesOrderDetail.mockResolvedValue({
+      status: "picking",
+      order_number: "ЗМ-2026-000009",
+      items: [{ product_id: 1, name: "Губка для посуду", unit: "уп", category_name: "Господарчі товари", quantity: 2, photo_url: null }],
+      timeline: { submitted_at: "2026-07-01T10:00:00Z", picking_at: "2026-07-01T12:00:00Z", shipped_at: null },
+    });
+    const { GET } = await loadRoute();
+    const res = await GET(detailRequest(), { params: { id: CONSUMABLES_ID } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(mockGetConsumablesOrderDetail).toHaveBeenCalledWith(CONSUMABLES_ID);
+    expect(body.consumables.status).toBe("picking");
+    expect(body.consumables.items).toHaveLength(1);
+  });
+
+  it("degrades gracefully (consumables: null) when the warehouse CRM lookup fails", async () => {
+    mockGetConsumablesOrderDetail.mockRejectedValue(new Error("warehouse CRM unreachable"));
+    const { GET } = await loadRoute();
+    const res = await GET(detailRequest(), { params: { id: CONSUMABLES_ID } });
+    // A CRM outage must not turn a valid, owned request into an error response.
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.feedback.id).toBe(CONSUMABLES_ID);
+    expect(body.consumables).toBeNull();
   });
 });

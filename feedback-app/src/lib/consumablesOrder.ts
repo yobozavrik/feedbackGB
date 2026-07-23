@@ -9,7 +9,8 @@
 // the caller's own feedback contributed to. No writes, no schema changes.
 
 import { getWarehouseCrmSupabase } from "./warehouseCrm";
-import type { ConsumablesStatus } from "./consumablesStatusMeta";
+import { isUuid } from "./validation";
+import { CONSUMABLES_STATUS_META, type ConsumablesStatus } from "./consumablesStatusMeta";
 
 /**
  * Map a CRM (transfer, order) status pair to the seller-facing status.
@@ -52,10 +53,11 @@ export async function getConsumablesSummaries(
   const db = getWarehouseCrmSupabase();
   if (!db || feedbackIds.length === 0) return result;
 
-  const { data: contribs } = await db
+  const { data: contribs, error: contribsError } = await db
     .from("feedbackgb_order_contributions")
     .select("feedback_id, order_id")
     .in("feedback_id", feedbackIds);
+  if (contribsError) throw contribsError;
   const rows = (contribs ?? []) as Array<Pick<ContributionRow, "feedback_id" | "order_id">>;
   if (rows.length === 0) return result;
 
@@ -124,10 +126,11 @@ export async function getConsumablesOrderDetail(
   const db = getWarehouseCrmSupabase();
   if (!db) return null;
 
-  const { data: contribs } = await db
+  const { data: contribs, error: contribsError } = await db
     .from("feedbackgb_order_contributions")
     .select("order_id, product_id, quantity_requested")
     .eq("feedback_id", feedbackId);
+  if (contribsError) throw contribsError;
   const rows = (contribs ?? []) as Array<Omit<ContributionRow, "feedback_id">>;
   if (rows.length === 0) return null;
 
@@ -182,4 +185,21 @@ export async function getConsumablesOrderDetail(
       shipped_at: latest?.completed_at ?? orderRow?.shipped_at ?? null,
     },
   };
+}
+
+/**
+ * Resolve which pipeline step to highlight on the success screen: the bridge
+ * between "заявка відправлена" and the real warehouse stage. Falls back to
+ * step 0 ("Прийнята") for a malformed/missing id, a not-yet-visible order, or
+ * a CRM hiccup — a just-submitted order is always at least accepted, so 0 is
+ * never a wrong answer, just a possibly-stale one.
+ */
+export async function getConsumablesSuccessStage(feedbackId: string | undefined): Promise<number> {
+  if (!feedbackId || !isUuid(feedbackId)) return 0;
+  try {
+    const detail = await getConsumablesOrderDetail(feedbackId);
+    return detail ? CONSUMABLES_STATUS_META[detail.status].step : 0;
+  } catch {
+    return 0;
+  }
 }
