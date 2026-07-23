@@ -4,6 +4,7 @@ import {
   CheckSquareOutlined,
   DashboardOutlined,
   FunnelPlotOutlined,
+  InboxOutlined,
   SettingOutlined,
   ShopOutlined,
   TeamOutlined,
@@ -54,6 +55,11 @@ export const adminRoute: ProLayoutProps["route"] = {
       icon: <ShopOutlined />,
     },
     {
+      path: "/admin/supply",
+      name: "Постачання",
+      icon: <InboxOutlined />,
+    },
+    {
       path: "/admin/users",
       name: "Співробітники",
       icon: <TeamOutlined />,
@@ -89,5 +95,6 @@ export const adminBreadcrumbNames: Record<string, string> = {
   "/admin/analytics": "Аналітика",
   "/admin/funnel": "Воронка",
   "/admin/stores": "Магазини",
+  "/admin/supply": "Постачання",
   "/admin/settings": "Налаштування",
 };

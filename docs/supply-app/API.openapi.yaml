@@ -1,0 +1,96 @@
+openapi: 3.1.0
+info:
+  title: Supply App API
+  version: 0.1.0-draft
+  description: |
+    Contract for the separate Supply App. Write operations are unavailable
+    until the CRM idempotency gate in INTEGRATIONS.md is resolved.
+servers:
+  - url: https://supply.example.invalid
+paths:
+  /api/auth/pin:
+    post:
+      summary: Start an app-scoped Supply session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pin]
+              properties:
+                pin:
+                  type: string
+                  pattern: '^[0-9]{6}$'
+      responses:
+        '204': { description: Supply session cookie was set }
+        '401': { description: Neutral authentication failure }
+        '429': { description: Rate limit exceeded }
+  /api/documents:
+    post:
+      summary: Create an idempotent supply document
+      security: [{ supplySession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDocument'
+      responses:
+        '201': { description: Created }
+        '409': { description: Existing client_submission_id returned }
+        '422': { description: Validation error }
+  /api/admin/supply/{documentType}/{id}/approve:
+    post:
+      summary: Approve a supply document
+      security: [{ adminSession: [] }]
+      parameters:
+        - $ref: '#/components/parameters/DocumentType'
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200': { description: Approved }
+        '403': { description: Admin role is required }
+        '409': { description: Illegal state transition }
+components:
+  securitySchemes:
+    supplySession:
+      type: apiKey
+      in: cookie
+      name: supply_session
+    adminSession:
+      type: apiKey
+      in: cookie
+      name: fbgb_session
+  parameters:
+    DocumentType:
+      name: documentType
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [orders, defects, incoming-documents]
+    DocumentId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    CreateDocument:
+      type: object
+      required: [type, facilityId, clientSubmissionId, items]
+      properties:
+        type:
+          type: string
+          enum: [order, defect, incoming_document]
+        facilityId: { type: string, format: uuid }
+        clientSubmissionId: { type: string, format: uuid }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [productId, quantity, unit]
+            properties:
+              productId: { type: integer }
+              quantity: { type: number, exclusiveMinimum: 0 }
+              unit: { type: string, minLength: 1 }

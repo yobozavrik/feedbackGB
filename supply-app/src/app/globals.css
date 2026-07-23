@@ -1,0 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root { color-scheme: light; --bg: 249 249 255; --elev: 255 255 255; --ink-900: 20 27 43; --ink-500: 115 118 134; --ink-300: 195 197 215; --brand-500: 19 83 216; --brand-600: 0 63 177; --brand-50: 219 225 255; }
+html, body { background: rgb(var(--bg)); color: rgb(var(--ink-900)); -webkit-font-smoothing: antialiased; }
+.grad-text { background-image: linear-gradient(90deg, rgb(var(--brand-600)), rgb(var(--brand-500))); -webkit-background-clip: text; background-clip: text; color: transparent; }
