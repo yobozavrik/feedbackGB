@@ -1,6 +1,7 @@
 // supabase.ts stays per-app (it imports @supabase/supabase-js from the app's
 // node_modules); the @/* alias resolves to the compiling app's own copy.
 import { getServerSupabase } from "@/lib/supabase";
+import { getSessionSecret } from "./session";
 
 interface Bucket {
   hits: number[];
@@ -95,6 +96,46 @@ export async function rateLimit(
     }
     return fallbackRateLimit(key, limit, windowMs);
   }
+}
+
+/**
+ * Deterministic rate-limit bucket key for a credential value (e.g. a login
+ * PIN) rather than an IP — defends against a distributed attacker rotating
+ * IPs to brute-force one specific target credential, which a per-IP limiter
+ * alone can't catch.
+ *
+ * The credential is NEVER used as (part of) the key directly: rate_limits.key
+ * is stored as plain text in Postgres, and a login credential is effectively
+ * a password (users.pin_hash protects it with bcrypt). We derive the key via
+ * HMAC-SHA256 keyed by SESSION_SECRET (already required in prod, reused here
+ * with a domain-separation label rather than adding a second secret) so a
+ * database reader without that secret cannot invert the bucket back to the
+ * credential — only the app process can. This does not need bcrypt-level
+ * slowness: the goal is bucketing identical inputs, not protecting a stored
+ * password from offline cracking.
+ */
+export async function credentialRateLimitKey(
+  namespace: string,
+  credential: string,
+): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(getSessionSecret()),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = new Uint8Array(
+    await crypto.subtle.sign(
+      "HMAC",
+      key,
+      enc.encode(`ratelimit:v1:${namespace}:${credential}`),
+    ),
+  );
+  let hex = "";
+  for (const b of sig) hex += b.toString(16).padStart(2, "0");
+  return `${namespace}:${hex}`;
 }
 
 /**

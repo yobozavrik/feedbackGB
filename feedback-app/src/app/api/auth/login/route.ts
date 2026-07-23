@@ -6,7 +6,7 @@ import {
   SESSION_MAX_AGE,
   type UserRole,
 } from "@/lib/session";
-import { clientIp, rateLimit } from "@/lib/rateLimit";
+import { clientIp, credentialRateLimitKey, rateLimit } from "@/lib/rateLimit";
 import { logAudit, uaFromRequest } from "@/lib/audit";
 import { geoipToAuditMeta, geoipToUserUpdate, lookupIp } from "@/lib/geoip";
 
@@ -21,15 +21,39 @@ interface UserRow {
   display_label: string | null;
 }
 
-// Rate-limit: 10 attempts / 10 minutes / IP.
+// Two independent rate-limit buckets, both 10 attempts / 10 minutes:
+//   - login:ip:<ip>              defends against one source hammering the
+//                                 endpoint with many different PINs.
+//   - login:pin:<hmac(pin)>      defends against a distributed attacker
+//                                 rotating IPs to brute-force one specific
+//                                 target PIN, which the IP bucket alone
+//                                 can't catch. Keyed by SESSION_SECRET (see
+//                                 credentialRateLimitKey) so the PIN is never
+//                                 stored in the plain-text rate_limits.key
+//                                 column.
+// Same limit/window on both by design — kept symmetric with the existing
+// IP bucket rather than inventing new tuning without real traffic data.
 //
-// Per-user lockout still lives in the DB (`users.locked_until`, populated
-// after 10 wrong attempts via the legacy verify_pin path). The new
-// PIN-only login flow can't increment failed_attempts on a wrong PIN
-// because the wrong PIN doesn't identify a user — IP rate limit is the
-// primary defence here.
+// `users.failed_attempts` / `locked_until` (populated by the legacy
+// per-user verify_pin path) are vestigial for this global-PIN flow: a wrong
+// PIN doesn't identify a user, so nothing increments them anymore. The two
+// buckets above are the real defence now.
 const IP_WINDOW_MS = 10 * 60_000;
 const IP_LIMIT = 10;
+const PIN_WINDOW_MS = 10 * 60_000;
+const PIN_LIMIT = 10;
+
+function tooManyAttempts(resetMs: number) {
+  return NextResponse.json(
+    { error: "Забагато спроб, спробуй за декілька хвилин." },
+    {
+      status: 429,
+      headers: {
+        "Retry-After": String(Math.ceil(resetMs / 1000)),
+      },
+    },
+  );
+}
 
 /**
  * POST /api/auth/login   { pin: "123456" }
@@ -58,15 +82,7 @@ export async function POST(req: Request) {
   }
 
   if (!ipLimit.ok) {
-    return NextResponse.json(
-      { error: "Забагато спроб, спробуй за декілька хвилин." },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(Math.ceil(ipLimit.reset_ms / 1000)),
-        },
-      },
-    );
+    return tooManyAttempts(ipLimit.reset_ms);
   }
 
   let body: { pin?: string };
@@ -79,6 +95,23 @@ export async function POST(req: Request) {
   const pin = (body.pin ?? "").trim();
   if (!/^\d{6}$/.test(pin)) {
     return NextResponse.json({ error: "PIN має бути 6 цифр" }, { status: 400 });
+  }
+
+  let pinLimit;
+  try {
+    pinLimit = await rateLimit(await credentialRateLimitKey("login:pin", pin), PIN_LIMIT, PIN_WINDOW_MS);
+  } catch (err) {
+    console.error("Rate limiting failed on login route:", err);
+    return NextResponse.json(
+      { error: "Послуга тимчасово недоступна. Будь ласка, спробуйте пізніше." },
+      { status: 503 }
+    );
+  }
+  if (!pinLimit.ok) {
+    // Same response shape as the IP bucket — a client can't tell which
+    // bucket tripped, so this never confirms "that PIN gets attempted a
+    // lot" to whoever is probing.
+    return tooManyAttempts(pinLimit.reset_ms);
   }
 
   const supabase = getServerSupabase();
@@ -116,6 +149,7 @@ export async function POST(req: Request) {
       meta: {
         app_surface: APP_SURFACE,
         ip_attempts_remaining: ipLimit.remaining,
+        pin_attempts_remaining: pinLimit.remaining,
       },
     });
     return NextResponse.json({ error: "Невірний PIN" }, { status: 401 });

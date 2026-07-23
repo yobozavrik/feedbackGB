@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { rateLimit } from "../rateLimit";
+import { credentialRateLimitKey, rateLimit } from "../rateLimit";
 import { getServerSupabase } from "../supabase";
 
 vi.mock("../supabase", () => ({
@@ -79,6 +79,58 @@ describe("rateLimit", () => {
 
     await expect(rateLimit("test-db-err", 10, 60000)).rejects.toThrow(
       "DB rate limit RPC failed in production: database offline"
+    );
+  });
+});
+
+describe("credentialRateLimitKey", () => {
+  beforeEach(() => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("SESSION_SECRET", "test-secret-at-least-16-bytes");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("is deterministic for the same namespace + credential", async () => {
+    const a = await credentialRateLimitKey("login:pin", "123456");
+    const b = await credentialRateLimitKey("login:pin", "123456");
+    expect(a).toBe(b);
+  });
+
+  it("differs for different credentials", async () => {
+    const a = await credentialRateLimitKey("login:pin", "123456");
+    const b = await credentialRateLimitKey("login:pin", "654321");
+    expect(a).not.toBe(b);
+  });
+
+  it("differs for different namespaces given the same credential", async () => {
+    // Domain separation: a future second use of this helper (different
+    // namespace) must not collide with the login:pin bucket for the same
+    // raw value.
+    const a = await credentialRateLimitKey("login:pin", "123456");
+    const b = await credentialRateLimitKey("other:thing", "123456");
+    expect(a).not.toBe(b);
+  });
+
+  it("never leaks the raw credential into the returned key", async () => {
+    const key = await credentialRateLimitKey("login:pin", "123456");
+    expect(key).not.toContain("123456");
+  });
+
+  it("changes if SESSION_SECRET changes (keyed, not a plain hash)", async () => {
+    const a = await credentialRateLimitKey("login:pin", "123456");
+    vi.stubEnv("SESSION_SECRET", "a-completely-different-secret-16b");
+    const b = await credentialRateLimitKey("login:pin", "123456");
+    expect(a).not.toBe(b);
+  });
+
+  it("fails closed in production when SESSION_SECRET is missing", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("SESSION_SECRET", "");
+    await expect(credentialRateLimitKey("login:pin", "123456")).rejects.toThrow(
+      /SESSION_SECRET is not set/,
     );
   });
 });

@@ -219,6 +219,67 @@ describe("POST /api/auth/login", () => {
     );
   });
 
+  it("returns 429 once the IP bucket is exhausted, even with different PINs", async () => {
+    const supabase = await import("@/lib/supabase");
+    const fake = fakeSupabase(null);
+    vi.mocked(supabase.getServerSupabase).mockReturnValue(
+      fake.client as unknown as ReturnType<typeof supabase.getServerSupabase>,
+    );
+    const { POST } = await loadRoute();
+    const ip = "198.51.100.60";
+
+    // IP_LIMIT is 10 — exhaust it with 10 distinct (never-matching) PINs so
+    // failure here can't be attributed to the PIN bucket instead.
+    for (let i = 0; i < 10; i++) {
+      const res = await POST(loginRequest({ pin: String(100000 + i).padStart(6, "0") }, ip));
+      expect(res.status).not.toBe(429);
+    }
+    const res = await POST(loginRequest({ pin: "999999" }, ip));
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBeTruthy();
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("Забагато спроб, спробуй за декілька хвилин.");
+  });
+
+  it("blocks the SAME pin brute-forced from many different IPs (per-credential bucket)", async () => {
+    const supabase = await import("@/lib/supabase");
+    const fake = fakeSupabase(null);
+    vi.mocked(supabase.getServerSupabase).mockReturnValue(
+      fake.client as unknown as ReturnType<typeof supabase.getServerSupabase>,
+    );
+    const { POST } = await loadRoute();
+    const targetPin = "424242";
+
+    // PIN_LIMIT is 10 — a different source IP every time, so the IP bucket
+    // alone would never trip; only the per-pin bucket can catch this.
+    for (let i = 0; i < 10; i++) {
+      const res = await POST(loginRequest({ pin: targetPin }, `203.0.113.${i + 1}`));
+      expect(res.status).not.toBe(429);
+    }
+    const res = await POST(loginRequest({ pin: targetPin }, "203.0.113.200"));
+    expect(res.status).toBe(429);
+  });
+
+  it("does not let one PIN's exhausted bucket affect a different PIN's bucket", async () => {
+    const supabase = await import("@/lib/supabase");
+    const fake = fakeSupabase(null);
+    vi.mocked(supabase.getServerSupabase).mockReturnValue(
+      fake.client as unknown as ReturnType<typeof supabase.getServerSupabase>,
+    );
+    const { POST } = await loadRoute();
+
+    // Burn PIN "111111"'s bucket via 10 different IPs, so only its own
+    // per-pin bucket is exhausted — no single IP bucket is touched more than
+    // once (that's covered by the dedicated IP-bucket test above).
+    for (let i = 0; i < 10; i++) {
+      await POST(loginRequest({ pin: "111111" }, `192.0.2.${i + 1}`));
+    }
+    // A different PIN from a brand-new IP has its own fresh pin bucket and a
+    // fresh IP bucket — must not be blocked by "111111"'s exhausted one.
+    const res = await POST(loginRequest({ pin: "222222" }, "192.0.2.250"));
+    expect(res.status).not.toBe(429);
+  });
+
   it("returns 401 with anonymous audit on missing user", async () => {
     const supabase = await import("@/lib/supabase");
     const audit = await import("@/lib/audit");

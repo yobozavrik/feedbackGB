@@ -43,7 +43,13 @@ const COOKIE_NAME = "fbgb_session";
 const ONE_DAY = 60 * 60 * 24;
 const DEV_FALLBACK = "dev-only-secret-change-me";
 
-function getSecret(): string {
+/**
+ * Exported (not just session-internal) because rateLimit.ts's
+ * credentialRateLimitKey() reuses the same secret to key its HMAC — one
+ * source of truth for "how do we get SESSION_SECRET, and what do we do if
+ * it's missing in prod" instead of duplicating the guard.
+ */
+export function getSessionSecret(): string {
   const s = process.env.SESSION_SECRET;
   if (s && s.length >= 16) return s;
   if (process.env.NODE_ENV === "production") {
@@ -79,7 +85,7 @@ async function getKey(): Promise<CryptoKey> {
   const enc = new TextEncoder();
   return crypto.subtle.importKey(
     "raw",
-    enc.encode(getSecret()),
+    enc.encode(getSessionSecret()),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign", "verify"],
