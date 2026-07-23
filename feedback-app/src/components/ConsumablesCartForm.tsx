@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTelegram } from "./TelegramProvider";
 import {
@@ -18,7 +18,13 @@ import {
   TrashIcon,
 } from "./icons";
 
-type CatalogItem = { id: number; name: string; unit: string | null; category_name: string | null; photo_url: string | null };
+import {
+  buildCatalogQuery,
+  mergeCatalogPage,
+  type CatalogItem,
+  type CatalogResponse,
+} from "@/lib/consumablesCatalog";
+
 type CartItem = CatalogItem & { quantity: number };
 
 /** Product thumbnail with a graceful icon fallback when there's no photo. */
@@ -43,32 +49,81 @@ export function ConsumablesCartForm() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Stable across retries of the SAME cart: the warehouse CRM is idempotent by
+  // feedback_id (== this id), so reusing it means a retry after a partial
+  // success (CRM accepted, journal write failed) can't create a second order.
+  // Deliberately NOT regenerated when the cart changes — a fresh id there would
+  // re-introduce that duplication. Reset only after a confirmed success.
+  const submissionIdRef = useRef<string | null>(null);
 
+  // Fetch one catalog page. `search` is passed explicitly (not closed over) so
+  // this stays safe to call from both the debounced effect and the load-more
+  // handler without stale-closure surprises.
+  async function loadCatalogPage(
+    targetPage: number,
+    reset: boolean,
+    searchValue: string,
+    signal?: AbortSignal,
+  ) {
+    if (reset) setLoading(true); else setLoadingMore(true);
+    setCatalogError(null);
+    try {
+      const response = await fetch(
+        `/api/consumables/catalog?${buildCatalogQuery(targetPage, searchValue)}`,
+        { signal },
+      );
+      if (!response.ok) throw new Error("Не вдалося завантажити каталог");
+      const body = await response.json() as CatalogResponse;
+      setCatalog((prev) => mergeCatalogPage(prev, body.items ?? [], reset));
+      setPage(targetPage);
+      setTotalPages(body.total_pages ?? 1);
+    } catch (cause) {
+      if (!signal?.aborted) setCatalogError(cause instanceof Error ? cause.message : "Не вдалося завантажити каталог");
+    } finally {
+      if (!signal?.aborted) { setLoading(false); setLoadingMore(false); }
+    }
+  }
+
+  // New search (debounced) or manual retry always restarts at page 1.
   useEffect(() => {
     const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      setCatalogError(null);
-      try {
-        const params = new URLSearchParams({ page: "1", page_size: "40" });
-        if (search.trim()) params.set("search", search.trim());
-        const response = await fetch(`/api/consumables/catalog?${params}`, { signal: controller.signal });
-        if (!response.ok) throw new Error("Не вдалося завантажити каталог");
-        const body = await response.json() as { items?: CatalogItem[] };
-        setCatalog(body.items ?? []);
-      } catch (cause) {
-        if (!controller.signal.aborted) setCatalogError(cause instanceof Error ? cause.message : "Не вдалося завантажити каталог");
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
+    const timer = setTimeout(() => {
+      void loadCatalogPage(1, true, search, controller.signal);
     }, 180);
     return () => { controller.abort(); clearTimeout(timer); };
+    // loadCatalogPage is intentionally omitted: it's re-created every render
+    // and including it would restart the fetch on each keystroke's re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, reloadKey]);
+
+  const hasMore = page < totalPages;
+  const busy = loading || loadingMore;
+  function loadMore() {
+    if (!hasMore || busy) return;
+    void loadCatalogPage(page + 1, false, search);
+  }
+
+  // Auto-load the next page when the sentinel scrolls into view; the visible
+  // "Показати ще" button stays as an explicit fallback.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore || busy) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) loadMore();
+    }, { rootMargin: "200px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, busy, page, search]);
 
   const totalUnits = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
   const cartItem = (id: number) => cart.find((item) => item.id === id);
@@ -88,9 +143,11 @@ export function ConsumablesCartForm() {
     if (!cart.length) { setInlineError("Додайте хоча б один розхідний матеріал"); setView("catalog"); return; }
     setSubmitting(true);
     setSubmitError(null);
-    // The client-generated submission id becomes the feedback record id for
-    // consumables, so we can hand it to /thanks to look up the real order stage.
-    const submissionId = crypto.randomUUID();
+    // Lazily mint once, then reuse for every retry of this cart. Becomes the
+    // feedback record id for consumables, which /thanks uses to look up the
+    // real order stage.
+    if (!submissionIdRef.current) submissionIdRef.current = crypto.randomUUID();
+    const submissionId = submissionIdRef.current;
     try {
       const response = await fetch("/api/feedback", {
         method: "POST",
@@ -106,6 +163,8 @@ export function ConsumablesCartForm() {
       });
       if (!response.ok) { const body = await response.json().catch(() => null); throw new Error(body?.error || "Не вдалося відправити заявку"); }
       webApp?.HapticFeedback?.notificationOccurred("success");
+      // Confirmed accepted — a subsequent order must get a fresh id.
+      submissionIdRef.current = null;
       router.push(`/thanks?cat=consumables_request&id=${submissionId}`);
     } catch (cause) {
       setSubmitError(cause instanceof Error ? cause.message : "Не вдалося відправити заявку");
@@ -155,7 +214,10 @@ export function ConsumablesCartForm() {
             </button>
             <button
               type="button"
-              onClick={() => { setSubmitError(null); setView("cart"); }}
+              // Refresh the catalog on the way back: a common cause of refusal
+              // is a product going inactive after the catalog was loaded, so
+              // returning to a stale list would just reproduce the error.
+              onClick={() => { setSubmitError(null); setReloadKey((k) => k + 1); setView("cart"); }}
               className="flex h-14 w-full items-center justify-center gap-2 rounded-xl border border-[#0058bc] bg-transparent text-[17px] font-semibold text-[#0058bc] active:scale-[0.98]"
             >
               <EditIcon size={20} /> Редагувати кошик
@@ -241,6 +303,19 @@ export function ConsumablesCartForm() {
               <div className="card flex flex-col items-center gap-2 p-6 text-center">
                 <span className="text-ink-500"><SearchIcon size={28} /></span>
                 <p className="text-sm text-ink-500">Нічого не знайдено</p>
+              </div>
+            ) : null}
+
+            {hasMore ? (
+              <div ref={sentinelRef} className="pt-1">
+                <button
+                  type="button"
+                  onClick={loadMore}
+                  disabled={busy}
+                  className="btn-ghost h-12 w-full gap-2"
+                >
+                  {loadingMore ? <><SpinnerIcon size={18} /> Завантаження…</> : "Показати ще"}
+                </button>
               </div>
             ) : null}
           </section>

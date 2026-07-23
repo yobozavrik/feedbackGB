@@ -537,3 +537,110 @@ describe("POST /api/feedback — auto-assignment", () => {
     expect(record.assigned_to).toBeNull();
   });
 });
+
+/**
+ * Consumables orders are a server-to-server call to the warehouse CRM BEFORE
+ * the journal row is written. These tests lock the failure contract:
+ *   - unmapped store          → 409 (actionable), journal NOT written
+ *   - invalid/inactive item   → 409 (refresh catalog), journal NOT written
+ *   - unknown/transient       → 502, journal NOT written
+ *   - duplicate submission    → 200 duplicate, no second journal row
+ */
+describe("POST /api/feedback — consumables warehouse handoff", () => {
+  beforeEach(async () => {
+    vi.resetModules();
+    mockSupabaseInsert.mockReset();
+    mockSupabaseSelect.mockReset();
+    mockSupabaseRpc.mockReset();
+    mockWarehouseRpc.mockReset();
+    mockSessionCookieValue = "valid-seller-token";
+    mockAdminDirectionAdminId = null;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function loadRoute() {
+    return await import("@/app/api/feedback/route");
+  }
+
+  function consumablesRequest(token = "valid-seller-token") {
+    return feedbackRequest(
+      {
+        category: "consumables_request",
+        fields: { comment: "" },
+        cart_items: [{ product_id: 101, quantity: 2 }],
+        client_submission_id: "4a187a5b-59c4-42b7-a36c-2f4161a15ea2",
+      },
+      token,
+    );
+  }
+
+  it("returns 409 with an actionable message when the store isn't mapped to a CRM shop", async () => {
+    mockWarehouseRpc.mockResolvedValue({
+      data: { success: false, error: "FeedbackGB store is not mapped to a CRM shop" },
+      error: null,
+    });
+    const { POST } = await loadRoute();
+    const res = await POST(consumablesRequest());
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toMatch(/магазин/i);
+    // The warehouse refused — the journal row must not be written.
+    expect(mockSupabaseInsert).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 asking to refresh the catalog when a cart item is invalid", async () => {
+    mockWarehouseRpc.mockResolvedValue({
+      data: null,
+      error: { message: "Invalid FeedbackGB cart item" },
+    });
+    const { POST } = await loadRoute();
+    const res = await POST(consumablesRequest());
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toMatch(/оновіть каталог/i);
+    expect(mockSupabaseInsert).not.toHaveBeenCalled();
+  });
+
+  it("returns 502 for an unknown warehouse failure", async () => {
+    mockWarehouseRpc.mockResolvedValue({
+      data: null,
+      error: { message: "deadlock detected", code: "40P01" },
+    });
+    const { POST } = await loadRoute();
+    const res = await POST(consumablesRequest());
+    expect(res.status).toBe(502);
+    expect(mockSupabaseInsert).not.toHaveBeenCalled();
+  });
+
+  it("does not create a second journal row when the same submission is retried", async () => {
+    // Warehouse is idempotent by feedback_id and reports the existing order.
+    mockWarehouseRpc.mockResolvedValue({
+      data: { success: true, duplicate: true, order_id: "crm-order-id", order_number: "ЗМ-1" },
+      error: null,
+    });
+    // The journal insert hits the unique constraint on client_submission_id.
+    mockInsertResolves({
+      error: { code: "23505", message: "duplicate key value violates unique constraint" },
+    });
+    // Existing row belongs to the same seller.
+    mockSupabaseSelect.mockImplementation(() => ({
+      eq: () => ({
+        maybeSingle: async () => ({
+          data: { id: "existing-id", user_id: "seller-uid-123" },
+          error: null,
+        }),
+      }),
+    }));
+
+    const { POST } = await loadRoute();
+    const res = await POST(consumablesRequest());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.duplicate).toBe(true);
+    // One insert attempt, and it was rejected by the constraint — no second row.
+    expect(mockSupabaseInsert).toHaveBeenCalledTimes(1);
+  });
+});

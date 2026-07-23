@@ -9,6 +9,7 @@ import { SESSION_COOKIE, verifySession } from "@/lib/session";
 import { resolveAssignedAdmin } from "@/lib/assignment";
 import { createNotification } from "@/lib/notifications";
 import { getWarehouseCrmSupabase } from "@/lib/warehouseCrm";
+import { classifyConsumablesCrmFailure } from "@/lib/consumablesOrderError";
 import type { FeedbackPayload } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -245,11 +246,13 @@ export async function POST(req: Request) {
     );
     const crm = crmResult as { success?: boolean; error?: string; order_id?: string; order_number?: string } | null;
     if (crmError || !crm?.success || !crm.order_id) {
-      console.error("[feedback] warehouse consumables request failed", { code: crmError?.code });
-      return NextResponse.json(
-        { error: "Складський модуль не прийняв заявку" },
-        { status: 502 },
-      );
+      const failure = classifyConsumablesCrmFailure(crmError, crm);
+      console.error("[feedback] warehouse consumables request failed", {
+        code: crmError?.code,
+        status: failure.status,
+        ...(failure.logStoreId ? { store_id: effectiveStoreId } : {}),
+      });
+      return NextResponse.json({ error: failure.error }, { status: failure.status });
     }
   }
 
