@@ -1,390 +1,190 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { CatalogItem } from "@/lib/consumablesCatalog";
+import {
+  buildCatalogQuery,
+  mergeCatalogPage,
+  type CatalogItem,
+  type CatalogResponse,
+} from "@/lib/consumablesCatalog";
 
-interface Category {
-  id: number;
-  name: string;
-}
-interface DraftItem {
-  product_id: number;
-  quantity: number;
-  name?: string;
-  unit?: string | null;
-  photo_url?: string | null;
-}
-interface Draft {
-  id: string;
-  cart_items: DraftItem[];
-  comment: string | null;
-}
+type CartItem = CatalogItem & { quantity: number };
 
-const SUGGEST_DEBOUNCE_MS = 220;
-const AUTOSAVE_DEBOUNCE_MS = 500;
-const SUGGEST_LIMIT = 10;
-
-function Thumb({ url }: { url: string | null | undefined }) {
+function Thumb({ url, name }: { url: string | null; name: string }) {
   if (!url) {
-    return (
-      <span
-        aria-hidden
-        className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-elev2 text-ink-500"
-      >
-        📦
-      </span>
-    );
+    return <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-elev2 text-ink-500" aria-hidden>📦</span>;
   }
   // eslint-disable-next-line @next/next/no-img-element
-  return (
-    <img
-      src={url}
-      alt=""
-      loading="lazy"
-      className="h-11 w-11 flex-shrink-0 rounded-lg border border-ink-300/20 object-cover"
-    />
-  );
+  return <img src={url} alt="" className="h-12 w-12 flex-shrink-0 rounded-lg border border-ink-300/20 object-cover" loading="lazy" />;
 }
 
 export function ConsumablesCart() {
   const router = useRouter();
-
-  // draft state
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [comment, setComment] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  // catalog / search
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [activeCategory, setActiveCategory] = useState<number | null>(null);
+  const [view, setView] = useState<"catalog" | "cart">("catalog");
   const [search, setSearch] = useState("");
-  const [suggestions, setSuggestions] = useState<CatalogItem[]>([]);
-  const [suggestOpen, setSuggestOpen] = useState(false);
-  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  // Stable across retries of the SAME cart, so the CRM idempotency key on
+  // feedback_id matches server-side and a partial-success retry can't create
+  // a second order.
+  const submissionIdRef = useRef<string | null>(null);
 
-  // quantity modal
-  const [pendingItem, setPendingItem] = useState<CatalogItem | null>(null);
-  const [pendingQty, setPendingQty] = useState("1");
-
-  // === draft load =========================================================
-  useEffect(() => {
-    void (async () => {
-      const r = await fetch("/api/drafts/consumables");
-      if (r.ok) {
-        const j = (await r.json()) as { draft: Draft };
-        setDraft(j.draft);
-        setComment(j.draft.comment ?? "");
-      } else if (r.status === 401) {
-        window.location.assign("/");
-      } else {
-        setError("Не вдалося завантажити чернетку");
-      }
-    })();
-  }, []);
-
-  // === categories =========================================================
-  useEffect(() => {
-    fetch("/api/consumables/categories")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("cats"))))
-      .then((j: { categories?: Category[] }) => setCategories(j.categories ?? []))
-      .catch(() => {
-        // silent — chips are optional UX
-      });
-  }, []);
-
-  // === typeahead ==========================================================
-  useEffect(() => {
-    const q = search.trim();
-    if (q.length < 2 && !activeCategory) {
-      setSuggestions([]);
-      setSuggestOpen(false);
-      return;
-    }
-    const handle = setTimeout(() => {
-      setSuggestLoading(true);
-      const params = new URLSearchParams({ page: "1", page_size: String(SUGGEST_LIMIT) });
-      if (q) params.set("search", q);
-      if (activeCategory) params.set("category_id", String(activeCategory));
-      fetch(`/api/consumables/catalog?${params}`)
-        .then((r) => (r.ok ? r.json() : Promise.reject(new Error("cat"))))
-        .then((j: { items?: CatalogItem[] }) => {
-          setSuggestions(j.items ?? []);
-          setSuggestOpen(true);
-        })
-        .catch(() => setSuggestions([]))
-        .finally(() => setSuggestLoading(false));
-    }, SUGGEST_DEBOUNCE_MS);
-    return () => clearTimeout(handle);
-  }, [search, activeCategory]);
-
-  // === draft auto-save ====================================================
-  const savingRef = useRef<AbortController | null>(null);
-  const saveDraft = useCallback(async (items: DraftItem[], nextComment: string) => {
-    savingRef.current?.abort();
-    const ctl = new AbortController();
-    savingRef.current = ctl;
+  const loadPage = useCallback(async (targetPage: number, reset: boolean, searchValue: string) => {
+    setLoading(true);
+    setError(null);
     try {
-      const r = await fetch("/api/drafts/consumables", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ cart_items: items, comment: nextComment || null }),
-        signal: ctl.signal,
-      });
-      if (r.ok) {
-        const j = (await r.json()) as { draft: Draft };
-        setDraft(j.draft);
-      }
+      const res = await fetch(`/api/consumables/catalog?${buildCatalogQuery(targetPage, searchValue)}`);
+      if (!res.ok) throw new Error();
+      const body = (await res.json()) as CatalogResponse;
+      setCatalog((prev) => mergeCatalogPage(prev, body.items ?? [], reset));
+      setPage(body.page ?? targetPage);
+      setTotalPages(body.total_pages ?? 1);
     } catch {
-      // aborted or offline — next edit will retry
+      setError("Не вдалося завантажити каталог");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  // debounce comment writes
   useEffect(() => {
-    if (!draft) return;
-    if ((draft.comment ?? "") === comment) return;
-    const handle = setTimeout(() => {
-      void saveDraft(draft.cart_items, comment);
-    }, AUTOSAVE_DEBOUNCE_MS);
+    const handle = setTimeout(() => void loadPage(1, true, search), search ? 250 : 0);
     return () => clearTimeout(handle);
-  }, [comment, draft, saveDraft]);
+  }, [search, loadPage]);
 
-  // === cart operations ====================================================
-  function addToCart(item: CatalogItem, qty: number) {
-    if (!draft) return;
-    const existing = draft.cart_items.find((c) => c.product_id === item.id);
-    let next: DraftItem[];
-    if (existing) {
-      next = draft.cart_items.map((c) =>
-        c.product_id === item.id ? { ...c, quantity: Math.round((c.quantity + qty) * 1000) / 1000 } : c,
-      );
-    } else {
-      next = [
-        ...draft.cart_items,
-        {
-          product_id: item.id,
-          quantity: qty,
-          name: item.name,
-          unit: item.unit ?? null,
-          photo_url: item.photo_url ?? null,
-        },
-      ];
-    }
-    setDraft({ ...draft, cart_items: next });
-    void saveDraft(next, comment);
+  function addToCart(item: CatalogItem) {
+    setCart((prev) => {
+      const existing = prev.find((c) => c.id === item.id);
+      if (existing) return prev.map((c) => (c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c));
+      return [...prev, { ...item, quantity: 1 }];
+    });
+  }
+  function updateQty(id: number, delta: number) {
+    setCart((prev) =>
+      prev
+        .map((c) => (c.id === id ? { ...c, quantity: c.quantity + delta } : c))
+        .filter((c) => c.quantity > 0),
+    );
+  }
+  function removeFromCart(id: number) {
+    setCart((prev) => prev.filter((c) => c.id !== id));
   }
 
-  function updateQty(pid: number, qty: number) {
-    if (!draft) return;
-    const next = draft.cart_items
-      .map((c) => (c.product_id === pid ? { ...c, quantity: qty } : c))
-      .filter((c) => c.quantity > 0);
-    setDraft({ ...draft, cart_items: next });
-    void saveDraft(next, comment);
-  }
-
-  function removeItem(pid: number) {
-    updateQty(pid, 0);
-  }
-
-  // === suggestion tap → open qty modal ====================================
-  function openQtyModal(item: CatalogItem) {
-    setPendingItem(item);
-    setPendingQty("1");
-    setSearch("");
-    setSuggestOpen(false);
-  }
-
-  function confirmQty() {
-    if (!pendingItem) return;
-    const q = Number(pendingQty.replace(",", "."));
-    if (!Number.isFinite(q) || q <= 0) {
-      setError("Кількість має бути більше 0");
-      return;
-    }
-    addToCart(pendingItem, Math.round(q * 1000) / 1000);
-    setPendingItem(null);
-    setError(null);
-  }
-
-  // === submit =============================================================
   async function submit() {
-    if (!draft || draft.cart_items.length === 0) return;
+    if (cart.length === 0) return;
     setSubmitting(true);
-    setError(null);
+    setSubmitError(null);
+    if (!submissionIdRef.current) submissionIdRef.current = crypto.randomUUID();
     try {
-      // ensure comment saved
-      await saveDraft(draft.cart_items, comment);
-      const r = await fetch("/api/drafts/consumables/submit", { method: "POST" });
-      if (!r.ok) {
-        const j = (await r.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error || "Не вдалося відправити");
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          category: "consumables_request",
+          fields: { comment: comment.trim() || null },
+          cart_items: cart.map((c) => ({ product_id: c.id, quantity: c.quantity })),
+          client_submission_id: submissionIdRef.current,
+          client_created_at: new Date().toISOString(),
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || "Помилка");
       }
+      submissionIdRef.current = null;
       router.push("/home/thanks");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Помилка");
+      setSubmitError(err instanceof Error ? err.message : "Помилка");
       setSubmitting(false);
     }
   }
 
-  const cartCount = useMemo(
-    () => (draft?.cart_items ?? []).reduce((n, c) => n + c.quantity, 0),
-    [draft],
-  );
-  const cart = draft?.cart_items ?? [];
+  const cartCount = cart.reduce((n, c) => n + c.quantity, 0);
 
-  return (
-    <div className="animate-fade-up space-y-4 pb-32">
-      {/* === category chips === */}
-      {categories.length > 0 ? (
-        <div className="-mx-4 overflow-x-auto sm:-mx-6">
-          <div className="flex gap-2 px-4 sm:px-6">
-            <button
-              type="button"
-              onClick={() => setActiveCategory(null)}
-              className={`h-8 flex-shrink-0 rounded-full px-3 text-[12px] font-semibold ${
-                activeCategory === null ? "bg-brand-500 text-white" : "bg-elev2 text-ink-700"
-              }`}
-            >
-              Всі
-            </button>
-            {categories.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setActiveCategory(c.id === activeCategory ? null : c.id)}
-                className={`h-8 flex-shrink-0 rounded-full px-3 text-[12px] font-semibold ${
-                  activeCategory === c.id ? "bg-brand-500 text-white" : "bg-elev2 text-ink-700"
-                }`}
-              >
-                {c.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {/* === search + suggestions === */}
-      <div className="relative">
-        <input
-          type="search"
-          value={search}
-          placeholder="Почни вводити назву…"
-          onChange={(e) => setSearch(e.target.value)}
-          onFocus={() => search.trim().length >= 2 && setSuggestOpen(true)}
-          onBlur={() => setTimeout(() => setSuggestOpen(false), 150)}
-          className="field-input"
-          aria-autocomplete="list"
-          aria-controls="suggest-list"
-        />
-        {suggestOpen && (suggestions.length > 0 || suggestLoading) ? (
-          <ul
-            id="suggest-list"
-            role="listbox"
-            className="absolute inset-x-0 top-full z-30 mt-1 max-h-80 overflow-y-auto rounded-lg border border-ink-300/30 bg-elev shadow-soft"
-          >
-            {suggestLoading && suggestions.length === 0 ? (
-              <li className="px-3 py-4 text-center text-[13px] text-ink-500">Пошук…</li>
-            ) : (
-              suggestions.map((item) => (
-                <li key={item.id} role="option">
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => openQtyModal(item)}
-                    className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-elev2"
-                  >
-                    <Thumb url={item.photo_url} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-medium text-ink-900">{item.name}</span>
-                      <span className="block text-[11px] text-ink-500">
-                        {item.unit ?? "шт"}
-                        {item.category_name ? ` · ${item.category_name}` : ""}
-                      </span>
-                    </span>
-                    <span className="text-brand-500" aria-hidden>＋</span>
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        ) : null}
-      </div>
-
-      {/* === cart === */}
-      <section>
-        <h2 className="mb-2 px-1 font-display text-[15px] font-semibold text-ink-900">
-          Кошик · {cart.length} позиц.
+  if (view === "cart") {
+    return (
+      <div className="card animate-fade-up p-4 pb-24">
+        <button
+          type="button"
+          onClick={() => setView("catalog")}
+          className="mb-4 inline-flex h-8 items-center rounded-full px-2 text-[12px] font-semibold text-brand-500 hover:bg-elev2"
+        >
+          ← До каталогу
+        </button>
+        <h2 className="mb-3 font-display text-[18px] font-semibold text-ink-900">
+          Кошик · {cartCount} шт
         </h2>
         {cart.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-ink-300/40 bg-elev p-4 text-center text-[13px] text-ink-500">
-            Пусто. Знайди позиції через пошук.
-          </p>
+          <p className="text-[13px] text-ink-500">Порожньо. Додай позиції з каталогу.</p>
         ) : (
           <ul className="space-y-2">
             {cart.map((c) => (
-              <li key={c.product_id} className="flex items-center gap-3 rounded-lg border border-ink-300/20 bg-elev p-2 shadow-soft">
-                <Thumb url={c.photo_url} />
+              <li key={c.id} className="flex items-center gap-3 rounded-lg border border-ink-300/20 p-2">
+                <Thumb url={c.photo_url} name={c.name} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-medium text-ink-900">{c.name ?? `#${c.product_id}`}</p>
+                  <p className="truncate text-[13px] font-medium text-ink-900">{c.name}</p>
                   <p className="text-[11px] text-ink-500">{c.unit ?? "шт"}</p>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => updateQty(c.product_id, Math.max(0, c.quantity - 1))}
-                    aria-label="Менше"
-                    className="h-8 w-8 rounded-full bg-elev2 text-lg"
-                  >
-                    −
-                  </button>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={c.quantity}
-                    onChange={(e) => {
-                      const q = Number(e.target.value.replace(",", "."));
-                      if (Number.isFinite(q) && q >= 0) updateQty(c.product_id, q);
-                    }}
-                    className="h-8 w-14 rounded-lg border border-ink-300/30 bg-elev text-center text-[13px]"
-                    aria-label="Кількість"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => updateQty(c.product_id, c.quantity + 1)}
-                    aria-label="Більше"
-                    className="h-8 w-8 rounded-full bg-elev2 text-lg"
-                  >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeItem(c.product_id)}
-                    aria-label="Видалити"
-                    className="ml-1 h-8 w-8 rounded-full bg-elev2 text-sm text-brand-600"
-                  >
-                    ✕
-                  </button>
+                  <button type="button" onClick={() => updateQty(c.id, -1)} className="h-8 w-8 rounded-full bg-elev2 text-lg" aria-label="Менше">−</button>
+                  <span className="w-8 text-center text-[14px] font-semibold">{c.quantity}</span>
+                  <button type="button" onClick={() => updateQty(c.id, 1)} className="h-8 w-8 rounded-full bg-elev2 text-lg" aria-label="Більше">+</button>
+                  <button type="button" onClick={() => removeFromCart(c.id)} className="ml-1 h-8 w-8 rounded-full bg-elev2 text-sm text-brand-600" aria-label="Видалити">✕</button>
                 </div>
               </li>
             ))}
           </ul>
         )}
-      </section>
+        <div className="mt-4">
+          <label htmlFor="comment" className="field-label">Коментар</label>
+          <textarea
+            id="comment"
+            placeholder="Особливі побажання (необов'язково)"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            className="field-textarea"
+          />
+        </div>
 
-      {/* === comment === */}
-      <div>
-        <label htmlFor="comment" className="field-label">Коментар</label>
-        <textarea
-          id="comment"
-          placeholder="Особливі побажання (необов'язково)"
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          className="field-textarea"
-        />
+        {submitError ? (
+          <div role="alert" className="mt-3 rounded-lg border border-brand-500/40 bg-brand-50 px-4 py-3 text-[14px] text-brand-600">
+            {submitError}
+          </div>
+        ) : null}
+
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink-300/20 bg-bg/90 px-4 py-3 backdrop-blur-md sm:px-6">
+          <div className="mx-auto flex max-w-md gap-2">
+            <button type="button" onClick={() => setView("catalog")} className="btn-ghost px-4">До каталогу</button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={submitting || cart.length === 0}
+              className="btn-primary flex-1"
+            >
+              {submitting ? "Відправляємо…" : `Відправити (${cartCount})`}
+            </button>
+          </div>
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="animate-fade-up space-y-3 pb-24">
+      <input
+        type="search"
+        placeholder="Пошук за назвою…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="field-input"
+      />
 
       {error ? (
         <div role="alert" className="rounded-lg border border-brand-500/40 bg-brand-50 px-4 py-3 text-[14px] text-brand-600">
@@ -392,62 +192,54 @@ export function ConsumablesCart() {
         </div>
       ) : null}
 
-      {/* === quantity modal === */}
-      {pendingItem ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="qty-title"
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center"
-          onClick={() => setPendingItem(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-t-2xl bg-elev p-4 shadow-soft sm:rounded-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-3 flex items-center gap-3">
-              <Thumb url={pendingItem.photo_url} />
-              <div className="min-w-0">
-                <p id="qty-title" className="truncate text-[14px] font-semibold text-ink-900">{pendingItem.name}</p>
-                <p className="text-[11px] text-ink-500">{pendingItem.unit ?? "шт"}</p>
+      <ul className="space-y-2">
+        {catalog.map((item) => {
+          const inCart = cart.find((c) => c.id === item.id);
+          return (
+            <li key={item.id} className="flex items-center gap-3 rounded-lg border border-ink-300/20 bg-elev p-2 shadow-soft">
+              <Thumb url={item.photo_url} name={item.name} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-medium text-ink-900">{item.name}</p>
+                <p className="text-[11px] text-ink-500">
+                  {item.unit ?? "шт"}{item.category_name ? ` · ${item.category_name}` : ""}
+                </p>
               </div>
-            </div>
-            <label htmlFor="pending-qty" className="field-label">Кількість</label>
-            <input
-              id="pending-qty"
-              type="text"
-              inputMode="decimal"
-              autoFocus
-              value={pendingQty}
-              onChange={(e) => setPendingQty(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && confirmQty()}
-              className="field-input mb-3"
-            />
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setPendingItem(null)} className="btn-ghost flex-1">
-                Скасувати
+              <button
+                type="button"
+                onClick={() => addToCart(item)}
+                className={`h-9 rounded-full px-3 text-[12px] font-semibold ${inCart ? "bg-brand-500 text-white" : "bg-brand-50 text-brand-600"}`}
+              >
+                {inCart ? `× ${inCart.quantity}` : "+ Додати"}
               </button>
-              <button type="button" onClick={confirmQty} className="btn-primary flex-1">
-                Підтвердити
-              </button>
-            </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      {loading ? <p className="text-center text-[12px] text-ink-500">Завантаження…</p> : null}
+      {!loading && page < totalPages ? (
+        <button
+          type="button"
+          onClick={() => void loadPage(page + 1, false, search)}
+          className="btn-ghost w-full"
+        >
+          Показати ще
+        </button>
+      ) : null}
+
+      {cartCount > 0 ? (
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink-300/20 bg-bg/90 px-4 py-3 backdrop-blur-md sm:px-6">
+          <div className="mx-auto max-w-md">
+            <button
+              type="button"
+              onClick={() => setView("cart")}
+              className="btn-primary w-full"
+            >
+              До кошика · {cartCount} позиц.
+            </button>
           </div>
         </div>
       ) : null}
-
-      {/* === sticky submit bar === */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink-300/20 bg-bg/90 px-4 py-3 backdrop-blur-md sm:px-6">
-        <div className="mx-auto max-w-md">
-          <button
-            type="button"
-            onClick={submit}
-            disabled={submitting || cart.length === 0}
-            className="btn-primary w-full"
-          >
-            {submitting ? "Відправляємо…" : `Відправити на склад · ${cartCount || 0}`}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
