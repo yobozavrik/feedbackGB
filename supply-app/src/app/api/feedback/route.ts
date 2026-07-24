@@ -4,6 +4,7 @@ import { getSupplyApiUser } from "@/lib/currentUser";
 import { getServerSupabase } from "@/lib/supabase";
 import { validateFeedbackPayload } from "@/lib/feedbackValidation";
 import { buildSummary } from "@/lib/summary";
+import { resolveAssignedAdmin } from "@/lib/assignment";
 import type { FeedbackPayload } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -86,6 +87,11 @@ export async function POST(request: Request) {
     user.facilityName,
   );
 
+  // Route supply HR requests to the admin from admin_directions with
+  // store_id IS NULL ("all stores"). Never blocks: resolveAssignedAdmin
+  // swallows its own errors and returns null (unassigned).
+  const assignedTo = await resolveAssignedAdmin(supabase, category.id, null);
+
   const record = {
     category: category.id,
     store_id: null,
@@ -96,6 +102,7 @@ export async function POST(request: Request) {
     photo_url: photoUrl,
     tg_verified: false,
     summary,
+    assigned_to: assignedTo,
     client_submission_id: clientSubmissionId,
     client_created_at: clientCreatedAt,
   };

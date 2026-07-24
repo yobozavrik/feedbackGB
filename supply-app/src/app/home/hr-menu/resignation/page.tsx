@@ -1,6 +1,7 @@
 import { requireSupplyUser } from "@/lib/currentUser";
 import { SupplyHeader } from "@/components/SupplyHeader";
 import { ResignationForm } from "@/components/hr/ResignationForm";
+import { MyHrList } from "@/components/hr/MyHrList";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,7 @@ export default async function ResignationPage() {
     <main className="relative">
       <SupplyHeader subtitle="Хочу звільнитися" back={{ href: "/home/hr-menu", label: "Назад" }} />
       <ResignationForm />
+      <MyHrList endpoint="resignation-requests" title="Мої заявки на звільнення" />
     </main>
   );
 }
