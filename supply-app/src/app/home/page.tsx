@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireSupplyUser } from "@/lib/currentUser";
 import { SupplyHomeGrid } from "@/components/SupplyHomeGrid";
+import { NotificationsBell } from "@/components/NotificationsBell";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,16 @@ export default async function SupplyHomePage() {
             <span className="text-xl" aria-hidden>🏭</span>
             <span className="font-display text-[20px] font-bold tracking-tight text-brand-500">Галя: Цех і склад</span>
           </Link>
+          <div className="flex items-center gap-1">
+            <Link
+              href="/home/my-requests"
+              aria-label="Мої заявки"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-lg hover:bg-elev2"
+            >
+              <span aria-hidden>🗂️</span>
+            </Link>
+            <NotificationsBell />
+          </div>
         </div>
         {user.facilityName ? (
           <p className="mt-0.5 text-[13px] text-ink-500">{user.facilityName}</p>

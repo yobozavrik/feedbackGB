@@ -44,6 +44,7 @@ import type { AdminOption, FeedRow } from "./page";
 const { Text } = Typography;
 
 type Period = "all" | "today" | "week" | "month";
+type LocationScope = "all" | "store" | "facility";
 
 interface Props {
   rows: FeedRow[];
@@ -59,6 +60,12 @@ const PERIOD_LABELS: Record<Period, string> = {
   today: "Сьогодні",
   week: "Тиждень",
   month: "Місяць",
+};
+
+const LOCATION_LABELS: Record<LocationScope, string> = {
+  all: "Усі точки",
+  store: "🏪 Магазини",
+  facility: "🏭 Цехи і склади",
 };
 
 const AGING_TAG: Record<AgingBucket, string> = {
@@ -116,6 +123,7 @@ export function AdminClient({
   const { notification } = App.useApp();
   const router = useRouter();
   const [period, setPeriod] = useState<Period>("all");
+  const [locationScope, setLocationScope] = useState<LocationScope>("all");
   const [active, setActive] = useState<FeedRow | null>(null);
   const [myQueueOnly, setMyQueueOnly] = useState(assignedToMeOnly);
 
@@ -186,8 +194,11 @@ export function AdminClient({
     if (myQueueOnly && currentAdminId) {
       out = out.filter((r) => r.assigned_to === currentAdminId);
     }
+    if (locationScope !== "all") {
+      out = out.filter((r) => r.location_kind === locationScope);
+    }
     return out;
-  }, [rows, period, myQueueOnly, currentAdminId]);
+  }, [rows, period, myQueueOnly, currentAdminId, locationScope]);
 
   const newLast7Days = useMemo(
     () =>
@@ -277,15 +288,24 @@ export function AdminClient({
         },
       },
       {
-        title: "Магазин",
+        title: "Точка",
         dataIndex: "store_name",
-        width: 160,
+        width: 180,
         ellipsis: true,
         filters: storeFilters.length > 0 ? storeFilters : undefined,
         filterSearch: true,
-        onFilter: (value, row) => row.store_name === value,
-        render: (_, row) =>
-          row.store_name ?? <Text type="secondary">—</Text>,
+        onFilter: (value, row) => (row.facility_name ?? row.store_name) === value,
+        render: (_, row) => {
+          const name = row.facility_name ?? row.store_name;
+          if (!name) return <Text type="secondary">—</Text>;
+          const emoji = row.location_kind === "facility" ? "🏭" : row.location_kind === "store" ? "🏪" : "";
+          return (
+            <Space size={4}>
+              {emoji ? <span aria-hidden>{emoji}</span> : null}
+              <Text style={{ fontSize: 13 }}>{name}</Text>
+            </Space>
+          );
+        },
       },
       {
         title: "Хто",
@@ -465,6 +485,15 @@ export function AdminClient({
               ) : null}
             </Space>
           ) : null,
+          <Segmented<LocationScope>
+            key="location-scope"
+            value={locationScope}
+            onChange={(v) => setLocationScope(v as LocationScope)}
+            options={(Object.keys(LOCATION_LABELS) as LocationScope[]).map((k) => ({
+              label: LOCATION_LABELS[k],
+              value: k,
+            }))}
+          />,
           <Segmented<Period>
             key="period"
             value={period}

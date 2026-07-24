@@ -13,6 +13,8 @@ export const dynamic = "force-dynamic";
 
 const DASHBOARD_WINDOW_DAYS = 30;
 
+export type LocationKind = "store" | "facility" | "none";
+
 export interface FeedRow {
   id: string;
   created_at: string;
@@ -21,6 +23,9 @@ export interface FeedRow {
   category_title: string | null;
   store_id: number | null;
   store_name: string | null;
+  facility_id: string | null;
+  facility_name: string | null;
+  location_kind: LocationKind;
   fields: Record<string, unknown> | null;
   photo_url: string | null;
   user_id: string | null;
@@ -129,8 +134,14 @@ export default async function AdminPage() {
     fetchDashboardStats(),
     fetchAdmins(),
   ]);
+  // Location filter shows shops + facilities in one alphabetised list; the
+  // Segmented "Магазини / Цехи і склади" toggle scopes what's visible.
   const stores = Array.from(
-    new Set(rows.map((r) => r.store_name).filter((x): x is string => Boolean(x))),
+    new Set(
+      rows
+        .map((r) => r.facility_name ?? r.store_name)
+        .filter((x): x is string => Boolean(x)),
+    ),
   ).sort();
 
   return (
