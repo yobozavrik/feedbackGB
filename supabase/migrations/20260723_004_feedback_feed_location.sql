@@ -5,15 +5,16 @@
 -- Applied manually by super_admin after 20260723_001 (which added
 -- feedback.facility_id).
 --
--- Added fields (backwards-compatible append):
+-- Added fields (backwards-compatible append — CREATE OR REPLACE VIEW cannot
+-- reorder or rename existing columns, so the three new ones sit at the tail):
 --   facility_id     — direct reference (uuid or null)
 --   facility_name   — resolved from feedbackgb.facilities.name (null for stores)
 --   location_kind   — 'store' | 'facility' | 'none'
 --
 -- store_name keeps its existing COALESCE(spot.name, store_label) behaviour, so
--- supply rows (store_id IS NULL) already surface the facility name in the
--- current admin views. The explicit facility_* + location_kind fields let the
--- admin UI add a proper filter and iconography without parsing store_label.
+-- supply rows (store_id IS NULL) already surface the facility name via
+-- current admin views. The explicit facility_* + location_kind columns let
+-- the admin UI add a proper filter and iconography without parsing store_label.
 
 set search_path = feedbackgb, public, pg_catalog;
 
@@ -28,13 +29,6 @@ select
   f.store_id,
   coalesce(s.name, f.store_label) as store_name,
   s.address as store_address,
-  f.facility_id,
-  fac.name as facility_name,
-  case
-    when f.store_id is not null then 'store'
-    when f.facility_id is not null then 'facility'
-    else 'none'
-  end as location_kind,
   f.user_id,
   u.full_name as user_full_name,
   u.role as user_role,
@@ -56,7 +50,15 @@ select
   a.full_name as assigned_full_name,
   f.client_created_at,
   f.client_submission_id,
-  f.fields -> 'photo_urls' as photo_urls
+  f.fields -> 'photo_urls' as photo_urls,
+  -- Appended, per CREATE OR REPLACE VIEW rules (no reordering allowed):
+  f.facility_id,
+  fac.name as facility_name,
+  case
+    when f.store_id is not null then 'store'
+    when f.facility_id is not null then 'facility'
+    else 'none'
+  end as location_kind
 from feedbackgb.feedback f
   left join feedbackgb.categories c on c.id = f.category
   left join categories.spots s on s.spot_id = f.store_id
