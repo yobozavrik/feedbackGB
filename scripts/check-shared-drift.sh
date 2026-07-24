@@ -84,6 +84,11 @@ lib/hrTopics.ts
 lib/feedbackValidation.ts
 lib/sla.ts
 lib/summary.ts
+lib/assignment.ts
+lib/consumablesCatalog.ts
+lib/consumablesStatusMeta.ts
+lib/consumablesOrderError.ts
+lib/consumablesOrder.ts
 "
 for f in $PURE_SHARED_FILES; do
   for app in feedback-app feedback-admin supply-app; do
@@ -95,6 +100,16 @@ for f in $PURE_SHARED_FILES; do
     fi
   done
 done
+
+# warehouseCrm.ts imports @supabase/supabase-js from the app's own node_modules,
+# so it must stay per-app (like supabase.ts) — but the two seller/supply copies
+# still need to be byte-identical. feedback-admin doesn't use it.
+if [ -f feedback-app/src/lib/warehouseCrm.ts ] && [ -f supply-app/src/lib/warehouseCrm.ts ]; then
+  if ! cmp -s feedback-app/src/lib/warehouseCrm.ts supply-app/src/lib/warehouseCrm.ts; then
+    echo "[shared-drift] DRIFT: lib/warehouseCrm.ts differs between feedback-app and supply-app" >&2
+    status=1
+  fi
+fi
 
 if [ "$status" -ne 0 ]; then
   cat <<'EOF' >&2

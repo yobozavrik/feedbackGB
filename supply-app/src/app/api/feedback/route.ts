@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getSupplyApiUser } from "@/lib/currentUser";
 import { getServerSupabase } from "@/lib/supabase";
+import { getWarehouseCrmSupabase } from "@/lib/warehouseCrm";
 import { validateFeedbackPayload } from "@/lib/feedbackValidation";
 import { buildSummary } from "@/lib/summary";
 import { resolveAssignedAdmin } from "@/lib/assignment";
+import { classifyConsumablesCrmFailure } from "@/lib/consumablesOrderError";
 import type { FeedbackPayload } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -14,13 +16,15 @@ const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const ALLOWED_PHOTO_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-// Phase B ships HR only. Consumables (a direct CRM call) lands in Phase C.
-const ALLOWED_CATEGORIES = new Set(["hr_question"]);
+// Consumables now flow through the supply-sibling CRM RPC. Sырьё-документи
+// (raw materials, defects, incoming invoices) live outside the feedback table
+// per ADR 0004 and are added later.
+const ALLOWED_CATEGORIES = new Set(["hr_question", "consumables_request"]);
 
 /**
- * POST /api/feedback — create an HR request for the authenticated supply user.
- * Server owns identity: facility_id + store_label come from the session, never
- * from the client. store_id stays NULL for supply rows.
+ * POST /api/feedback — create HR or consumables request for the authenticated
+ * supply user. Server owns identity: facility_id + store_label come from the
+ * session, never from the client. store_id stays NULL for supply rows.
  */
 export async function POST(request: Request) {
   const user = await getSupplyApiUser();
@@ -46,7 +50,7 @@ export async function POST(request: Request) {
   if (!validated.ok) {
     return NextResponse.json({ error: validated.error }, { status: validated.status });
   }
-  const { category, cleanFields, clientSubmissionId, clientCreatedAt, rawPhotos } = validated.data;
+  const { category, cleanFields, clientSubmissionId, clientCreatedAt, cartItems, rawPhotos } = validated.data;
 
   if (!ALLOWED_CATEGORIES.has(category.id)) {
     return NextResponse.json({ error: "Ця категорія недоступна в supply-app" }, { status: 400 });
@@ -72,7 +76,8 @@ export async function POST(request: Request) {
     cleanFields["target_facility_name"] = (target as { name: string }).name;
   }
 
-  // Photo (sick-leave certificate): base64 data URL only, private bucket.
+  // Photo (sick-leave certificate for HR; not used by consumables): base64
+  // data URL only, private bucket.
   const photoUrls: string[] = [];
   for (const rawPhoto of rawPhotos) {
     if (typeof rawPhoto !== "string") continue;
@@ -87,12 +92,15 @@ export async function POST(request: Request) {
     user.facilityName,
   );
 
-  // Route supply HR requests to the admin from admin_directions with
-  // store_id IS NULL ("all stores"). Never blocks: resolveAssignedAdmin
-  // swallows its own errors and returns null (unassigned).
+  // Auto-assign the responsible admin: admin_directions rule with
+  // store_id IS NULL. Never blocks — resolveAssignedAdmin swallows errors.
   const assignedTo = await resolveAssignedAdmin(supabase, category.id, null);
 
-  const record = {
+  // Consumables: RPC BEFORE the journal insert. The user must not see success
+  // if the warehouse rejected the order. feedback.id === client_submission_id
+  // so a retry hits the idempotency key both in feedbackgb_order_contributions
+  // (in CRM) and in feedback (via unique client_submission_id).
+  const record: Record<string, unknown> = {
     category: category.id,
     store_id: null,
     store_label: user.facilityName,
@@ -106,6 +114,60 @@ export async function POST(request: Request) {
     client_submission_id: clientSubmissionId,
     client_created_at: clientCreatedAt,
   };
+
+  if (category.id === "consumables_request") {
+    if (!cartItems) {
+      return NextResponse.json({ error: "Кошик порожній" }, { status: 400 });
+    }
+    if (!user.facilityId) {
+      return NextResponse.json({ error: "Твій цех/склад не прив'язано" }, { status: 400 });
+    }
+    const { data: facility, error: facilityErr } = await supabase
+      .from("facilities")
+      .select("crm_location_id")
+      .eq("id", user.facilityId)
+      .maybeSingle();
+    if (facilityErr) {
+      console.error("[supply] facility lookup", { code: facilityErr.code });
+      return NextResponse.json({ error: "Помилка сервера" }, { status: 500 });
+    }
+    const rawShopId = (facility as { crm_location_id: string | null } | null)?.crm_location_id;
+    const crmShopId = rawShopId != null ? Number(rawShopId) : NaN;
+    if (!Number.isFinite(crmShopId)) {
+      return NextResponse.json(
+        { error: "Твій цех/склад не має CRM-прив'язки. Зверніться до супер-адміністратора." },
+        { status: 400 },
+      );
+    }
+
+    // Pre-assign feedback.id so it matches client_submission_id — CRM stores
+    // this as feedbackgb_order_contributions.feedback_id and it's the sole
+    // idempotency key across retries.
+    const feedbackId = clientSubmissionId ?? randomUUID();
+    record.id = feedbackId;
+    record.cart_items = cartItems;
+
+    const warehouse = getWarehouseCrmSupabase();
+    if (!warehouse) {
+      return NextResponse.json({ error: "Складський модуль недоступний" }, { status: 503 });
+    }
+    const { data: crmResult, error: crmError } = await warehouse.rpc(
+      "rpc_create_feedbackgb_supply_consumables_order",
+      {
+        p_feedback_id: feedbackId,
+        p_feedback_user_id: user.id,
+        p_crm_shop_id: crmShopId,
+        p_notes: typeof cleanFields.comment === "string" ? cleanFields.comment : null,
+        p_items: cartItems,
+      },
+    );
+    const crm = crmResult as { success?: boolean; error?: string; order_id?: string } | null;
+    if (crmError || !crm?.success || !crm.order_id) {
+      const failure = classifyConsumablesCrmFailure(crmError, crm);
+      console.error("[supply] consumables CRM failed", { code: crmError?.code, status: failure.status });
+      return NextResponse.json({ error: failure.error }, { status: failure.status });
+    }
+  }
 
   const { data: inserted, error } = await supabase
     .from("feedback")
@@ -137,7 +199,7 @@ export async function POST(request: Request) {
       .is("actor_user_id", null);
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, id: (inserted as { id: string } | null)?.id ?? null });
 }
 
 async function sanitizeAndUploadPhoto(
