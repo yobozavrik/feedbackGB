@@ -24,4 +24,11 @@ html, body { background: rgb(var(--bg)); color: rgb(var(--ink-900)); -webkit-fon
     @apply inline-flex h-[52px] items-center justify-center gap-2 rounded-lg border border-ink-300/45
            bg-elev px-5 text-ink-900 hover:bg-elev2 active:scale-[0.97] transition-all duration-200;
   }
+  .btn-step {
+    @apply inline-flex h-[52px] w-[52px] items-center justify-center rounded-lg
+           border border-ink-300/35 bg-elev text-[24px] font-semibold text-ink-900
+           hover:bg-elev2/70 active:scale-[0.95]
+           disabled:opacity-40 disabled:pointer-events-none
+           transition-all duration-150 select-none;
+  }
 }
