@@ -1,16 +1,47 @@
 openapi: 3.1.0
 info:
   title: Supply App API
-  version: 0.1.0-draft
+  version: 1.0.0
   description: |
-    Contract for the separate Supply App. Write operations are unavailable
-    until the CRM idempotency gate in INTEGRATIONS.md is resolved.
+    Server-only API for the Supply App (branch feature/hr-questions-menu,
+    commit dd7ce47). Every endpoint outside /api/auth/* and /api/health is
+    behind the app-scoped `supply_session` cookie enforced by src/middleware.ts.
+
+    Не документує сирьєвий контур (замовлення сировини, брак, накладні) —
+    він поки не імплементовано, див. docs/supply-app/ADR/0004 та §7 у
+    WORKFLOWS.md.
 servers:
   - url: https://supply.example.invalid
+    description: production
+  - url: http://localhost:3003
+    description: local dev (npm run dev · Root Directory supply-app/)
+
+tags:
+  - name: Auth
+  - name: Health
+  - name: Feedback
+  - name: Consumables
+  - name: HR
+  - name: Notifications
+
+security:
+  - supplySession: []
+
 paths:
+  # ------------------------------------------------------------------ Auth
   /api/auth/pin:
     post:
+      tags: [Auth]
       summary: Start an app-scoped Supply session
+      description: |
+        Verifies the 6-digit PIN via `feedbackgb.verify_pin_for_app(p_pin,
+        'supply_app')` — a match requires an active `user_app_access` row
+        AND (for role `supply_worker`) at least one active
+        `user_facility_memberships` row. `last_login` is bumped ONLY inside
+        the success branch, so a wrong-app PIN attempt never side-effects
+        the victim's user row. IP + PIN (HMAC-keyed) rate-limit buckets:
+        10 requests / 10 minutes each.
+      security: []
       requestBody:
         required: true
         content:
@@ -23,82 +54,572 @@ paths:
                   type: string
                   pattern: '^[0-9]{6}$'
       responses:
-        '200': { description: Supply session cookie was set }
-        '400': { description: Invalid request body or PIN format }
-        '401': { description: Neutral authentication failure }
-        '429': { description: Rate limit exceeded }
-        '503': { description: Authentication service is unavailable }
+        '200':
+          description: Session cookie set
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: "supply_session=<hmac.body>; HttpOnly; SameSite=Lax; Secure; Max-Age=43200"
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { const: true } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/LoginRejected' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /api/auth/logout:
     post:
-      summary: Clear the app-scoped Supply session
-      security: [{ supplySession: [] }]
+      tags: [Auth]
+      summary: Clear the app-scoped session
+      description: |
+        For `Accept: text/html` returns 303 to `/` (works as a plain
+        `<form action=post>` navigation). Otherwise returns JSON. In both
+        cases the cookie is cleared and an `auth.logout` audit row is
+        written (never blocks the response).
       responses:
-        '200': { description: Supply session cookie was cleared }
-  /api/documents:
+        '200':
+          description: JSON callers
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { const: true } } }
+        '303':
+          description: Browser form navigation → redirect to `/`
+    get:
+      tags: [Auth]
+      summary: Logout via link (redirect to safe local path)
+      parameters:
+        - name: next
+          in: query
+          required: false
+          description: Same-origin absolute path to redirect to after logout. Non-`/`-prefixed values or `//`-prefixed values are replaced with `/`.
+          schema: { type: string }
+      responses:
+        '303': { description: Cookie cleared, redirected }
+
+  # -------------------------------------------------------------- Health
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Liveness + readiness probe
+      security: []
+      responses:
+        '200':
+          description: Snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, supabase_configured, schema_ready, session_secret_ok]
+                properties:
+                  ok: { const: true }
+                  supabase_configured: { type: boolean }
+                  schema_ready:
+                    type: boolean
+                    description: "true after migration 20260723_001 applied"
+                  session_secret_ok:
+                    type: boolean
+                    description: "true when SUPPLY_SESSION_SECRET satisfies length requirement"
+
+  # -------------------------------------------------------------- Feedback
+  /api/feedback:
     post:
-      summary: Create an idempotent supply document
-      security: [{ supplySession: [] }]
+      tags: [Feedback, HR, Consumables]
+      summary: Create HR request or consumables order
+      description: |
+        Single write endpoint for the supply cabinet. Category-driven:
+
+        - `hr_question` — HR request; server resolves target facility name
+          when hr_topic=`transfer` and the client sent `target_facility_id`.
+        - `consumables_request` — cart order; CRM RPC is called BEFORE
+          `feedback.insert` (user must not see success if warehouse
+          rejects). `feedback.id` is pre-set to `client_submission_id`
+          so a retry hits the same idempotency key on both sides.
+
+        Server owns identity: `facility_id` and `store_label` come from the
+        session, never from the client. `store_id` stays null for supply.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateDocument'
+              oneOf:
+                - $ref: '#/components/schemas/HrRequestBody'
+                - $ref: '#/components/schemas/ConsumablesRequestBody'
       responses:
-        '201': { description: Created }
-        '409': { description: Existing client_submission_id returned }
-        '422': { description: Validation error }
-  /api/admin/supply/{documentType}/{id}/approve:
-    post:
-      summary: Approve a supply document
-      security: [{ adminSession: [] }]
+        '200':
+          description: Persisted (or idempotent duplicate acknowledged)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { const: true }
+                  id: { type: string, format: uuid, nullable: true }
+                  duplicate: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '413': { description: Payload too large (>8 MB) }
+        '500': { description: Помилка збереження }
+        '503':
+          description: Backend or warehouse unreachable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # -------------------------------------------------------------- Consumables
+  /api/consumables/catalog:
+    get:
+      tags: [Consumables]
+      summary: Paginated warehouse catalog for the consumables cart
+      description: |
+        Passes through to `household_chemicals.rpc_product_catalog` with
+        `p_warehouse_id = env(CONSUMABLES_WAREHOUSE_ID, default 37)`.
       parameters:
-        - $ref: '#/components/parameters/DocumentType'
-        - $ref: '#/components/parameters/DocumentId'
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 80 }
       responses:
-        '200': { description: Approved }
-        '403': { description: Admin role is required }
-        '409': { description: Illegal state transition }
+        '200':
+          description: Catalog page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, page, page_size, total_pages]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CatalogItem' }
+                  total: { type: integer }
+                  page: { type: integer }
+                  page_size: { type: integer }
+                  total_pages: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '503': { description: Warehouse CRM temporarily unavailable }
+
+  # -------------------------------------------------------------- Transfer targets
+  /api/transfer-targets:
+    get:
+      tags: [HR]
+      summary: Union of active stores + active facilities for the HR transfer form
+      responses:
+        '200':
+          description: Row list (id is text so the two id spaces coexist)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      required: [kind, id, name]
+                      properties:
+                        kind: { type: string, enum: [store, facility] }
+                        id: { type: string, description: "integer for stores, uuid for facilities" }
+                        name: { type: string }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '500': { description: DB error }
+
+  # -------------------------------------------------------------- HR self-service
+  /api/hr/vacation-requests:
+    get:
+      tags: [HR]
+      summary: Own HR requests, topic=vacation
+      responses:
+        '200': { $ref: '#/components/responses/MyHrList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/hr/day-off-requests:
+    get:
+      tags: [HR]
+      summary: Own HR requests, topic=day-off
+      responses:
+        '200': { $ref: '#/components/responses/MyHrList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/hr/sick-leave-requests:
+    get:
+      tags: [HR]
+      summary: Own HR requests, topic=sick-leave
+      responses:
+        '200': { $ref: '#/components/responses/MyHrList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/hr/resignation-requests:
+    get:
+      tags: [HR]
+      summary: Own HR requests, topic=resignation
+      responses:
+        '200': { $ref: '#/components/responses/MyHrList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/hr/transfer-requests:
+    get:
+      tags: [HR]
+      summary: Own HR requests, topic=transfer
+      responses:
+        '200': { $ref: '#/components/responses/MyHrList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  # -------------------------------------------------------------- Cabinet
+  /api/my-feedback:
+    get:
+      tags: [Feedback]
+      summary: Own submitted requests (active + archive), newest first
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Rows, consumables_status enriched from warehouse CRM
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows:
+                    type: array
+                    items: { $ref: '#/components/schemas/MyFeedbackRow' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /api/my-feedback/{id}:
+    get:
+      tags: [Feedback]
+      summary: Full detail + comment thread + consumables timeline
+      description: |
+        Non-owner ids return 404 (not 403) so an outsider cannot enumerate
+        the existence of ids belonging to others.
+      parameters:
+        - $ref: '#/components/parameters/FeedbackId'
+      responses:
+        '200':
+          description: Detail payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [feedback, comments, consumables]
+                properties:
+                  feedback: { $ref: '#/components/schemas/FeedbackFeedRow' }
+                  comments:
+                    type: array
+                    items: { $ref: '#/components/schemas/Comment' }
+                  consumables:
+                    oneOf:
+                      - { type: 'null' }
+                      - $ref: '#/components/schemas/ConsumablesDetail'
+        '400': { description: Malformed id }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { description: Not found or not owner }
+
+  # -------------------------------------------------------------- Notifications
+  /api/notifications:
+    get:
+      tags: [Notifications]
+      summary: Own notifications (bell + list)
+      parameters:
+        - name: unread
+          in: query
+          schema: { type: string, enum: ['1'] }
+          description: When set, only unread rows are returned; use limit=1 for a badge poll
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: Notifications payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [notifications, unread_count]
+                properties:
+                  notifications:
+                    type: array
+                    items: { $ref: '#/components/schemas/Notification' }
+                  unread_count: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /api/notifications/{id}/read:
+    post:
+      tags: [Notifications]
+      summary: Mark one notification as read (idempotent)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Marked
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { const: true } } }
+        '400': { description: Malformed id }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /api/notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark all own unread notifications as read
+      responses:
+        '200':
+          description: All marked
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { const: true } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+# ============================================================= Components
 components:
   securitySchemes:
     supplySession:
       type: apiKey
       in: cookie
       name: supply_session
-    adminSession:
-      type: apiKey
-      in: cookie
-      name: fbgb_session
+
   parameters:
-    DocumentType:
-      name: documentType
-      in: path
-      required: true
-      schema:
-        type: string
-        enum: [orders, defects, incoming-documents]
-    DocumentId:
+    FeedbackId:
       name: id
       in: path
       required: true
       schema: { type: string, format: uuid }
+
+  responses:
+    Unauthenticated:
+      description: Missing or invalid supply_session
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    BadRequest:
+      description: Client validation error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: Too many login attempts
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    LoginRejected:
+      description: |
+        Neutral failure — same shape for "unknown PIN", "inactive user",
+        "no supply_app access", "no active facility membership".
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties:
+              error: { type: string, example: "Вхід недоступний." }
+    ServiceUnavailable:
+      description: Rate limiter or DB temporarily unavailable
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    MyHrList:
+      description: Own hr_question rows for one topic (newest first, ≤20)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              rows:
+                type: array
+                items:
+                  type: object
+                  required: [id, created_at, status, fields]
+                  properties:
+                    id: { type: string, format: uuid }
+                    created_at: { type: string, format: date-time }
+                    status: { $ref: '#/components/schemas/FeedbackStatus' }
+                    fields: { type: object, additionalProperties: true }
+
   schemas:
-    CreateDocument:
+    Error:
       type: object
-      required: [type, facilityId, clientSubmissionId, items]
+      required: [error]
       properties:
-        type:
+        error: { type: string }
+
+    FeedbackStatus:
+      type: string
+      enum: [new, in_progress, resolved, rejected]
+
+    HrTopic:
+      type: string
+      enum: [vacation, day-off, sick-leave, resignation, transfer]
+
+    ConsumablesStatus:
+      type: string
+      enum: [accepted, picking, shipped]
+      description: |
+        Derived from household_chemicals order+transfer lifecycle by
+        `shared/lib/consumablesOrder.ts::deriveStatus`. Never persisted.
+
+    HrRequestBody:
+      type: object
+      required: [category, fields]
+      properties:
+        category: { type: string, const: hr_question }
+        fields:
+          type: object
+          required: [hr_topic]
+          properties:
+            hr_topic: { $ref: '#/components/schemas/HrTopic' }
+            date_from: { type: string, format: date }
+            date_to: { type: string, format: date, nullable: true }
+            comment: { type: string, nullable: true }
+            target_store_id:
+              type: integer
+              description: "Set for hr_topic=transfer targeting a store. Exactly one of target_store_id / target_facility_id."
+            target_facility_id:
+              type: string
+              format: uuid
+              description: "Set for hr_topic=transfer targeting a цех/склад."
+        photo_url:
           type: string
-          enum: [order, defect, incoming_document]
-        facilityId: { type: string, format: uuid }
-        clientSubmissionId: { type: string, format: uuid }
-        items:
+          nullable: true
+          description: "base64 data URL; whitelisted image/* MIME; ≤5 MB. Sick-leave certificate."
+        client_submission_id: { type: string, format: uuid }
+        client_created_at: { type: string, format: date-time }
+
+    CartItem:
+      type: object
+      required: [product_id, quantity]
+      properties:
+        product_id: { type: integer, minimum: 1 }
+        quantity: { type: number, exclusiveMinimum: 0, maximum: 1000000 }
+
+    ConsumablesRequestBody:
+      type: object
+      required: [category, cart_items, client_submission_id]
+      properties:
+        category: { type: string, const: consumables_request }
+        cart_items:
           type: array
           minItems: 1
-          items:
-            type: object
-            required: [productId, quantity, unit]
-            properties:
-              productId: { type: integer }
-              quantity: { type: number, exclusiveMinimum: 0 }
-              unit: { type: string, minLength: 1 }
+          maxItems: 100
+          items: { $ref: '#/components/schemas/CartItem' }
+        fields:
+          type: object
+          properties:
+            comment: { type: string, nullable: true }
+        client_submission_id:
+          type: string
+          format: uuid
+          description: "Reused as feedback.id AND p_feedback_id in the CRM RPC — idempotent across retries."
+        client_created_at: { type: string, format: date-time }
+
+    CatalogItem:
+      type: object
+      required: [id, name, unit]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        sku: { type: string, nullable: true }
+        unit: { type: string, nullable: true }
+        photo_url: { type: string, nullable: true }
+        category_id: { type: integer, nullable: true }
+        category_name: { type: string, nullable: true }
+
+    MyFeedbackRow:
+      type: object
+      required: [id, category, created_at, status, summary]
+      properties:
+        id: { type: string, format: uuid }
+        category: { type: string }
+        category_emoji: { type: string, nullable: true }
+        category_title: { type: string, nullable: true }
+        summary: { type: string, nullable: true }
+        status: { $ref: '#/components/schemas/FeedbackStatus' }
+        assigned_full_name: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time, nullable: true }
+        item_count:
+          type: integer
+          description: "Present only for category=consumables_request"
+        consumables_status:
+          allOf: [{ $ref: '#/components/schemas/ConsumablesStatus' }]
+          nullable: true
+          description: "Present only for category=consumables_request; null when CRM enrichment failed"
+
+    FeedbackFeedRow:
+      type: object
+      description: "Passthrough of `feedbackgb.feedback_feed`. Fields at the tail come from migration 20260723_004."
+      properties:
+        id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        category: { type: string }
+        category_title: { type: string, nullable: true }
+        store_id: { type: integer, nullable: true }
+        store_name: { type: string, nullable: true }
+        fields: { type: object, nullable: true, additionalProperties: true }
+        summary: { type: string }
+        status: { $ref: '#/components/schemas/FeedbackStatus' }
+        facility_id: { type: string, format: uuid, nullable: true }
+        facility_name: { type: string, nullable: true }
+        location_kind: { type: string, enum: [store, facility, none] }
+
+    Comment:
+      type: object
+      required: [id, body, created_at, author_full_name]
+      properties:
+        id: { type: string, format: uuid }
+        body: { type: string }
+        created_at: { type: string, format: date-time }
+        author_full_name: { type: string }
+
+    ConsumablesItem:
+      type: object
+      required: [product_id, name, quantity]
+      properties:
+        product_id: { type: integer }
+        name: { type: string }
+        unit: { type: string, nullable: true }
+        category_name: { type: string, nullable: true }
+        quantity: { type: number }
+        photo_url: { type: string, nullable: true }
+
+    ConsumablesDetail:
+      type: object
+      required: [status, items, timeline]
+      properties:
+        status: { $ref: '#/components/schemas/ConsumablesStatus' }
+        order_number: { type: string, nullable: true }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ConsumablesItem' }
+        timeline:
+          type: object
+          properties:
+            submitted_at: { type: string, format: date-time, nullable: true }
+            picking_at:   { type: string, format: date-time, nullable: true }
+            shipped_at:   { type: string, format: date-time, nullable: true }
+
+    Notification:
+      type: object
+      required: [id, type, title, body, is_read, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        type:
+          type: string
+          enum:
+            - feedback.assigned_to_admin
+            - feedback.status_in_progress_for_seller
+            - feedback.status_resolved_for_seller
+        title: { type: string }
+        body: { type: string }
+        feedback_id: { type: string, format: uuid, nullable: true }
+        payload: { type: object, additionalProperties: true }
+        is_read: { type: boolean }
+        created_at: { type: string, format: date-time }
