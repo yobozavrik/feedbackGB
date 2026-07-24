@@ -1,9 +1,8 @@
+import Image from "next/image";
 import Link from "next/link";
 import { requireSupplyUser } from "@/lib/currentUser";
 
 const actions: Array<[string, string, string]> = [
-  ["Замовлення сировини", "Створити заявку на потрібну сировину", "📋"],
-  ["Брак сировини", "Зафіксувати брак сировини", "💔"],
   ["Прихідні накладні", "Додати прихідну накладну", "🧾"],
   ["Проблема з постачанням", "Привезли не те / зіпсоване / запізно", "📦"],
 ];
@@ -27,12 +26,40 @@ export default async function SupplySectionPage() {
       >
         <p className="font-semibold text-ink-900">Модуль ще в підготовці</p>
         <p className="mt-1">
-          Форми замовлення, браку та прихідних накладних увімкнуться після застосування Supply-міграції та
-          підтвердженого CRM-контракту. Зараз система не показує тестових або вигаданих документів.
+          Форма прихідних накладних увімкнеться після застосування Supply-міграції та підтвердженого
+          CRM-контракту. Зараз система не показує тестових або вигаданих документів.
         </p>
       </div>
 
       <div className="space-y-3">
+        <Link
+          href="/home/supply/order"
+          className="group flex h-[118px] items-center rounded-xl border border-ink-300/20 bg-elev p-4 shadow-soft transition-all hover:-translate-y-0.5 active:scale-[0.98] active:bg-elev2"
+        >
+          <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-brand-50">
+            <Image src="/raw-materials/dry-goods.png" alt="" fill sizes="48px" className="object-cover mix-blend-multiply" />
+          </div>
+          <div className="ml-4 flex-1">
+            <h2 className="font-display text-[19px] font-semibold text-ink-900">Замовлення сировини</h2>
+            <p className="mt-1 text-[13px] text-ink-500">Створити заявку на потрібну сировину</p>
+          </div>
+          <span aria-hidden className="text-[22px] text-brand-500">→</span>
+        </Link>
+
+        <Link
+          href="/home/feedback/raw_material_defect"
+          className="group flex h-[118px] items-center rounded-xl border border-ink-300/20 bg-elev p-4 shadow-soft transition-all hover:-translate-y-0.5 active:scale-[0.98] active:bg-elev2"
+        >
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-[30px] leading-none">
+            💔
+          </div>
+          <div className="ml-4 flex-1">
+            <h2 className="font-display text-[19px] font-semibold text-ink-900">Брак сировини</h2>
+            <p className="mt-1 text-[13px] text-ink-500">Зафіксувати брак сировини</p>
+          </div>
+          <span aria-hidden className="text-[22px] text-brand-500">→</span>
+        </Link>
+
         {actions.map(([title, description, emoji]) => (
           <div
             key={title}

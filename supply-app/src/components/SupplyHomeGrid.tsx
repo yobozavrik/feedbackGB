@@ -9,6 +9,12 @@ type SoonCard = { title: string; short: string; emoji: string };
 // links to a 404.
 const ACTIVE: Card[] = [
   {
+    title: "Сировина для цеху",
+    short: "Замовлення сировини, брак, накладні, постачання",
+    emoji: "🧺",
+    href: "/home/supply",
+  },
+  {
     title: "Заявка на розхідні матеріали",
     short: "Чекова стрічка, пакети, хімія тощо",
     emoji: "📋",
@@ -19,12 +25,6 @@ const ACTIVE: Card[] = [
     short: "Зламалось обладнання / потрібен ремонт",
     emoji: "🔧",
     href: "/home/feedback/tech_issue",
-  },
-  {
-    title: "Сировина для цеху",
-    short: "Замовлення сировини, брак, накладні, постачання",
-    emoji: "🧺",
-    href: "/home/supply",
   },
   {
     title: "Питання по HR",
