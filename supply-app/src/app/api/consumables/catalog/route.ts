@@ -18,10 +18,15 @@ export async function GET(req: Request) {
   const search = (url.searchParams.get("search") ?? "").trim().slice(0, 80) || null;
   const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
   const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("page_size") ?? 50)));
+  const rawCategory = url.searchParams.get("category_id");
+  const categoryId =
+    rawCategory && Number.isFinite(Number(rawCategory)) && Number(rawCategory) > 0
+      ? Number(rawCategory)
+      : null;
   const db = getWarehouseCrmSupabase();
   if (!db) return NextResponse.json({ error: "catalog_unavailable" }, { status: 503 });
   const { data, error } = await db.rpc("rpc_product_catalog", {
-    p_category_id: null,
+    p_category_id: categoryId,
     p_search: search,
     p_warehouse_id: SUPPLY_WAREHOUSE_ID,
     p_page: page,

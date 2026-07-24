@@ -19,7 +19,7 @@ const ALLOWED_PHOTO_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 // Consumables now flow through the supply-sibling CRM RPC. Sырьё-документи
 // (raw materials, defects, incoming invoices) live outside the feedback table
 // per ADR 0004 and are added later.
-const ALLOWED_CATEGORIES = new Set(["hr_question", "consumables_request"]);
+const ALLOWED_CATEGORIES = new Set(["hr_question", "consumables_request", "tech_issue"]);
 
 /**
  * POST /api/feedback — create HR or consumables request for the authenticated

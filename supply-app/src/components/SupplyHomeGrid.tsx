@@ -15,6 +15,12 @@ const ACTIVE: Card[] = [
     href: "/home/feedback/consumables_request",
   },
   {
+    title: "Заявка на ремонт",
+    short: "Зламалось обладнання / потрібен ремонт",
+    emoji: "🔧",
+    href: "/home/feedback/tech_issue",
+  },
+  {
     title: "Сировина для цеху",
     short: "Замовлення сировини, брак, накладні, постачання",
     emoji: "🧺",
@@ -28,9 +34,7 @@ const ACTIVE: Card[] = [
   },
 ];
 
-const SOON: SoonCard[] = [
-  { title: "Заявка на ремонт", short: "Зламалось обладнання / потрібен ремонт", emoji: "🔧" },
-];
+const SOON: SoonCard[] = [];
 
 const cardBase =
   "group relative flex h-[118px] items-center overflow-hidden rounded-xl border border-ink-300/20 bg-elev p-4 shadow-soft";
