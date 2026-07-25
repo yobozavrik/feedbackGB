@@ -15,8 +15,7 @@ export type CategoryId =
   | "tech_issue"
   | "customer_voice"
   | "consumables_request"
-  | "hr_question"
-  | "raw_material_defect";
+  | "hr_question";
 
 export type FieldKind = "text" | "textarea" | "number" | "photo" | "date";
 
@@ -150,38 +149,6 @@ export const CATEGORIES: Category[] = [
         id: "comment",
         label: "Деталі",
         placeholder: "Коли помітила, які ознаки, скільки партія",
-        kind: "textarea",
-        required: true,
-      },
-      { id: "photo", label: "Фото браку (дуже бажано)", kind: "photo" },
-    ],
-  },
-  {
-    id: "raw_material_defect",
-    emoji: "💔",
-    title: "Брак сировини",
-    short: "Зіпсована, прострочена, пошкоджена сировина",
-    description:
-      "Сировина зіпсована, прострочена або пошкоджена ще до використання в цеху. Обери інгредієнт, вкажи кількість і додай фото — це допомагає з поверненням постачальнику.",
-    gradient: "bg-cat-defect/40",
-    accent: "text-rose-500",
-    tint: "defect",
-    priority: true,
-    // supply-app resolves the item from zakupki (UUID ingredient ids, not the
-    // integer POS product_id this flag implies) — it builds its own picker
-    // and submits ingredient_id/product_name/quantity/product_unit as plain
-    // fields instead, so requiresProduct/requiresQuantity stay unset here.
-    fields: [
-      {
-        id: "defect_type",
-        label: "Що саме з нею не так?",
-        placeholder: "Прострочена / зіпсована / пошкоджена упаковка",
-        kind: "text",
-      },
-      {
-        id: "comment",
-        label: "Деталі",
-        placeholder: "Коли помітили, які ознаки, скільки партія",
         kind: "textarea",
         required: true,
       },

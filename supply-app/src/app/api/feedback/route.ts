@@ -17,12 +17,10 @@ const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const ALLOWED_PHOTO_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 // Consumables now flow through the supply-sibling CRM RPC. Прихідні накладні
-// / замовлення сировини still live outside the feedback table per ADR 0004.
-// raw_material_defect is the one exception: mirrors feedback-app's plain
-// "Брак товару" flow (fields dump + optional photo, no CRM/zakupki write) —
-// there's no warehouse-side write-off RPC yet, so this is a fast path like
-// tech_issue, not a zakupki.requests row.
-const ALLOWED_CATEGORIES = new Set(["hr_question", "consumables_request", "tech_issue", "raw_material_defect"]);
+// / замовлення сировини / брак сировини live in zakupki.requests (see
+// /api/supply/raw-materials/order and /defect) — one history across every
+// workshop/store/warehouse, not the feedback table.
+const ALLOWED_CATEGORIES = new Set(["hr_question", "consumables_request", "tech_issue"]);
 
 /**
  * POST /api/feedback — create HR or consumables request for the authenticated

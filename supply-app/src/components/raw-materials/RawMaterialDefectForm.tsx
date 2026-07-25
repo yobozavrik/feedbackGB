@@ -102,21 +102,16 @@ export function RawMaterialDefectForm() {
     }
     setBusy(true);
     const body: Record<string, unknown> = {
-      category: "raw_material_defect",
-      fields: {
-        product_name: ingredient.name,
-        product_unit: UNIT_LABEL[ingredient.unit] ?? ingredient.unit,
-        quantity,
-        defect_type: defectType.trim() || null,
-        comment: comment.trim(),
-      },
+      ingredient_id: ingredient.id,
+      quantity,
+      defect_type: defectType.trim() || null,
+      comment: comment.trim(),
       client_submission_id: crypto.randomUUID(),
-      client_created_at: new Date().toISOString(),
     };
     if (photos.length > 0) body.photo_urls = photos;
 
     try {
-      const res = await fetch("/api/feedback", {
+      const res = await fetch("/api/supply/raw-materials/defect", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
