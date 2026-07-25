@@ -4,14 +4,9 @@ import { requireSupplyUser } from "@/lib/currentUser";
 import { getWorkshopIdForFacility } from "@/lib/zakupkiWorkshop";
 import { getZakupkiSupabase } from "@/lib/zakupkiDb";
 import { PackageIcon } from "@/components/icons";
+import { CategoryIngredientList, type CategoryIngredient } from "@/components/raw-materials/CategoryIngredientList";
 
 export const dynamic = "force-dynamic";
-
-const UNIT_LABEL: Record<string, string> = {
-  kg: "кг",
-  liter: "л",
-  piece: "шт",
-};
 
 interface CatalogRow {
   ingredient_id: string;
@@ -20,13 +15,6 @@ interface CatalogRow {
     unit: string;
     ingredient_images: { storage_path: string; is_primary: boolean; status: string }[] | null;
   } | null;
-}
-
-interface Ingredient {
-  id: string;
-  name: string;
-  unit: string;
-  photoPath: string | null;
 }
 
 // Signed once per page render for every item at once (single Storage API
@@ -66,7 +54,7 @@ export default async function RawMaterialsCategoryPage({
     .eq("category_id", params.categoryId)
     .eq("is_active", true);
 
-  const ingredients: Ingredient[] = ((rows ?? []) as unknown as CatalogRow[])
+  const raw = ((rows ?? []) as unknown as CatalogRow[])
     .filter((row) => row.ingredients)
     .map((row) => ({
       id: row.ingredient_id,
@@ -78,7 +66,7 @@ export default async function RawMaterialsCategoryPage({
     }))
     .sort((a, b) => a.name.localeCompare(b.name, "uk"));
 
-  const photoPaths = ingredients.map((i) => i.photoPath).filter((p): p is string => p !== null);
+  const photoPaths = raw.map((i) => i.photoPath).filter((p): p is string => p !== null);
   const signedUrlByPath = new Map<string, string>();
   if (photoPaths.length > 0) {
     const { data: signed } = await db.storage
@@ -88,6 +76,13 @@ export default async function RawMaterialsCategoryPage({
       if (entry.signedUrl && !entry.error) signedUrlByPath.set(entry.path ?? "", entry.signedUrl);
     }
   }
+
+  const ingredients: CategoryIngredient[] = raw.map((item) => ({
+    id: item.id,
+    name: item.name,
+    unit: item.unit,
+    photoUrl: item.photoPath ? signedUrlByPath.get(item.photoPath) ?? null : null,
+  }));
 
   return (
     <main>
@@ -100,26 +95,7 @@ export default async function RawMaterialsCategoryPage({
       <h1 className="mb-4 font-display text-[22px] font-bold text-ink-900">{(category as { name: string }).name}</h1>
 
       {ingredients.length > 0 ? (
-        <div className="overflow-hidden rounded-xl border border-ink-300/20 bg-elev shadow-soft">
-          {ingredients.map((item) => {
-            const photoUrl = item.photoPath ? signedUrlByPath.get(item.photoPath) : undefined;
-            return (
-              <div
-                key={item.id}
-                className="flex h-14 items-center gap-3 border-b border-ink-300/20 px-4 last:border-b-0"
-              >
-                {photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- pre-signed Storage URL, batch-generated server-side (see SIGNED_URL_TTL_SEC above)
-                  <img src={photoUrl} alt="" className="h-9 w-9 flex-shrink-0 rounded-md object-cover" />
-                ) : (
-                  <span className="h-9 w-9 flex-shrink-0 rounded-md bg-elev2" aria-hidden />
-                )}
-                <span className="min-w-0 flex-1 truncate text-[15px] text-ink-900">{item.name}</span>
-                <span className="whitespace-nowrap text-[13px] text-ink-500">{UNIT_LABEL[item.unit] ?? item.unit}</span>
-              </div>
-            );
-          })}
-        </div>
+        <CategoryIngredientList ingredients={ingredients} />
       ) : (
         <div className="flex flex-col items-center rounded-xl border border-dashed border-ink-300/40 bg-elev px-6 py-12 text-center shadow-soft">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-elev2">

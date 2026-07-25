@@ -30,3 +30,23 @@ export async function getWorkshopIdForFacility(facilityId: string | null): Promi
     .maybeSingle();
   return (workshop as { id: string } | null)?.id ?? null;
 }
+
+/**
+ * Bridges a supply-app (feedbackgb) session to its zakupki.employees row —
+ * required for zakupki.requests.employee_id (NOT NULL). No auto-provisioning:
+ * a super_admin links each real zakupki employee to their supply-app login
+ * by hand (see 20260725_001_zakupki_supply_app_bridge.sql). Returns null
+ * until that link exists; callers must surface a clear error, not a 500.
+ */
+export async function getZakupkiEmployeeId(workshopId: string, feedbackgbUserId: string): Promise<string | null> {
+  const zakupki = getZakupkiSupabase();
+  if (!zakupki) return null;
+  const { data } = await zakupki
+    .from("employees")
+    .select("id")
+    .eq("feedbackgb_user_id", feedbackgbUserId)
+    .eq("workshop_id", workshopId)
+    .eq("is_active", true)
+    .maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
+}
