@@ -9,7 +9,7 @@ interface RequestRow {
   status: string;
   comment: string | null;
   created_at: string;
-  workshops: { name_uk: string } | null;
+  workshops: { name_uk: string; code: string } | null;
   employees: { first_name: string; last_name: string } | null;
   request_items: { item_name: string; quantity: number; unit: string }[] | null;
 }
@@ -21,7 +21,7 @@ async function fetchOrders(): Promise<{ rows: SupplyOrderRow[]; error: string | 
   const { data, error } = await zakupki
     .from("requests")
     .select(
-      "id, status, comment, created_at, workshops(name_uk), employees(first_name, last_name), request_items(item_name, quantity, unit)",
+      "id, status, comment, created_at, workshops(name_uk, code), employees(first_name, last_name), request_items(item_name, quantity, unit)",
     )
     .eq("type", "raw_material")
     .order("created_at", { ascending: false })
@@ -34,6 +34,7 @@ async function fetchOrders(): Promise<{ rows: SupplyOrderRow[]; error: string | 
     comment: r.comment,
     createdAt: r.created_at,
     workshopName: r.workshops?.name_uk ?? "—",
+    workshopCode: r.workshops?.code ?? "",
     employeeName: r.employees ? `${r.employees.first_name} ${r.employees.last_name}`.trim() : "—",
     items: (r.request_items ?? []).map((i) => ({ name: i.item_name, quantity: i.quantity, unit: i.unit })),
   }));

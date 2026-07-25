@@ -1,5 +1,6 @@
 "use client";
 
+import { ApartmentOutlined, ContainerOutlined, ShopOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
 import { Alert, Card, Tabs, Tag, Typography } from "antd";
 import { useMemo } from "react";
@@ -18,26 +19,75 @@ export interface SupplyOrderRow {
   comment: string | null;
   createdAt: string;
   workshopName: string;
+  workshopCode: string;
   employeeName: string;
   items: SupplyOrderItem[];
 }
 
 const UNIT_LABEL: Record<string, string> = { kg: "кг", liter: "л", piece: "шт" };
 
-const STATUS_META: Record<string, { label: string; color: string }> = {
-  new: { label: "Нова", color: "blue" },
-  accepted: { label: "Прийнята", color: "cyan" },
-  in_progress: { label: "В роботі", color: "gold" },
-  completed: { label: "Виконана", color: "green" },
-  rejected: { label: "Відхилена", color: "red" },
+const STATUS_META: Record<string, { label: string; bg: string; text: string }> = {
+  new: { label: "Нова", bg: "#e6f1fb", text: "#0c447c" },
+  accepted: { label: "Прийнята", bg: "#e1f5ee", text: "#085041" },
+  in_progress: { label: "В роботі", bg: "#faeeda", text: "#633806" },
+  completed: { label: "Виконана", bg: "#eaf3de", text: "#27500a" },
+  rejected: { label: "Відхилена", bg: "#fcebeb", text: "#791f1f" },
 };
-
-function formatItems(items: SupplyOrderItem[]): string {
-  return items.map((i) => `${i.name} · ${formatQty(i.quantity)} ${UNIT_LABEL[i.unit] ?? i.unit}`).join(", ");
-}
 
 function formatQty(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(2)));
+}
+
+function StatusPill({ status }: { status: string }) {
+  const meta = STATUS_META[status] ?? { label: status, bg: "#f1efe8", text: "#444441" };
+  return (
+    <span
+      style={{
+        background: meta.bg,
+        color: meta.text,
+        fontSize: 12,
+        fontWeight: 500,
+        padding: "3px 10px",
+        borderRadius: 999,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {meta.label}
+    </span>
+  );
+}
+
+/** zakupki.workshops has no explicit "kind" column — the code prefix already
+ * encodes it (store_* / warehouse_* / everything else is a production цех). */
+function WorkshopIcon({ code }: { code: string }) {
+  const Icon = code.startsWith("store_") ? ShopOutlined : code.startsWith("warehouse_") ? ContainerOutlined : ApartmentOutlined;
+  return (
+    <span
+      style={{
+        width: 26,
+        height: 26,
+        borderRadius: 8,
+        background: "#fde7ee",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      <Icon style={{ fontSize: 13, color: "#d54a78" }} />
+    </span>
+  );
+}
+
+function ItemsSummary({ items }: { items: SupplyOrderItem[] }) {
+  if (items.length === 0) return <Text type="secondary">—</Text>;
+  const [first, ...rest] = items;
+  return (
+    <Text>
+      {first.name} · {formatQty(first.quantity)} {UNIT_LABEL[first.unit] ?? first.unit}
+      {rest.length > 0 ? <Text type="secondary">, +{rest.length} позицій</Text> : null}
+    </Text>
+  );
 }
 
 function OrdersTable({ orders, loadError }: { orders: SupplyOrderRow[]; loadError: string | null }) {
@@ -46,37 +96,33 @@ function OrdersTable({ orders, loadError }: { orders: SupplyOrderRow[]; loadErro
       {
         title: "Дата",
         dataIndex: "createdAt",
-        width: 160,
+        width: 150,
         render: (_, row) => new Date(row.createdAt).toLocaleString("uk-UA"),
         sorter: (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         defaultSortOrder: "descend",
       },
-      { title: "Цех / склад", dataIndex: "workshopName", width: 200 },
-      { title: "Співробітник", dataIndex: "employeeName", width: 180 },
+      {
+        title: "Цех / склад",
+        dataIndex: "workshopName",
+        width: 200,
+        render: (_, row) => (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <WorkshopIcon code={row.workshopCode} />
+            {row.workshopName}
+          </span>
+        ),
+      },
+      { title: "Співробітник", dataIndex: "employeeName", width: 170 },
       {
         title: "Позиції",
         dataIndex: "items",
-        render: (_, row) =>
-          row.items.length === 0 ? (
-            <Text type="secondary">—</Text>
-          ) : (
-            <Text>{formatItems(row.items)}</Text>
-          ),
-      },
-      {
-        title: "К-сть позицій",
-        dataIndex: "items",
-        width: 110,
-        render: (_, row) => row.items.length,
+        render: (_, row) => <ItemsSummary items={row.items} />,
       },
       {
         title: "Статус",
         dataIndex: "status",
         width: 130,
-        render: (_, row) => {
-          const meta = STATUS_META[row.status] ?? { label: row.status, color: "default" };
-          return <Tag color={meta.color}>{meta.label}</Tag>;
-        },
+        render: (_, row) => <StatusPill status={row.status} />,
       },
       {
         title: "Коментар",
