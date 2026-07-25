@@ -2,7 +2,7 @@
 
 import { ApartmentOutlined, ContainerOutlined, ShopOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { Alert, Card, Drawer, Tabs, Tag, Typography } from "antd";
+import { Alert, Card, Modal, Tabs, Tag, Typography } from "antd";
 import { useMemo, useState } from "react";
 
 const { Text } = Typography;
@@ -90,9 +90,9 @@ function ItemsSummary({ items }: { items: SupplyOrderItem[] }) {
   );
 }
 
-function OrderDetailDrawer({ order, onClose }: { order: SupplyOrderRow | null; onClose: () => void }) {
+function OrderDetailModal({ order, onClose }: { order: SupplyOrderRow | null; onClose: () => void }) {
   return (
-    <Drawer title="Заявка на сировину" open={order !== null} onClose={onClose} width={420}>
+    <Modal title="Заявка на сировину" open={order !== null} onCancel={onClose} footer={null} width={480}>
       {order ? (
         <>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -135,7 +135,7 @@ function OrderDetailDrawer({ order, onClose }: { order: SupplyOrderRow | null; o
           <Text>{order.comment ?? <Text type="secondary">—</Text>}</Text>
         </>
       ) : null}
-    </Drawer>
+    </Modal>
   );
 }
 
@@ -199,7 +199,7 @@ function OrdersTable({ orders, loadError }: { orders: SupplyOrderRow[]; loadErro
           style: { cursor: "pointer" },
         })}
       />
-      <OrderDetailDrawer order={selected} onClose={() => setSelected(null)} />
+      <OrderDetailModal order={selected} onClose={() => setSelected(null)} />
     </>
   );
 }
