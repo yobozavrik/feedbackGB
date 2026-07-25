@@ -2,8 +2,8 @@
 
 import { ApartmentOutlined, ContainerOutlined, ShopOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { Alert, Card, Tabs, Tag, Typography } from "antd";
-import { useMemo } from "react";
+import { Alert, Card, Drawer, Tabs, Tag, Typography } from "antd";
+import { useMemo, useState } from "react";
 
 const { Text } = Typography;
 
@@ -90,7 +90,57 @@ function ItemsSummary({ items }: { items: SupplyOrderItem[] }) {
   );
 }
 
+function OrderDetailDrawer({ order, onClose }: { order: SupplyOrderRow | null; onClose: () => void }) {
+  return (
+    <Drawer title="Заявка на сировину" open={order !== null} onClose={onClose} width={420}>
+      {order ? (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <WorkshopIcon code={order.workshopCode} />
+            <Text strong style={{ fontSize: 15 }}>
+              {order.workshopName}
+            </Text>
+            <StatusPill status={order.status} />
+          </div>
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            {order.employeeName} · {new Date(order.createdAt).toLocaleString("uk-UA")}
+          </Text>
+
+          <div style={{ marginTop: 20, marginBottom: 8, fontSize: 13, color: "#5a4848", fontWeight: 500 }}>
+            Позиції ({order.items.length})
+          </div>
+          <div style={{ border: "1px solid #f0e6dc", borderRadius: 12, overflow: "hidden" }}>
+            {order.items.map((item, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  padding: "10px 14px",
+                  borderBottom: i < order.items.length - 1 ? "1px solid #f6ece2" : "none",
+                  fontSize: 13,
+                }}
+              >
+                <span>{item.name}</span>
+                <span style={{ color: "#8c7a7a" }}>
+                  {formatQty(item.quantity)} {UNIT_LABEL[item.unit] ?? item.unit}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 20, marginBottom: 8, fontSize: 13, color: "#5a4848", fontWeight: 500 }}>
+            Коментар
+          </div>
+          <Text>{order.comment ?? <Text type="secondary">—</Text>}</Text>
+        </>
+      ) : null}
+    </Drawer>
+  );
+}
+
 function OrdersTable({ orders, loadError }: { orders: SupplyOrderRow[]; loadError: string | null }) {
+  const [selected, setSelected] = useState<SupplyOrderRow | null>(null);
   const columns = useMemo<ProColumns<SupplyOrderRow>[]>(
     () => [
       {
@@ -144,7 +194,12 @@ function OrdersTable({ orders, loadError }: { orders: SupplyOrderRow[]; loadErro
         options={{ density: true, fullScreen: true, reload: false, setting: true }}
         pagination={{ pageSize: 50, showSizeChanger: true, showTotal: (total) => `${total} заявок` }}
         scroll={{ x: 1000 }}
+        onRow={(row) => ({
+          onClick: () => setSelected(row),
+          style: { cursor: "pointer" },
+        })}
       />
+      <OrderDetailDrawer order={selected} onClose={() => setSelected(null)} />
     </>
   );
 }
