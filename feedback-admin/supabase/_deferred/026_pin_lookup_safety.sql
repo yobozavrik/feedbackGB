@@ -1,3 +1,6 @@
+-- ОТЛОЖЕНО. НЕ ПРИМЕНЯТЬ НИ К ОДНОЙ БАЗЕ. 026 ломает смену PIN в действующей админке.
+-- Уже применялась к рабочей базе 2026-09-15; set_user_pin(uuid,text) восстановлена миграцией 027.
+--
 -- Safety fixes required before enabling plan-B PIN lookup for real users.
 set search_path = feedbackgb, public, pg_catalog;
 

@@ -1,3 +1,6 @@
+-- ОТЛОЖЕНО. НЕ ПРИМЕНЯТЬ НИ К ОДНОЙ БАЗЕ. Вход по PIN оставлен прежним (решение владельца 2026-09-15).
+-- Внимание: уже применена к рабочей базе 2026-09-15; добавленные объекты не используются кодом.
+--
 -- PIN-only authentication transition (plan B).
 --
 -- PIN lookup values are HMAC-SHA256(PIN, PIN_PEPPER), calculated only in the

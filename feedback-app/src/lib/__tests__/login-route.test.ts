@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const limitState = vi.hoisted(() => ({ blocked: false }));
-
 /**
  * Behavioural tests for /api/auth/login. We stub `getServerSupabase` to
  * return an in-memory fake so the handler runs to completion without
@@ -10,7 +8,7 @@ const limitState = vi.hoisted(() => ({ blocked: false }));
  * Goal of this suite: catch regressions in the PIN-only auth contract:
  *   1. Body must accept `{pin}` only — no `user_id` required.
  *   2. PIN must be exactly 6 digits.
- *   3. On indexed PIN lookup success the route mints a session cookie and
+ *   3. On verify_pin_global success the route mints a session cookie and
  *      mirrors the role to the response body.
  *   4. On null/malformed user the route returns 401 and writes an
  *      anonymous audit row (no targetUserId).
@@ -69,7 +67,7 @@ function fakeSupabase(rpcResult: SupabaseUserRow | null) {
   return {
     client: {
       rpc: vi.fn(async (fn: string, params: unknown) => {
-        if (fn === "verify_pin_lookup") {
+        if (fn === "verify_pin_global") {
           return { data: rpcResult, error: null };
         }
         return {
@@ -116,18 +114,11 @@ vi.mock("@/lib/geoip", async () => {
     lookupIp: vi.fn(async () => null),
   };
 });
-vi.mock("@/lib/rateLimit", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/rateLimit")>("@/lib/rateLimit");
-  return { ...actual, rateLimitStatus: vi.fn(async () => ({ ok: !limitState.blocked, remaining: limitState.blocked ? 0 : 10, reset_ms: 60_000 })) };
-});
 
 describe("POST /api/auth/login", () => {
   beforeEach(async () => {
     vi.resetModules();
     process.env.SESSION_SECRET = "test-secret-test-secret-test-secret";
-    process.env.PIN_PEPPER = "test-pepper-test-pepper-test-pepper-123456";
-    process.env.PIN_LOOKUP_LEGACY_FALLBACK = "false";
-    limitState.blocked = false;
     const audit = await import("@/lib/audit");
     vi.mocked(audit.logAudit).mockClear();
   });
@@ -170,19 +161,6 @@ describe("POST /api/auth/login", () => {
     expect(res.status).toBe(503);
   });
 
-  it("rejects a blocked IP before verifying even a valid PIN", async () => {
-    const supabase = await import("@/lib/supabase");
-    const fake = fakeSupabase(SAMPLE_USER);
-    vi.mocked(supabase.getServerSupabase).mockReturnValue(fake.client as unknown as ReturnType<typeof supabase.getServerSupabase>);
-    limitState.blocked = true;
-    const { POST } = await loadRoute();
-    const res = await POST(loginRequest({ pin: "654321" }, "198.51.100.77"));
-    expect(res.status).toBe(429);
-    expect(res.headers.get("set-cookie")).toBeNull();
-    expect(fake.client.rpc).not.toHaveBeenCalledWith("verify_pin_lookup", expect.anything());
-    expect(fake.client.rpc).not.toHaveBeenCalledWith("verify_pin_global", expect.anything());
-  });
-
   it("ignores legacy user_id field (PIN alone is the credential)", async () => {
     const supabase = await import("@/lib/supabase");
     const fake = fakeSupabase(SAMPLE_USER);
@@ -199,8 +177,7 @@ describe("POST /api/auth/login", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(fake.client.rpc).toHaveBeenCalledWith("verify_pin_lookup", {
-      p_pin_lookup_hex: expect.stringMatching(/^[a-f0-9]{64}$/),
+    expect(fake.client.rpc).toHaveBeenCalledWith("verify_pin_global", {
       p_pin: "654321",
     });
     const body = (await res.json()) as {

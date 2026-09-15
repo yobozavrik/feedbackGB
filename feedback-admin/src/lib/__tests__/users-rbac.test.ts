@@ -57,7 +57,6 @@ describe("Users CRUD API & RBAC Checks", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRpc.mockReset();
-    process.env.PIN_PEPPER = "test-pepper-test-pepper-test-pepper-123456";
   });
 
   describe("POST /api/admin/users (Create User)", () => {
@@ -390,7 +389,6 @@ describe("Users CRUD API & RBAC Checks", () => {
       expect(mockRpc).toHaveBeenCalledWith("set_user_pin", {
         p_user_id: targetId,
         p_pin: "123456",
-        p_pin_lookup_hex: expect.stringMatching(/^[a-f0-9]{64}$/),
       });
     });
 
@@ -426,7 +424,6 @@ describe("Users CRUD API & RBAC Checks", () => {
       expect(mockRpc).toHaveBeenCalledWith("set_user_pin", {
         p_user_id: targetId,
         p_pin: "123456",
-        p_pin_lookup_hex: expect.stringMatching(/^[a-f0-9]{64}$/),
       });
     });
 
@@ -522,7 +519,6 @@ describe("Users CRUD API & RBAC Checks", () => {
       expect(mockRpc).toHaveBeenCalledWith("set_user_pin", {
         p_user_id: targetId,
         p_pin: "123456",
-        p_pin_lookup_hex: expect.stringMatching(/^[a-f0-9]{64}$/),
       });
     });
 

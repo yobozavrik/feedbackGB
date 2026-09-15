@@ -3,7 +3,6 @@ import { getServerSupabase } from "@/lib/supabase";
 import { requireAdminSession } from "@/lib/adminAuth";
 import { ipFromRequest, logAudit, uaFromRequest } from "@/lib/audit";
 import { isUuid } from "@/lib/validation";
-import { pinLookup } from "../../../../../../../../shared/lib/pinLookup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,13 +42,6 @@ export async function POST(
       { status: 400 },
     );
   }
-  let lookup: string;
-  try {
-    lookup = pinLookup(pin);
-  } catch {
-    console.error("PIN lookup is not configured");
-    return NextResponse.json({ error: "Помилка конфігурації сервера" }, { status: 503 });
-  }
 
   const supabase = getServerSupabase();
   if (!supabase) {
@@ -83,7 +75,6 @@ export async function POST(
   const { error } = await supabase.rpc("set_user_pin", {
     p_user_id: userId,
     p_pin: pin,
-    p_pin_lookup_hex: lookup,
   });
   if (error) {
     console.error("set_user_pin rpc error", { code: error.code, message: error.message });
