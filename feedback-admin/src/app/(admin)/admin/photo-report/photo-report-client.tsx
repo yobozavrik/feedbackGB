@@ -120,10 +120,11 @@ export function PhotoReportClient({
         {!galleryLoading && !galleryError ? (
           <Image.PreviewGroup>
             <div className="space-y-5">
-              {galleryReports.map((report) => (
+              {galleryReports.map((report, reportIndex) => (
                 <section key={report.id} className="rounded-lg border border-gray-200 p-3">
-                  <div className="mb-3 text-sm text-gray-600">
-                    {report.seller} · {new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" }).format(new Date(report.created_at))}
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600">
+                    <strong className="text-gray-800">Звіт {galleryReports.length - reportIndex}</strong>
+                    <span>{report.seller} · {new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" }).format(new Date(report.created_at))} · {report.photos.length} фото</span>
                   </div>
                   <div className="flex flex-wrap gap-3">
                     {report.photos.map((url, index) => (
