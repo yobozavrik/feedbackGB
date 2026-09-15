@@ -3,6 +3,7 @@ import {
   buildDailyPhotoReport,
   countReportPhotos,
   kyivDay,
+  reportPhotoUrls,
   type PhotoReportEntry,
   type PhotoReportStore,
 } from "../photoReport";
@@ -60,5 +61,10 @@ describe("photo report aggregation", () => {
   it("counts legacy single-photo and serialized json photo arrays", () => {
     expect(countReportPhotos(entry({ photo_urls: null, photo_url: "sb:one.jpg" }))).toBe(1);
     expect(countReportPhotos(entry({ photo_urls: '["a","b"]', photo_url: null }))).toBe(2);
+  });
+
+  it("returns only valid photo URLs for the gallery", () => {
+    expect(reportPhotoUrls(entry({ photo_urls: ["sb:one.jpg", null, 42, ""] }))).toEqual(["sb:one.jpg"]);
+    expect(reportPhotoUrls(entry({ photo_urls: 'not-json', photo_url: "sb:legacy.jpg" }))).toEqual(["sb:legacy.jpg"]);
   });
 });

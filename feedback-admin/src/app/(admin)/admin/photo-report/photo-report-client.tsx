@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Alert, Card, DatePicker, Empty, Statistic, Table, Tag } from "antd";
+import { Alert, Button, Card, DatePicker, Empty, Image, Modal, Spin, Statistic, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
 import {
@@ -16,6 +16,13 @@ function todayKyiv(): string {
   return kyivDay(new Date().toISOString());
 }
 
+interface GalleryReport {
+  id: string;
+  created_at: string;
+  seller: string;
+  photos: string[];
+}
+
 export function PhotoReportClient({
   stores,
   entries,
@@ -26,6 +33,10 @@ export function PhotoReportClient({
   error: string | null;
 }) {
   const [selectedDate, setSelectedDate] = useState(todayKyiv());
+  const [galleryStore, setGalleryStore] = useState<DailyPhotoReportRow | null>(null);
+  const [galleryReports, setGalleryReports] = useState<GalleryReport[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryError, setGalleryError] = useState<string | null>(null);
   const rows = useMemo(
     () => buildDailyPhotoReport(stores, entries, selectedDate),
     [entries, selectedDate, stores],
@@ -33,6 +44,22 @@ export function PhotoReportClient({
 
   const sentStores = rows.filter((row) => row.submitted).length;
   const totalPhotos = rows.reduce((sum, row) => sum + row.photos, 0);
+  const openGallery = async (row: DailyPhotoReportRow) => {
+    setGalleryStore(row);
+    setGalleryReports([]);
+    setGalleryError(null);
+    setGalleryLoading(true);
+    try {
+      const response = await fetch(`/api/admin/photo-report/gallery?store_id=${row.key}&date=${selectedDate}`);
+      const data = await response.json() as { reports?: GalleryReport[]; error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Не вдалося завантажити фото");
+      setGalleryReports(data.reports ?? []);
+    } catch (galleryRequestError) {
+      setGalleryError(galleryRequestError instanceof Error ? galleryRequestError.message : "Не вдалося завантажити фото");
+    } finally {
+      setGalleryLoading(false);
+    }
+  };
   const columns: ColumnsType<DailyPhotoReportRow> = [
     { title: "Магазин", dataIndex: "store", key: "store", sorter: (a, b) => a.store.localeCompare(b.store, "uk") },
     {
@@ -44,6 +71,11 @@ export function PhotoReportClient({
       onFilter: (value, row) => row.submitted === Boolean(value),
     },
     { title: "Фото", dataIndex: "photos", key: "photos", align: "right", sorter: (a, b) => a.photos - b.photos },
+    {
+      title: "Перегляд",
+      key: "gallery",
+      render: (_, row) => row.submitted ? <Button type="link" onClick={() => void openGallery(row)}>Відкрити фото</Button> : "—",
+    },
     { title: "Звітів", dataIndex: "reports", key: "reports", align: "right", sorter: (a, b) => a.reports - b.reports },
     { title: "Надіслав", dataIndex: "sellers", key: "sellers", render: (sellers: string[]) => sellers.length ? sellers.join(", ") : "—" },
     {
@@ -74,6 +106,36 @@ export function PhotoReportClient({
         </div>
         {rows.length ? <Table rowKey="key" columns={columns} dataSource={rows} pagination={{ pageSize: 25, showSizeChanger: true }} /> : <Empty description="Немає активних магазинів" />}
       </Card>
+      <Modal
+        open={galleryStore !== null}
+        title={galleryStore ? `${galleryStore.store} — фото за ${selectedDate}` : "Фото звіт"}
+        onCancel={() => setGalleryStore(null)}
+        footer={null}
+        width={980}
+        destroyOnClose
+      >
+        {galleryLoading ? <div className="py-12 text-center"><Spin /></div> : null}
+        {galleryError ? <Alert type="error" showIcon message="Не вдалося відкрити фото" description={galleryError} /> : null}
+        {!galleryLoading && !galleryError && !galleryReports.length ? <Empty description="У звітах немає доступних фото" /> : null}
+        {!galleryLoading && !galleryError ? (
+          <Image.PreviewGroup>
+            <div className="space-y-5">
+              {galleryReports.map((report) => (
+                <section key={report.id} className="rounded-lg border border-gray-200 p-3">
+                  <div className="mb-3 text-sm text-gray-600">
+                    {report.seller} · {new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" }).format(new Date(report.created_at))}
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    {report.photos.map((url, index) => (
+                      <Image key={url} src={url} alt={`Фото звіту ${index + 1}`} width={148} height={111} style={{ objectFit: "cover" }} />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </Image.PreviewGroup>
+        ) : null}
+      </Modal>
     </div>
   );
 }

@@ -37,18 +37,27 @@ export function kyivDay(value: string): string {
 }
 
 export function countReportPhotos(entry: PhotoReportEntry): number {
-  if (Array.isArray(entry.photo_urls)) return entry.photo_urls.length;
+  return reportPhotoUrls(entry).length;
+}
+
+/** Normalises modern arrays, JSON-serialised arrays, and legacy one-photo rows. */
+export function reportPhotoUrls(entry: PhotoReportEntry): string[] {
+  if (Array.isArray(entry.photo_urls)) {
+    return entry.photo_urls.filter((url): url is string => typeof url === "string" && url.length > 0);
+  }
   // PostgREST normally returns jsonb arrays as arrays. Retain this defensive
   // branch so an older serialization cannot turn a valid report into zero.
   if (typeof entry.photo_urls === "string") {
     try {
       const parsed: unknown = JSON.parse(entry.photo_urls);
-      if (Array.isArray(parsed)) return parsed.length;
+      if (Array.isArray(parsed)) {
+        return parsed.filter((url): url is string => typeof url === "string" && url.length > 0);
+      }
     } catch {
       // Legacy/null value: photo_url remains the compatible one-photo source.
     }
   }
-  return entry.photo_url ? 1 : 0;
+  return entry.photo_url ? [entry.photo_url] : [];
 }
 
 export function buildDailyPhotoReport(
