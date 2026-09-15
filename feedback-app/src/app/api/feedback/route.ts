@@ -142,9 +142,20 @@ export async function POST(req: Request) {
   // Do not create a misleading "complete" report with a partial photo set.
   if (category.id === "photo_report" && photoUrls.length !== rawPhotos.length) {
     if (photoUrls.length > 0) {
-      await supabase?.storage
+      const { error: cleanupError } = await supabase!.storage
         .from("feedback-photos")
         .remove(photoUrls.map((url) => url.slice(3)));
+      // A failed rollback must be visible: otherwise the report is correctly
+      // rejected but private orphaned objects cannot be traced or removed.
+      if (cleanupError) {
+        logPhotoReport("photo_report.cleanup_failure", {
+          request_id: requestId,
+          user_id: sess.uid,
+          store_id: effectiveStoreId,
+          uploaded_photo_count: photoUrls.length,
+          duration_ms: Date.now() - startedAt,
+        });
+      }
     }
     logPhotoReport("photo_report.storage_partial_failure", {
       request_id: requestId,

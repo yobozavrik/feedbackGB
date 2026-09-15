@@ -473,6 +473,25 @@ describe("POST /api/feedback — payload validation", () => {
     expect(mockStorageRemove.mock.calls[0][0]).toHaveLength(14);
   });
 
+  it("rejects a partial report even when rollback storage cleanup fails", async () => {
+    let calls = 0;
+    mockStorageUpload.mockImplementation(async () => {
+      calls += 1;
+      return calls === 1 ? { error: { statusCode: 503 } } : { error: null };
+    });
+    mockStorageRemove.mockResolvedValue({ error: { message: "cleanup unavailable" } });
+    const { POST } = await loadRoute();
+    const response = await POST(feedbackRequest({
+      category: "photo_report",
+      fields: {},
+      photo_urls: Array.from({ length: 15 }, () => "data:image/jpeg;base64,AAAA"),
+    }));
+
+    expect(response.status).toBe(503);
+    expect(mockSupabaseInsert).not.toHaveBeenCalled();
+    expect(mockStorageRemove).toHaveBeenCalledTimes(1);
+  });
+
   it("drops a non-data-URL photo instead of storing it", async () => {
     mockInsertResolves({ data: { id: "feedback-id" }, error: null });
     const { POST } = await loadRoute();
