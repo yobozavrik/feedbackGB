@@ -114,3 +114,37 @@ export function clientIp(req: Request): string {
   if (xfwd) return xfwd.split(",").at(-1)!.trim();
   return "unknown";
 }
+
+/** Reads a distributed limit without consuming an attempt. Use this before a
+ * credential verifier so a blocked source cannot make an expensive RPC call. */
+export async function rateLimitStatus(
+  key: string,
+  limit: number,
+  windowMs: number,
+): Promise<RateLimitResult> {
+  const supabase = getServerSupabase();
+  const isProd = process.env.NODE_ENV === "production";
+  if (!supabase) {
+    if (isProd) throw new Error("Supabase client is unavailable in production rate limiter.");
+    return fallbackRateLimitStatus(key, limit, windowMs);
+  }
+  try {
+    const { data, error } = await supabase.rpc("get_rate_limit_status", {
+      p_key: key,
+      p_limit: limit,
+      p_window_seconds: Math.max(1, Math.round(windowMs / 1000)),
+    });
+    if (error) throw new Error(`DB rate limit status RPC failed: ${error.message}`);
+    return { ok: Boolean(data.ok), remaining: Number(data.remaining), reset_ms: Number(data.reset_ms) };
+  } catch (error) {
+    if (isProd) throw error;
+    return fallbackRateLimitStatus(key, limit, windowMs);
+  }
+}
+
+function fallbackRateLimitStatus(key: string, limit: number, windowMs: number): RateLimitResult {
+  const now = Date.now();
+  const hits = (buckets.get(key)?.hits ?? []).filter((t) => now - t < windowMs);
+  const oldest = hits[0] ?? now;
+  return { ok: hits.length < limit, remaining: Math.max(0, limit - hits.length), reset_ms: Math.max(0, windowMs - (now - oldest)) };
+}

@@ -6,7 +6,7 @@ import {
   SESSION_MAX_AGE,
   type UserRole,
 } from "@/lib/session";
-import { clientIp, rateLimit } from "@/lib/rateLimit";
+import { clientIp, rateLimit, rateLimitStatus } from "@/lib/rateLimit";
 import { logAudit, uaFromRequest } from "@/lib/audit";
 import { geoipToAuditMeta, geoipToUserUpdate, lookupIp } from "@/lib/geoip";
 import { pinLookup } from "../../../../../../shared/lib/pinLookup";
@@ -56,6 +56,21 @@ async function failedLogin(req: Request, ip: string): Promise<NextResponse> {
   }
 }
 
+async function preflightLoginLimit(req: Request, ip: string): Promise<NextResponse | null> {
+  try {
+    const [ipLimit, globalLimit] = await Promise.all([
+      rateLimitStatus(`login:failure:ip:${ip}`, IP_FAILURE_LIMIT, IP_WINDOW_MS),
+      rateLimitStatus("login:failure:global", GLOBAL_FAILURE_LIMIT, GLOBAL_WINDOW_MS),
+    ]);
+    if (ipLimit.ok && globalLimit.ok) return null;
+    const retryMs = !globalLimit.ok ? globalLimit.reset_ms : ipLimit.reset_ms;
+    return NextResponse.json({ error: "Забагато спроб, спробуй за декілька хвилин." }, { status: 429, headers: { "Retry-After": String(Math.ceil(retryMs / 1000)) } });
+  } catch (err) {
+    console.error("login limit preflight unavailable", { request_id: req.headers.get("x-request-id"), error: err instanceof Error ? err.message : String(err) });
+    return NextResponse.json({ error: "Послуга тимчасово недоступна. Будь ласка, спробуйте пізніше." }, { status: 503 });
+  }
+}
+
 /**
  * POST /api/auth/login   { pin: "123456" }
  *
@@ -96,6 +111,9 @@ export async function POST(req: Request) {
     console.error("PIN lookup is not configured");
     return NextResponse.json({ error: "Помилка конфігурації сервера" }, { status: 503 });
   }
+
+  const blocked = await preflightLoginLimit(req, ip);
+  if (blocked) return blocked;
 
   let { data, error } = await supabase.rpc("verify_pin_lookup", {
     p_pin_lookup_hex: lookup,

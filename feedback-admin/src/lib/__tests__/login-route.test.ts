@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const limitState = vi.hoisted(() => ({ blocked: false }));
+
 /**
  * Behavioural tests for /api/auth/login. We stub `getServerSupabase` to
  * return an in-memory fake so the handler runs to completion without
@@ -114,6 +116,10 @@ vi.mock("@/lib/geoip", async () => {
     lookupIp: vi.fn(async () => null),
   };
 });
+vi.mock("@/lib/rateLimit", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/rateLimit")>("@/lib/rateLimit");
+  return { ...actual, rateLimitStatus: vi.fn(async () => ({ ok: !limitState.blocked, remaining: limitState.blocked ? 0 : 10, reset_ms: 60_000 })) };
+});
 
 describe("POST /api/auth/login", () => {
   beforeEach(async () => {
@@ -121,6 +127,7 @@ describe("POST /api/auth/login", () => {
     process.env.SESSION_SECRET = "test-secret-test-secret-test-secret";
     process.env.PIN_PEPPER = "test-pepper-test-pepper-test-pepper-123456";
     process.env.PIN_LOOKUP_LEGACY_FALLBACK = "false";
+    limitState.blocked = false;
     const audit = await import("@/lib/audit");
     vi.mocked(audit.logAudit).mockClear();
   });
@@ -161,6 +168,19 @@ describe("POST /api/auth/login", () => {
       loginRequest({ pin: "654321" }, "198.51.100.10"),
     );
     expect(res.status).toBe(503);
+  });
+
+  it("rejects a blocked IP before verifying even a valid PIN", async () => {
+    const supabase = await import("@/lib/supabase");
+    const fake = fakeSupabase(SAMPLE_ADMIN);
+    vi.mocked(supabase.getServerSupabase).mockReturnValue(fake.client as unknown as ReturnType<typeof supabase.getServerSupabase>);
+    limitState.blocked = true;
+    const { POST } = await loadRoute();
+    const res = await POST(loginRequest({ pin: "654321" }, "198.51.100.77"));
+    expect(res.status).toBe(429);
+    expect(res.headers.get("set-cookie")).toBeNull();
+    expect(fake.client.rpc).not.toHaveBeenCalledWith("verify_pin_lookup", expect.anything());
+    expect(fake.client.rpc).not.toHaveBeenCalledWith("verify_pin_global", expect.anything());
   });
 
   it("ignores legacy user_id field (PIN alone is the credential)", async () => {
