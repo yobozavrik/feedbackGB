@@ -23,6 +23,7 @@ export interface FeedRow {
   store_name: string | null;
   fields: Record<string, unknown> | null;
   photo_url: string | null;
+  photo_urls: unknown;
   user_id: string | null;
   user_full_name: string | null;
   user_role: string | null;

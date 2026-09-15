@@ -16,6 +16,7 @@ import {
   Segmented,
   Select,
   Space,
+  Spin,
   Tag,
   Typography,
   theme as antdTheme,
@@ -87,6 +88,30 @@ export function FeedDrawer({
   const [loadingComments, setLoadingComments] = useState(false);
   const [newCommentText, setNewCommentText] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
+
+  useEffect(() => {
+    if (!row?.id || (!row.photo_url && !row.photo_urls)) {
+      setGalleryUrls([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingPhotos(true);
+    void fetch(`/api/admin/feedback/${row.id}/photos`)
+      .then(async (response) => {
+        const data = await response.json() as { photos?: string[] };
+        if (!response.ok) throw new Error("photo_gallery_failed");
+        if (!cancelled) setGalleryUrls(data.photos ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setGalleryUrls(row.photo_url ? [row.photo_url] : []);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPhotos(false);
+      });
+    return () => { cancelled = true; };
+  }, [row?.id, row?.photo_url, row?.photo_urls]);
 
   const fetchComments = useCallback(async (feedbackId: string) => {
     setLoadingComments(true);
@@ -374,20 +399,27 @@ export function FeedDrawer({
           </Paragraph>
         )}
 
-        {row.photo_url ? (
+        {row.photo_url || galleryUrls.length ? (
           <div>
             <Title level={5} style={{ margin: 0, marginBottom: 8 }}>
-              Фото
+              Фото {galleryUrls.length > 1 ? `(${galleryUrls.length})` : ""}
             </Title>
-            <Image
-              src={row.photo_url}
-              alt="фото фідбеку"
-              style={{
-                borderRadius: 8,
-                maxHeight: 480,
-                objectFit: "contain",
-              }}
-            />
+            {loadingPhotos ? <Spin size="small" /> : (
+              <Image.PreviewGroup>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {(galleryUrls.length ? galleryUrls : row.photo_url ? [row.photo_url] : []).map((url, index) => (
+                    <Image
+                      key={url}
+                      src={url}
+                      alt={`фото фідбеку ${index + 1}`}
+                      width={index === 0 ? 260 : 120}
+                      height={index === 0 ? 195 : 90}
+                      style={{ borderRadius: 8, objectFit: "cover" }}
+                    />
+                  ))}
+                </div>
+              </Image.PreviewGroup>
+            )}
           </div>
         ) : null}
 
