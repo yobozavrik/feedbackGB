@@ -19,12 +19,22 @@ const PHOTO_REPORT_MAX_PHOTO_BYTES = 280 * 1024;
 const PHOTO_UPLOAD_CONCURRENCY = 3;
 const ALLOWED_PHOTO_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
+function logPhotoReport(
+  event: string,
+  fields: Record<string, string | number | boolean | null>,
+) {
+  // Intentionally excludes image bytes, form text, PINs, cookies and tokens.
+  console.log(JSON.stringify({ level: "info", event, surface: "seller_app", ...fields }));
+}
+
 /**
  * POST /api/feedback
  * Creates a feedback record for the authenticated user.
  * Middleware enforces session; role is ignored for POST (everyone can submit).
  */
 export async function POST(req: Request) {
+  const startedAt = Date.now();
+  const requestId = req.headers.get("x-request-id");
   const contentLength = Number(req.headers.get("content-length") ?? "0");
   if (contentLength && contentLength > MAX_BODY_BYTES) {
     return NextResponse.json(
@@ -71,6 +81,17 @@ export async function POST(req: Request) {
     quantity,
     rawPhotos,
   } = validated.data;
+
+  if (category.id === "photo_report") {
+    logPhotoReport("photo_report.received", {
+      request_id: requestId,
+      user_id: sess.uid,
+      store_id: sess.store_id ?? null,
+      photo_count: rawPhotos.length,
+      request_bytes: raw.length,
+      duration_ms: Date.now() - startedAt,
+    });
+  }
 
   // TG init_data is strictly optional. We only copy TG identity into the DB
   // if HMAC validation succeeded — never trust the client's claimed TG id.
@@ -125,7 +146,24 @@ export async function POST(req: Request) {
         .from("feedback-photos")
         .remove(photoUrls.map((url) => url.slice(3)));
     }
+    logPhotoReport("photo_report.storage_partial_failure", {
+      request_id: requestId,
+      user_id: sess.uid,
+      store_id: effectiveStoreId,
+      requested_photo_count: rawPhotos.length,
+      uploaded_photo_count: photoUrls.length,
+      duration_ms: Date.now() - startedAt,
+    });
     return NextResponse.json({ error: "Не вдалося зберегти всі фото. Спробуй ще раз." }, { status: 503 });
+  }
+  if (category.id === "photo_report") {
+    logPhotoReport("photo_report.storage_complete", {
+      request_id: requestId,
+      user_id: sess.uid,
+      store_id: effectiveStoreId,
+      photo_count: photoUrls.length,
+      duration_ms: Date.now() - startedAt,
+    });
   }
 
   let storeName: string | null = null;
@@ -249,6 +287,15 @@ export async function POST(req: Request) {
         }
       }
     }
+    if (category.id === "photo_report") {
+      logPhotoReport("photo_report.database_failure", {
+        request_id: requestId,
+        user_id: sess.uid,
+        store_id: effectiveStoreId,
+        photo_count: photoUrls.length,
+        duration_ms: Date.now() - startedAt,
+      });
+    }
     return NextResponse.json({ error: "Помилка збереження" }, { status: 500 });
   }
 
@@ -280,6 +327,15 @@ export async function POST(req: Request) {
     });
   }
 
+  if (category.id === "photo_report") {
+    logPhotoReport("photo_report.completed", {
+      request_id: requestId,
+      user_id: sess.uid,
+      store_id: effectiveStoreId,
+      photo_count: photoUrls.length,
+      duration_ms: Date.now() - startedAt,
+    });
+  }
   return NextResponse.json({ ok: true, persisted: true });
 }
 

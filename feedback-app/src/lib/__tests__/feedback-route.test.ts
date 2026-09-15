@@ -43,6 +43,8 @@ vi.mock("@/lib/session", () => ({
 const mockSupabaseRpc = vi.fn(async () => ({ error: null }));
 const mockSupabaseInsert = vi.fn();
 const mockSupabaseSelect = vi.fn();
+const mockStorageUpload = vi.fn();
+const mockStorageRemove = vi.fn();
 // Controls what admin_directions "resolves" to for resolveAssignedAdmin().
 // null = no direction configured (default, matches pre-auto-assignment
 // behavior). Set per-test to simulate a configured direction.
@@ -52,6 +54,9 @@ vi.mock("@/lib/supabase", () => ({
   isSupabaseConfigured: vi.fn(() => true),
   getServerSupabase: vi.fn(() => ({
     rpc: mockSupabaseRpc,
+    storage: {
+      from: () => ({ upload: mockStorageUpload, remove: mockStorageRemove }),
+    },
     from: vi.fn((table) => {
       if (table === "v_stores") {
         return {
@@ -140,6 +145,10 @@ describe("POST /api/feedback", () => {
     mockSupabaseInsert.mockReset();
     mockSupabaseSelect.mockReset();
     mockSupabaseRpc.mockReset();
+    mockStorageUpload.mockReset();
+    mockStorageRemove.mockReset();
+    mockStorageUpload.mockResolvedValue({ error: null });
+    mockStorageRemove.mockResolvedValue({ error: null });
     mockSessionCookieValue = "valid-seller-token";
     mockAdminDirectionAdminId = null;
   });
@@ -313,6 +322,10 @@ describe("POST /api/feedback — payload validation", () => {
     mockSupabaseInsert.mockReset();
     mockSupabaseSelect.mockReset();
     mockSupabaseRpc.mockReset();
+    mockStorageUpload.mockReset();
+    mockStorageRemove.mockReset();
+    mockStorageUpload.mockResolvedValue({ error: null });
+    mockStorageRemove.mockResolvedValue({ error: null });
     mockSessionCookieValue = "valid-seller-token";
     mockAdminDirectionAdminId = null;
   });
@@ -425,6 +438,39 @@ describe("POST /api/feedback — payload validation", () => {
       photo_urls: Array.from({ length: 16 }, () => "data:image/jpeg;base64,aaaa"),
     });
     expect(overflow).toMatchObject({ ok: false, error: "Too many photos: max 15" });
+  });
+
+  it("uploads all fifteen photos of a report and persists their private paths", async () => {
+    mockInsertResolves({ data: { id: "feedback-id" }, error: null });
+    const { POST } = await loadRoute();
+    const response = await POST(feedbackRequest({
+      category: "photo_report",
+      fields: {},
+      photo_urls: Array.from({ length: 15 }, () => "data:image/jpeg;base64,AAAA"),
+    }));
+    expect(response.status).toBe(200);
+    expect(mockStorageUpload).toHaveBeenCalledTimes(15);
+    const record = mockSupabaseInsert.mock.calls[0][0];
+    expect(record.photo_url).toMatch(/^sb:/);
+    expect(record.fields.photo_urls).toHaveLength(15);
+  });
+
+  it("removes successfully uploaded files and does not insert a partial report", async () => {
+    let calls = 0;
+    mockStorageUpload.mockImplementation(async () => {
+      calls += 1;
+      return calls === 1 ? { error: { statusCode: 503 } } : { error: null };
+    });
+    const { POST } = await loadRoute();
+    const response = await POST(feedbackRequest({
+      category: "photo_report",
+      fields: {},
+      photo_urls: Array.from({ length: 15 }, () => "data:image/jpeg;base64,AAAA"),
+    }));
+    expect(response.status).toBe(503);
+    expect(mockSupabaseInsert).not.toHaveBeenCalled();
+    expect(mockStorageRemove).toHaveBeenCalledTimes(1);
+    expect(mockStorageRemove.mock.calls[0][0]).toHaveLength(14);
   });
 
   it("drops a non-data-URL photo instead of storing it", async () => {
