@@ -1,11 +1,9 @@
 import { getServerSupabase } from "@/lib/supabase";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
-import type { PhotoReportEntry, PhotoReportStore } from "@/lib/photoReport";
+import { kyivDay, type PhotoReportEntry, type PhotoReportStore } from "@/lib/photoReport";
 import { PhotoReportClient } from "./photo-report-client";
 
 export const dynamic = "force-dynamic";
-
-const LOOKBACK_DAYS = 31;
 
 async function fetchPhotoReportData(): Promise<{
   stores: PhotoReportStore[];
@@ -15,7 +13,11 @@ async function fetchPhotoReportData(): Promise<{
   const supabase = getServerSupabase();
   if (!supabase) return { stores: [], entries: [], error: "Supabase ще не налаштовано" };
 
-  const since = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const date = kyivDay(new Date().toISOString());
+  const from = new Date(`${date}T00:00:00.000Z`);
+  from.setUTCDate(from.getUTCDate() - 1);
+  const until = new Date(`${date}T00:00:00.000Z`);
+  until.setUTCDate(until.getUTCDate() + 2);
   const [storesRes, reportsRes] = await Promise.all([
     supabase
       .from("v_stores")
@@ -26,9 +28,10 @@ async function fetchPhotoReportData(): Promise<{
       .from("feedback_feed")
       .select("created_at,store_id,store_name,user_full_name,photo_url,photo_urls")
       .eq("category", "photo_report")
-      .gte("created_at", since)
+      .gte("created_at", from.toISOString())
+      .lt("created_at", until.toISOString())
       .order("created_at", { ascending: false })
-      .limit(15000),
+      .limit(2000),
   ]);
 
   return {
@@ -43,7 +46,7 @@ export default async function PhotoReportPage() {
   return (
     <AdminPageContainer
       title="Фото звіт"
-      subTitle={`Щоденний контроль надходження фото по активних магазинах. Дані за останні ${LOOKBACK_DAYS} день.`}
+      subTitle="Щоденний контроль надходження фото по активних магазинах."
     >
       <PhotoReportClient stores={stores} entries={entries} error={error} />
     </AdminPageContainer>

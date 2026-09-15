@@ -24,6 +24,13 @@ describe("photo galleries are admin-only", () => {
     expect(getServerSupabase).not.toHaveBeenCalled();
   });
 
+  it("rejects an anonymous daily summary request before touching the database", async () => {
+    const { GET } = await import("@/app/api/admin/photo-report/route");
+    const response = await GET(new Request("http://localhost/api/admin/photo-report?date=2026-09-15"));
+    expect(response.status).toBe(403);
+    expect(getServerSupabase).not.toHaveBeenCalled();
+  });
+
   it("rejects an anonymous feedback-record gallery request before touching the database", async () => {
     const { GET } = await import("@/app/api/admin/feedback/[id]/photos/route");
     const response = await GET(
@@ -38,6 +45,14 @@ describe("photo galleries are admin-only", () => {
     session = { uid: "admin-1" };
     const { GET } = await import("@/app/api/admin/photo-report/gallery/route");
     const response = await GET(new Request("http://localhost/api/admin/photo-report/gallery?store_id=bad&date=today"));
+    expect(response.status).toBe(400);
+    expect(getServerSupabase).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed daily-summary parameters for an authenticated admin", async () => {
+    session = { uid: "admin-1" };
+    const { GET } = await import("@/app/api/admin/photo-report/route");
+    const response = await GET(new Request("http://localhost/api/admin/photo-report?date=today"));
     expect(response.status).toBe(400);
     expect(getServerSupabase).not.toHaveBeenCalled();
   });

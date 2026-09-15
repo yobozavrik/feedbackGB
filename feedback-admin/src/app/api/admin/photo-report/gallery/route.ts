@@ -14,13 +14,8 @@ function isDate(value: string | null): value is string {
   return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
 }
 
-async function resolvePhotoUrl(supabase: NonNullable<ReturnType<typeof getServerSupabase>>, raw: string): Promise<string | null> {
-  if (raw.startsWith("sb:")) {
-    const { data, error } = await supabase.storage.from("feedback-photos").createSignedUrl(raw.slice(3), SIGNED_URL_TTL_SECONDS);
-    return error || !data?.signedUrl ? null : data.signedUrl;
-  }
-  if (raw.startsWith(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/`)) return raw;
-  return null;
+function isLegacyPublicUrl(raw: string): boolean {
+  return raw.startsWith(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/`);
 }
 
 /** Returns temporary admin-only URLs for the selected store's reports on one Kyiv day. */
@@ -57,16 +52,22 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "query_failed" }, { status: 500 });
   }
 
-  const reports = await Promise.all(
-    ((data ?? []) as GalleryEntry[])
-      .filter((entry) => kyivDay(entry.created_at) === date)
-      .map(async (entry) => ({
-        id: entry.id,
-        created_at: entry.created_at,
-        seller: entry.user_full_name ?? "Невідомо",
-        photos: (await Promise.all(reportPhotoUrls(entry).map((url) => resolvePhotoUrl(supabase, url)))).filter((url): url is string => url !== null),
-      })),
-  );
+  const entries = ((data ?? []) as GalleryEntry[]).filter((entry) => kyivDay(entry.created_at) === date);
+  const storagePaths = [...new Set(entries.flatMap(reportPhotoUrls).filter((url) => url.startsWith("sb:")).map((url) => url.slice(3)))];
+  const { data: signed, error: signingError } = storagePaths.length
+    ? await supabase.storage.from("feedback-photos").createSignedUrls(storagePaths, SIGNED_URL_TTL_SECONDS)
+    : { data: [], error: null };
+  if (signingError) {
+    console.error(JSON.stringify({ level: "error", event: "photo_report.gallery.signing_failed", store_id: storeId, date, paths: storagePaths.length }));
+    return NextResponse.json({ error: "signing_failed" }, { status: 500 });
+  }
+  const signedByPath = new Map((signed ?? []).flatMap((item) => item.path && item.signedUrl ? [[item.path, item.signedUrl] as const] : []));
+  const reports = entries.map((entry) => ({
+    id: entry.id,
+    created_at: entry.created_at,
+    seller: entry.user_full_name ?? "Невідомо",
+    photos: reportPhotoUrls(entry).flatMap((raw) => raw.startsWith("sb:") ? (signedByPath.get(raw.slice(3)) ? [signedByPath.get(raw.slice(3))!] : []) : isLegacyPublicUrl(raw) ? [raw] : []),
+  }));
 
   console.log(JSON.stringify({ level: "info", event: "photo_report.gallery.opened", store_id: storeId, date, reports: reports.length, actor_user_id: session.uid, request_id: req.headers.get("x-request-id") }));
   return NextResponse.json({ reports });

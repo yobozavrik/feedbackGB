@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, DatePicker, Empty, Image, Modal, Spin, Statistic, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
@@ -33,14 +33,39 @@ export function PhotoReportClient({
   error: string | null;
 }) {
   const [selectedDate, setSelectedDate] = useState(todayKyiv());
+  const [remoteRows, setRemoteRows] = useState<DailyPhotoReportRow[] | null>(null);
+  const [dailyLoading, setDailyLoading] = useState(false);
+  const [dailyError, setDailyError] = useState<string | null>(null);
   const [galleryStore, setGalleryStore] = useState<DailyPhotoReportRow | null>(null);
   const [galleryReports, setGalleryReports] = useState<GalleryReport[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryError, setGalleryError] = useState<string | null>(null);
-  const rows = useMemo(
+  const initialRows = useMemo(
     () => buildDailyPhotoReport(stores, entries, selectedDate),
     [entries, selectedDate, stores],
   );
+  const rows = remoteRows ?? initialRows;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setDailyLoading(true);
+    setDailyError(null);
+    void fetch(`/api/admin/photo-report?date=${selectedDate}`, { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json() as { rows?: DailyPhotoReportRow[]; error?: string };
+        if (!response.ok) throw new Error(data.error ?? "Не вдалося завантажити звіт");
+        setRemoteRows(data.rows ?? []);
+      })
+      .catch((requestError: unknown) => {
+        if (controller.signal.aborted) return;
+        setRemoteRows(null);
+        setDailyError(requestError instanceof Error ? requestError.message : "Не вдалося завантажити звіт");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDailyLoading(false);
+      });
+    return () => controller.abort();
+  }, [selectedDate]);
 
   const sentStores = rows.filter((row) => row.submitted).length;
   const totalPhotos = rows.reduce((sum, row) => sum + row.photos, 0);
@@ -88,7 +113,7 @@ export function PhotoReportClient({
 
   return (
     <div className="space-y-4">
-      {error ? <Alert type="error" showIcon message="Не вдалося завантажити дані" description={error} /> : null}
+      {error || dailyError ? <Alert type="error" showIcon message="Не вдалося завантажити дані" description={dailyError ?? error} /> : null}
       <Card>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -104,7 +129,7 @@ export function PhotoReportClient({
             <Statistic title="Фото отримано" value={totalPhotos} />
           </div>
         </div>
-        {rows.length ? <Table rowKey="key" columns={columns} dataSource={rows} pagination={{ pageSize: 25, showSizeChanger: true }} /> : <Empty description="Немає активних магазинів" />}
+        {dailyLoading ? <div className="py-12 text-center"><Spin /></div> : rows.length ? <Table rowKey="key" columns={columns} dataSource={rows} pagination={{ pageSize: 25, showSizeChanger: true }} /> : <Empty description="Немає активних магазинів" />}
       </Card>
       <Modal
         open={galleryStore !== null}
