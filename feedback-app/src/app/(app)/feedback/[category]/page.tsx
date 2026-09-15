@@ -3,6 +3,9 @@ import { Header } from "@/components/Header";
 import { FeedbackForm } from "@/components/FeedbackForm";
 import { PriorityFeedbackForm } from "@/components/PriorityFeedbackForm";
 import { CATEGORIES, getCategory } from "@/lib/categories";
+import { isPhotoReportEnabled } from "@/lib/photoReportFeature";
+
+export const dynamic = "force-dynamic";
 
 export function generateStaticParams() {
   return CATEGORIES.map((c) => ({ category: c.id }));
@@ -15,6 +18,7 @@ export default function FeedbackCategoryPage({
 }) {
   const category = getCategory(params.category);
   if (!category) notFound();
+  if (category.id === "photo_report" && !isPhotoReportEnabled()) notFound();
 
   return (
     <main>

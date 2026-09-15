@@ -8,6 +8,7 @@ import { validateInitData } from "@/lib/telegram";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 import { resolveAssignedAdmin } from "@/lib/assignment";
 import { createNotification } from "@/lib/notifications";
+import { isPhotoReportEnabled } from "@/lib/photoReportFeature";
 import type { FeedbackPayload } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -19,9 +20,11 @@ const PHOTO_REPORT_MAX_PHOTO_BYTES = 280 * 1024;
 const PHOTO_UPLOAD_CONCURRENCY = 3;
 const ALLOWED_PHOTO_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
+type PhotoReportLogValue = string | number | boolean | null | string[];
+
 function logPhotoReport(
   event: string,
-  fields: Record<string, string | number | boolean | null>,
+  fields: Record<string, PhotoReportLogValue>,
 ) {
   // Intentionally excludes image bytes, form text, PINs, cookies and tokens.
   console.log(JSON.stringify({ level: "info", event, surface: "seller_app", ...fields }));
@@ -81,6 +84,18 @@ export async function POST(req: Request) {
     quantity,
     rawPhotos,
   } = validated.data;
+
+  if (category.id === "photo_report" && !isPhotoReportEnabled()) {
+    return NextResponse.json({ error: "Фото звіт тимчасово вимкнений" }, { status: 503 });
+  }
+  // A photo report is all-or-nothing. Reject malformed or spoofed images
+  // before starting any Storage writes, rather than reporting a false 503.
+  if (
+    category.id === "photo_report"
+    && rawPhotos.some((photo) => typeof photo !== "string" || !decodeAllowedImage(photo, PHOTO_REPORT_MAX_PHOTO_BYTES))
+  ) {
+    return NextResponse.json({ error: "Неприпустимий формат фото" }, { status: 400 });
+  }
 
   if (category.id === "photo_report") {
     logPhotoReport("photo_report.received", {
@@ -142,20 +157,13 @@ export async function POST(req: Request) {
   // Do not create a misleading "complete" report with a partial photo set.
   if (category.id === "photo_report" && photoUrls.length !== rawPhotos.length) {
     if (photoUrls.length > 0) {
-      const { error: cleanupError } = await supabase!.storage
-        .from("feedback-photos")
-        .remove(photoUrls.map((url) => url.slice(3)));
-      // A failed rollback must be visible: otherwise the report is correctly
-      // rejected but private orphaned objects cannot be traced or removed.
-      if (cleanupError) {
-        logPhotoReport("photo_report.cleanup_failure", {
-          request_id: requestId,
-          user_id: sess.uid,
-          store_id: effectiveStoreId,
-          uploaded_photo_count: photoUrls.length,
-          duration_ms: Date.now() - startedAt,
-        });
-      }
+      await cleanupPhotoReportFiles(supabase!, photoUrls, "photo_report.cleanup_failure", {
+        request_id: requestId,
+        user_id: sess.uid,
+        store_id: effectiveStoreId,
+        uploaded_photo_count: photoUrls.length,
+        duration_ms: Date.now() - startedAt,
+      });
     }
     logPhotoReport("photo_report.storage_partial_failure", {
       request_id: requestId,
@@ -286,6 +294,15 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       if (!queryError && existing) {
+        if (category.id === "photo_report" && photoUrls.length > 0) {
+          await cleanupPhotoReportFiles(supabase!, photoUrls, "photo_report.orphan_pending", {
+            request_id: requestId,
+            user_id: sess.uid,
+            store_id: effectiveStoreId,
+            uploaded_photo_count: photoUrls.length,
+            duration_ms: Date.now() - startedAt,
+          });
+        }
         if (existing.user_id === sess.uid) {
           console.log(`Duplicate submission detected for user ${sess.uid}. Returning 200 OK.`);
           return NextResponse.json({ ok: true, persisted: true, duplicate: true });
@@ -299,6 +316,15 @@ export async function POST(req: Request) {
       }
     }
     if (category.id === "photo_report") {
+      if (photoUrls.length > 0) {
+        await cleanupPhotoReportFiles(supabase!, photoUrls, "photo_report.orphan_pending", {
+          request_id: requestId,
+          user_id: sess.uid,
+          store_id: effectiveStoreId,
+          uploaded_photo_count: photoUrls.length,
+          duration_ms: Date.now() - startedAt,
+        });
+      }
       logPhotoReport("photo_report.database_failure", {
         request_id: requestId,
         user_id: sess.uid,
@@ -425,19 +451,9 @@ async function sanitizeAndUploadPhoto(
   raw: string,
   maxPhotoBytes: number,
 ): Promise<string | null> {
-  // Only accept base64 data URLs for whitelisted image mimes.
-  const match = /^data:(image\/[a-z0-9+.-]+);base64,([A-Za-z0-9+/=]+)$/i.exec(raw);
-  if (!match) return null;
-  const mime = match[1].toLowerCase();
-  if (!ALLOWED_PHOTO_MIME.has(mime)) return null;
-
-  let buf: Buffer;
-  try {
-    buf = Buffer.from(match[2], "base64");
-  } catch {
-    return null;
-  }
-  if (buf.length === 0 || buf.length > maxPhotoBytes) return null;
+  const decoded = decodeAllowedImage(raw, maxPhotoBytes);
+  if (!decoded) return null;
+  const { mime, buf } = decoded;
 
   const ext =
     mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : "webp";
@@ -454,6 +470,56 @@ async function sanitizeAndUploadPhoto(
   // Return the storage path (not a public URL). The admin UI resolves this
   // to a short-lived signed URL at render time (see src/app/admin/page.tsx).
   return `sb:${path}`;
+}
+
+function decodeAllowedImage(raw: string, maxPhotoBytes: number): { mime: string; buf: Buffer } | null {
+  // Only accept base64 data URLs for whitelisted image mimes.
+  const match = /^data:(image\/[a-z0-9+.-]+);base64,([A-Za-z0-9+/=]+)$/i.exec(raw);
+  if (!match) return null;
+  const mime = match[1].toLowerCase();
+  if (!ALLOWED_PHOTO_MIME.has(mime)) return null;
+
+  let buf: Buffer;
+  try {
+    buf = Buffer.from(match[2], "base64");
+  } catch {
+    return null;
+  }
+  if (buf.length === 0 || buf.length > maxPhotoBytes || !matchesImageSignature(mime, buf)) return null;
+  return { mime, buf };
+}
+
+async function cleanupPhotoReportFiles(
+  supabase: NonNullable<ReturnType<typeof getServerSupabase>>,
+  photoUrls: string[],
+  failureEvent: "photo_report.cleanup_failure" | "photo_report.orphan_pending",
+  fields: Record<string, PhotoReportLogValue>,
+): Promise<void> {
+  // Storage paths contain only a date and a server-generated UUID. Keep them
+  // in the failure event so a scheduled reconciler can remove exact orphans.
+  const paths = photoUrls.map((url) => url.slice(3));
+  try {
+    const { error } = await supabase.storage.from("feedback-photos").remove(paths);
+    if (!error) return;
+  } catch {
+    // The safe event below intentionally omits provider error details.
+  }
+  logPhotoReport(failureEvent, { ...fields, photo_paths: paths });
+}
+
+function matchesImageSignature(mime: string, buf: Buffer): boolean {
+  if (mime === "image/jpeg") {
+    return buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+  }
+  if (mime === "image/png") {
+    return buf.length >= 8
+      && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47
+      && buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a;
+  }
+  return mime === "image/webp"
+    && buf.length >= 12
+    && buf.subarray(0, 4).toString("ascii") === "RIFF"
+    && buf.subarray(8, 12).toString("ascii") === "WEBP";
 }
 
 async function mapWithConcurrency<T, R>(

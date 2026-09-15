@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mutable mock value for cookies
 let mockSessionCookieValue = "valid-seller-token";
+const VALID_JPEG = "data:image/jpeg;base64,/9j/2Q==";
+const originalPhotoReportEnabled = process.env.PHOTO_REPORT_ENABLED;
 
 // Mock next/headers cookies
 vi.mock("next/headers", () => ({
@@ -151,10 +153,13 @@ describe("POST /api/feedback", () => {
     mockStorageRemove.mockResolvedValue({ error: null });
     mockSessionCookieValue = "valid-seller-token";
     mockAdminDirectionAdminId = null;
+    process.env.PHOTO_REPORT_ENABLED = "true";
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    if (originalPhotoReportEnabled === undefined) delete process.env.PHOTO_REPORT_ENABLED;
+    else process.env.PHOTO_REPORT_ENABLED = originalPhotoReportEnabled;
   });
 
   async function loadRoute() {
@@ -328,10 +333,13 @@ describe("POST /api/feedback — payload validation", () => {
     mockStorageRemove.mockResolvedValue({ error: null });
     mockSessionCookieValue = "valid-seller-token";
     mockAdminDirectionAdminId = null;
+    process.env.PHOTO_REPORT_ENABLED = "true";
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    if (originalPhotoReportEnabled === undefined) delete process.env.PHOTO_REPORT_ENABLED;
+    else process.env.PHOTO_REPORT_ENABLED = originalPhotoReportEnabled;
   });
 
   async function loadRoute() {
@@ -446,7 +454,7 @@ describe("POST /api/feedback — payload validation", () => {
     const response = await POST(feedbackRequest({
       category: "photo_report",
       fields: {},
-      photo_urls: Array.from({ length: 15 }, () => "data:image/jpeg;base64,AAAA"),
+      photo_urls: Array.from({ length: 15 }, () => VALID_JPEG),
     }));
     expect(response.status).toBe(200);
     expect(mockStorageUpload).toHaveBeenCalledTimes(15);
@@ -465,7 +473,7 @@ describe("POST /api/feedback — payload validation", () => {
     const response = await POST(feedbackRequest({
       category: "photo_report",
       fields: {},
-      photo_urls: Array.from({ length: 15 }, () => "data:image/jpeg;base64,AAAA"),
+      photo_urls: Array.from({ length: 15 }, () => VALID_JPEG),
     }));
     expect(response.status).toBe(503);
     expect(mockSupabaseInsert).not.toHaveBeenCalled();
@@ -480,16 +488,115 @@ describe("POST /api/feedback — payload validation", () => {
       return calls === 1 ? { error: { statusCode: 503 } } : { error: null };
     });
     mockStorageRemove.mockResolvedValue({ error: { message: "cleanup unavailable" } });
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const { POST } = await loadRoute();
     const response = await POST(feedbackRequest({
       category: "photo_report",
       fields: {},
-      photo_urls: Array.from({ length: 15 }, () => "data:image/jpeg;base64,AAAA"),
+      photo_urls: Array.from({ length: 15 }, () => VALID_JPEG),
     }));
 
     expect(response.status).toBe(503);
     expect(mockSupabaseInsert).not.toHaveBeenCalled();
     expect(mockStorageRemove).toHaveBeenCalledTimes(1);
+    const cleanup = log.mock.calls
+      .map(([message]) => JSON.parse(String(message)) as Record<string, unknown>)
+      .find((entry) => entry.event === "photo_report.cleanup_failure");
+    expect(cleanup?.photo_paths).toHaveLength(14);
+    expect(JSON.stringify(cleanup)).not.toContain("base64");
+  });
+
+  it("rejects a disabled photo report before upload or insert", async () => {
+    process.env.PHOTO_REPORT_ENABLED = "false";
+    const { POST } = await loadRoute();
+    const response = await POST(feedbackRequest({
+      category: "photo_report",
+      fields: {},
+      photo_urls: [VALID_JPEG],
+    }));
+
+    expect(response.status).toBe(503);
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+    expect(mockSupabaseInsert).not.toHaveBeenCalled();
+  });
+
+  it("removes all new report files after a database insert failure", async () => {
+    mockInsertResolves({ error: { code: "23514" } });
+    const { POST } = await loadRoute();
+    const response = await POST(feedbackRequest({
+      category: "photo_report",
+      fields: {},
+      photo_urls: Array.from({ length: 15 }, () => VALID_JPEG),
+    }));
+
+    expect(response.status).toBe(500);
+    expect(mockStorageRemove).toHaveBeenCalledTimes(1);
+    expect(mockStorageRemove.mock.calls[0][0]).toHaveLength(15);
+  });
+
+  it("removes newly uploaded report files before acknowledging an idempotent duplicate", async () => {
+    mockInsertResolves({ error: { code: "23505" } });
+    mockSupabaseSelect.mockImplementation(() => ({
+      eq: () => ({
+        maybeSingle: async () => ({ data: { id: "existing-feedback", user_id: "seller-uid-123" }, error: null }),
+      }),
+    }));
+    const { POST } = await loadRoute();
+    const response = await POST(feedbackRequest({
+      category: "photo_report",
+      fields: {},
+      client_submission_id: "4a187a5b-59c4-42b7-a36c-2f4161a15ea2",
+      photo_urls: Array.from({ length: 15 }, () => VALID_JPEG),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockStorageRemove).toHaveBeenCalledTimes(1);
+    expect(mockStorageRemove.mock.calls[0][0]).toHaveLength(15);
+  });
+
+  it("removes newly uploaded report files before rejecting another user's duplicate", async () => {
+    mockInsertResolves({ error: { code: "23505" } });
+    mockSupabaseSelect.mockImplementation(() => ({
+      eq: () => ({
+        maybeSingle: async () => ({ data: { id: "existing-feedback", user_id: "another-user" }, error: null }),
+      }),
+    }));
+    const { POST } = await loadRoute();
+    const response = await POST(feedbackRequest({
+      category: "photo_report",
+      fields: {},
+      client_submission_id: "4a187a5b-59c4-42b7-a36c-2f4161a15ea2",
+      photo_urls: Array.from({ length: 15 }, () => VALID_JPEG),
+    }));
+
+    expect(response.status).toBe(409);
+    expect(mockStorageRemove).toHaveBeenCalledTimes(1);
+    expect(mockStorageRemove.mock.calls[0][0]).toHaveLength(15);
+  });
+
+  it("rejects a declared JPEG without a JPEG signature before upload", async () => {
+    const { POST } = await loadRoute();
+    const response = await POST(feedbackRequest({
+      category: "photo_report",
+      fields: {},
+      photo_urls: ["data:image/jpeg;base64,YWFhYQ=="],
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+    expect(mockSupabaseInsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects SVG bytes falsely declared as PNG before upload", async () => {
+    const { POST } = await loadRoute();
+    const response = await POST(feedbackRequest({
+      category: "photo_report",
+      fields: {},
+      photo_urls: ["data:image/png;base64,PHN2Zz48L3N2Zz4="],
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mockStorageUpload).not.toHaveBeenCalled();
   });
 
   it("drops a non-data-URL photo instead of storing it", async () => {
