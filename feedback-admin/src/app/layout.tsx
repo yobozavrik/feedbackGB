@@ -4,6 +4,7 @@ import Script from "next/script";
 import { Suspense } from "react";
 import "@/styles/globals.css";
 import { PostHogProvider } from "@/components/PostHogProvider";
+import { ClientErrorReporter } from "@/components/ClientErrorReporter";
 
 const inter = Inter({
   subsets: ["latin", "cyrillic", "cyrillic-ext"],
@@ -60,7 +61,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-dvh font-sans antialiased">
         <Suspense fallback={null}>
-          <PostHogProvider>{children}</PostHogProvider>
+          <PostHogProvider>
+            <ClientErrorReporter />
+            {children}
+          </PostHogProvider>
         </Suspense>
       </body>
     </html>
