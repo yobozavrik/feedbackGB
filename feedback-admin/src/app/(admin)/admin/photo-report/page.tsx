@@ -1,6 +1,7 @@
 import { getServerSupabase } from "@/lib/supabase";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
-import { PhotoReportClient, type PhotoReportEntry, type PhotoReportStore } from "./photo-report-client";
+import type { PhotoReportEntry, PhotoReportStore } from "@/lib/photoReport";
+import { PhotoReportClient } from "./photo-report-client";
 
 export const dynamic = "force-dynamic";
 

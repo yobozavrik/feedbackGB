@@ -4,51 +4,16 @@ import { useMemo, useState } from "react";
 import { Alert, Card, DatePicker, Empty, Statistic, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
-
-export interface PhotoReportStore {
-  id: number;
-  name: string;
-  is_active: boolean;
-}
-
-export interface PhotoReportEntry {
-  created_at: string;
-  store_id: number | null;
-  store_name: string | null;
-  user_full_name: string | null;
-  photo_url: string | null;
-  photo_urls: unknown;
-}
-
-interface DailyStoreRow {
-  key: number;
-  store: string;
-  submitted: boolean;
-  reports: number;
-  photos: number;
-  sellers: string[];
-  lastSubmittedAt: string | null;
-}
-
-function kyivDate(value: string): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Kyiv",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(value));
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value;
-  return `${get("year")}-${get("month")}-${get("day")}`;
-}
+import {
+  buildDailyPhotoReport,
+  kyivDay,
+  type DailyPhotoReportRow,
+  type PhotoReportEntry,
+  type PhotoReportStore,
+} from "@/lib/photoReport";
 
 function todayKyiv(): string {
-  return kyivDate(new Date().toISOString());
-}
-
-function photoCount(entry: PhotoReportEntry): number {
-  if (Array.isArray(entry.photo_urls)) return entry.photo_urls.length;
-  return entry.photo_url ? 1 : 0;
+  return kyivDay(new Date().toISOString());
 }
 
 export function PhotoReportClient({
@@ -61,39 +26,14 @@ export function PhotoReportClient({
   error: string | null;
 }) {
   const [selectedDate, setSelectedDate] = useState(todayKyiv());
-  const rows = useMemo<DailyStoreRow[]>(() => {
-    const byStore = new Map<number, DailyStoreRow>();
-    for (const store of stores) {
-      byStore.set(store.id, {
-        key: store.id,
-        store: store.name,
-        submitted: false,
-        reports: 0,
-        photos: 0,
-        sellers: [],
-        lastSubmittedAt: null,
-      });
-    }
-    for (const entry of entries) {
-      if (entry.store_id == null || kyivDate(entry.created_at) !== selectedDate) continue;
-      const row = byStore.get(entry.store_id);
-      if (!row) continue;
-      row.submitted = true;
-      row.reports += 1;
-      row.photos += photoCount(entry);
-      if (entry.user_full_name && !row.sellers.includes(entry.user_full_name)) {
-        row.sellers.push(entry.user_full_name);
-      }
-      if (!row.lastSubmittedAt || entry.created_at > row.lastSubmittedAt) {
-        row.lastSubmittedAt = entry.created_at;
-      }
-    }
-    return Array.from(byStore.values()).sort((a, b) => Number(a.submitted) - Number(b.submitted) || a.store.localeCompare(b.store, "uk"));
-  }, [entries, selectedDate, stores]);
+  const rows = useMemo(
+    () => buildDailyPhotoReport(stores, entries, selectedDate),
+    [entries, selectedDate, stores],
+  );
 
   const sentStores = rows.filter((row) => row.submitted).length;
   const totalPhotos = rows.reduce((sum, row) => sum + row.photos, 0);
-  const columns: ColumnsType<DailyStoreRow> = [
+  const columns: ColumnsType<DailyPhotoReportRow> = [
     { title: "Магазин", dataIndex: "store", key: "store", sorter: (a, b) => a.store.localeCompare(b.store, "uk") },
     {
       title: "Статус",
