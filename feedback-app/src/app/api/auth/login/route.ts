@@ -9,6 +9,7 @@ import {
 import { clientIp, rateLimit } from "@/lib/rateLimit";
 import { logAudit, uaFromRequest } from "@/lib/audit";
 import { geoipToAuditMeta, geoipToUserUpdate, lookupIp } from "@/lib/geoip";
+import { pinLookup } from "../../../../../../shared/lib/pinLookup";
 
 export const runtime = "nodejs";
 const APP_SURFACE = "web_app";
@@ -21,23 +22,45 @@ interface UserRow {
   display_label: string | null;
 }
 
-// Rate-limit: 10 attempts / 10 minutes / IP.
-//
-// Per-user lockout still lives in the DB (`users.locked_until`, populated
-// after 10 wrong attempts via the legacy verify_pin path). The new
-// PIN-only login flow can't increment failed_attempts on a wrong PIN
-// because the wrong PIN doesn't identify a user — IP rate limit is the
-// primary defence here.
 const IP_WINDOW_MS = 10 * 60_000;
-const IP_LIMIT = 10;
+const IP_FAILURE_LIMIT = 10;
+const GLOBAL_WINDOW_MS = 60_000;
+const GLOBAL_FAILURE_LIMIT = 50;
+
+async function failedLogin(req: Request, ip: string): Promise<NextResponse> {
+  try {
+    const [ipLimit, globalLimit] = await Promise.all([
+      rateLimit(`login:failure:ip:${ip}`, IP_FAILURE_LIMIT, IP_WINDOW_MS),
+      rateLimit("login:failure:global", GLOBAL_FAILURE_LIMIT, GLOBAL_WINDOW_MS),
+    ]);
+    if (!ipLimit.ok || !globalLimit.ok) {
+      await logAudit("auth.login.failure", {
+        targetType: "session", ip, userAgent: uaFromRequest(req),
+        meta: { app_surface: APP_SURFACE, reason: !globalLimit.ok ? "global_throttle" : "ip_throttle" },
+      });
+      const retryMs = !globalLimit.ok ? globalLimit.reset_ms : ipLimit.reset_ms;
+      return NextResponse.json({ error: "Забагато спроб, спробуй за декілька хвилин." }, { status: 429, headers: { "Retry-After": String(Math.ceil(retryMs / 1000)) } });
+    }
+    const failures = IP_FAILURE_LIMIT - ipLimit.remaining;
+    if (failures > 5) {
+      await new Promise<void>((resolve) => setTimeout(resolve, Math.min(2_000, 100 * 2 ** (failures - 6))));
+    }
+    await logAudit("auth.login.failure", {
+      targetType: "session", ip, userAgent: uaFromRequest(req),
+      meta: { app_surface: APP_SURFACE, ip_failures: failures, ip_attempts_remaining: ipLimit.remaining },
+    });
+    return NextResponse.json({ error: "Невірний PIN" }, { status: 401 });
+  } catch (err) {
+    console.error("login failure protection unavailable", { request_id: req.headers.get("x-request-id"), error: err instanceof Error ? err.message : String(err) });
+    return NextResponse.json({ error: "Послуга тимчасово недоступна. Будь ласка, спробуйте пізніше." }, { status: 503 });
+  }
+}
 
 /**
  * POST /api/auth/login   { pin: "123456" }
  *
- * Accepts only a 6-digit PIN. Calls `feedbackgb.verify_pin_global(pin)`,
- * which returns the matching active user row (or null if no/multiple
- * matches). On success sets an httpOnly session cookie and returns the
- * user payload.
+ * Accepts only a 6-digit PIN. It HMACs the PIN locally, then calls the
+ * indexed verifier. The bcrypt hash remains the final credential check.
  *
  * Backwards-compat note: the request body intentionally tolerates a
  * stale `user_id` field (older clients still send it). The field is
@@ -45,29 +68,6 @@ const IP_LIMIT = 10;
  */
 export async function POST(req: Request) {
   const ip = clientIp(req);
-
-  let ipLimit;
-  try {
-    ipLimit = await rateLimit(`login:ip:${ip}`, IP_LIMIT, IP_WINDOW_MS);
-  } catch (err) {
-    console.error("Rate limiting failed on login route:", err);
-    return NextResponse.json(
-      { error: "Послуга тимчасово недоступна. Будь ласка, спробуйте пізніше." },
-      { status: 503 }
-    );
-  }
-
-  if (!ipLimit.ok) {
-    return NextResponse.json(
-      { error: "Забагато спроб, спробуй за декілька хвилин." },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(Math.ceil(ipLimit.reset_ms / 1000)),
-        },
-      },
-    );
-  }
 
   let body: { pin?: string };
   try {
@@ -89,36 +89,45 @@ export async function POST(req: Request) {
     );
   }
 
-  const { data, error } = await supabase.rpc("verify_pin_global", {
+  let lookup: string;
+  try {
+    lookup = pinLookup(pin);
+  } catch {
+    console.error("PIN lookup is not configured");
+    return NextResponse.json({ error: "Помилка конфігурації сервера" }, { status: 503 });
+  }
+
+  let { data, error } = await supabase.rpc("verify_pin_lookup", {
+    p_pin_lookup_hex: lookup,
     p_pin: pin,
   });
+  // The fallback exists only for the explicitly enabled migration window.
+  // Disable it after all active PINs have a lookup value: invalid PINs must
+  // never be able to trigger the legacy full-table bcrypt scan afterwards.
+  if (!data && !error && process.env.PIN_LOOKUP_LEGACY_FALLBACK === "true") {
+    const legacy = await supabase.rpc("verify_pin_global", { p_pin: pin });
+    data = legacy.data;
+    error = legacy.error;
+    if (data) {
+      const backfill = await supabase.rpc("backfill_pin_lookup", {
+        p_user_id: (data as UserRow).id,
+        p_pin: pin,
+        p_pin_lookup_hex: lookup,
+      });
+      if (backfill.error || !backfill.data) {
+        console.error("PIN lookup backfill failed", { code: backfill.error?.code });
+        return NextResponse.json({ error: "Помилка сервера" }, { status: 500 });
+      }
+    }
+  }
   if (error) {
     // Never echo DB error text to the client.
-    console.error("verify_pin_global rpc error", { code: error.code });
+    console.error("PIN verifier rpc error", { code: error.code });
     return NextResponse.json({ error: "Помилка сервера" }, { status: 500 });
   }
   const user = (data ?? null) as UserRow | null;
   if (!user || !user.id) {
-    // Failed-login branch intentionally does NOT call lookupIp:
-    //   1. Wastes ipinfo quota during credential-stuffing attacks
-    //      (high-cardinality source IPs blow through the cache).
-    //   2. Adds avoidable latency to the 401 response path.
-    //   3. The audit_log already records `ip` per event, so geo can
-    //      always be back-filled later via a CRON join against
-    //      `users.last_login_*` or a re-lookup if needed.
-    //
-    // We can't tell which user the wrong PIN belonged to — log the
-    // attempt anonymously with the IP and remaining bucket count.
-    await logAudit("auth.login.failure", {
-      targetType: "session",
-      ip,
-      userAgent: uaFromRequest(req),
-      meta: {
-        app_surface: APP_SURFACE,
-        ip_attempts_remaining: ipLimit.remaining,
-      },
-    });
-    return NextResponse.json({ error: "Невірний PIN" }, { status: 401 });
+    return failedLogin(req, ip);
   }
 
   const displayName = user.display_label ?? user.full_name;

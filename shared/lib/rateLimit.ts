@@ -98,17 +98,19 @@ export async function rateLimit(
 }
 
 /**
- * Extract the best-effort client IP from a Next.js Request.
- * Trusts the standard Vercel / proxy headers; falls back to "unknown".
+ * Extract the client IP from a platform-controlled header when present. For a
+ * generic proxy chain the last X-Forwarded-For hop is the one appended by the
+ * trusted proxy; never use the attacker-controlled first hop.
  */
 export function clientIp(req: Request): string {
   const h = req.headers;
+  const vercel = h.get("x-vercel-forwarded-for");
+  if (vercel) return vercel.trim();
+  const cloudflare = h.get("cf-connecting-ip");
+  if (cloudflare) return cloudflare.trim();
+  const real = h.get("x-real-ip");
+  if (real) return real.trim();
   const xfwd = h.get("x-forwarded-for");
-  if (xfwd) return xfwd.split(",")[0]!.trim();
-  return (
-    h.get("x-real-ip") ||
-    h.get("x-vercel-forwarded-for") ||
-    h.get("cf-connecting-ip") ||
-    "unknown"
-  );
+  if (xfwd) return xfwd.split(",").at(-1)!.trim();
+  return "unknown";
 }

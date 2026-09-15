@@ -8,7 +8,6 @@ import {
   buildDailyPhotoReport,
   kyivDay,
   type DailyPhotoReportRow,
-  type PhotoReportEntry,
   type PhotoReportStore,
 } from "@/lib/photoReport";
 
@@ -25,11 +24,9 @@ interface GalleryReport {
 
 export function PhotoReportClient({
   stores,
-  entries,
   error,
 }: {
   stores: PhotoReportStore[];
-  entries: PhotoReportEntry[];
   error: string | null;
 }) {
   const [selectedDate, setSelectedDate] = useState(todayKyiv());
@@ -40,10 +37,7 @@ export function PhotoReportClient({
   const [galleryReports, setGalleryReports] = useState<GalleryReport[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryError, setGalleryError] = useState<string | null>(null);
-  const initialRows = useMemo(
-    () => buildDailyPhotoReport(stores, entries, selectedDate),
-    [entries, selectedDate, stores],
-  );
+  const initialRows = useMemo(() => buildDailyPhotoReport(stores, [], selectedDate), [selectedDate, stores]);
   const rows = remoteRows ?? initialRows;
 
   useEffect(() => {
@@ -139,6 +133,7 @@ export function PhotoReportClient({
         width={980}
         destroyOnClose
       >
+        {galleryStore ? <div className="mb-3 flex justify-end"><Button onClick={() => void openGallery(galleryStore)} loading={galleryLoading}>Оновити посилання на фото</Button></div> : null}
         {galleryLoading ? <div className="py-12 text-center"><Spin /></div> : null}
         {galleryError ? <Alert type="error" showIcon message="Не вдалося відкрити фото" description={galleryError} /> : null}
         {!galleryLoading && !galleryError && !galleryReports.length ? <Empty description="У звітах немає доступних фото" /> : null}

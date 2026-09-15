@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase";
 import { requireAdminSession } from "@/lib/adminAuth";
 import { logAudit } from "@/lib/audit";
+import { pinLookup } from "../../../../../../shared/lib/pinLookup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -146,6 +147,15 @@ export async function POST(req: Request) {
       );
     }
   }
+  let pinLookupHex: string | null = null;
+  if (pin) {
+    try {
+      pinLookupHex = pinLookup(pin);
+    } catch {
+      console.error("PIN lookup is not configured");
+      return NextResponse.json({ error: "Помилка конфігурації сервера" }, { status: 503 });
+    }
+  }
 
   if (!["seller", "admin", "super_admin"].includes(role)) {
     return NextResponse.json({ error: "Недійсна роль" }, { status: 400 });
@@ -214,6 +224,7 @@ export async function POST(req: Request) {
     const { error: pinErr } = await supabase.rpc("set_user_pin", {
       p_user_id: newUser.id,
       p_pin: pin,
+      p_pin_lookup_hex: pinLookupHex,
     });
 
     if (pinErr) {

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * Goal of this suite: catch regressions in the PIN-only auth contract:
  *   1. Body must accept `{pin}` only — no `user_id` required.
  *   2. PIN must be exactly 6 digits.
- *   3. On verify_pin_global success the route mints a session cookie and
+ *   3. On indexed PIN lookup success the route mints a session cookie and
  *      mirrors the role to the response body.
  *   4. On null/malformed user the route returns 401 and writes an
  *      anonymous audit row (no targetUserId).
@@ -67,7 +67,7 @@ function fakeSupabase(rpcResult: SupabaseUserRow | null) {
   return {
     client: {
       rpc: vi.fn(async (fn: string, params: unknown) => {
-        if (fn === "verify_pin_global") {
+        if (fn === "verify_pin_lookup") {
           return { data: rpcResult, error: null };
         }
         return {
@@ -119,6 +119,8 @@ describe("POST /api/auth/login", () => {
   beforeEach(async () => {
     vi.resetModules();
     process.env.SESSION_SECRET = "test-secret-test-secret-test-secret";
+    process.env.PIN_PEPPER = "test-pepper-test-pepper-test-pepper-123456";
+    process.env.PIN_LOOKUP_LEGACY_FALLBACK = "false";
     const audit = await import("@/lib/audit");
     vi.mocked(audit.logAudit).mockClear();
   });
@@ -177,7 +179,8 @@ describe("POST /api/auth/login", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(fake.client.rpc).toHaveBeenCalledWith("verify_pin_global", {
+    expect(fake.client.rpc).toHaveBeenCalledWith("verify_pin_lookup", {
+      p_pin_lookup_hex: expect.stringMatching(/^[a-f0-9]{64}$/),
       p_pin: "654321",
     });
     const body = (await res.json()) as {
