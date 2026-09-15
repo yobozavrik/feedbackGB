@@ -15,6 +15,8 @@ export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024; // enough for several compressed photos
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB decoded
+const PHOTO_REPORT_MAX_PHOTO_BYTES = 280 * 1024;
+const PHOTO_UPLOAD_CONCURRENCY = 3;
 const ALLOWED_PHOTO_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 /**
@@ -97,12 +99,33 @@ export async function POST(req: Request) {
   let photoUrl: string | null = null;
   const photoUrls: string[] = [];
   if (supabase && rawPhotos.length > 0) {
-    for (const rawPhoto of rawPhotos) {
-      if (typeof rawPhoto !== "string") continue;
-      const safePath = await sanitizeAndUploadPhoto(supabase, rawPhoto);
+    const uploaded = await mapWithConcurrency(
+      rawPhotos,
+      PHOTO_UPLOAD_CONCURRENCY,
+      async (rawPhoto) => {
+        if (typeof rawPhoto !== "string") return null;
+        return sanitizeAndUploadPhoto(
+          supabase,
+          rawPhoto,
+          category.id === "photo_report" ? PHOTO_REPORT_MAX_PHOTO_BYTES : MAX_PHOTO_BYTES,
+        );
+      },
+    );
+    for (const safePath of uploaded) {
       if (safePath) photoUrls.push(safePath);
     }
     photoUrl = photoUrls[0] ?? null;
+  }
+
+  // A report is useful only if every selected photo reached private storage.
+  // Do not create a misleading "complete" report with a partial photo set.
+  if (category.id === "photo_report" && photoUrls.length !== rawPhotos.length) {
+    if (photoUrls.length > 0) {
+      await supabase?.storage
+        .from("feedback-photos")
+        .remove(photoUrls.map((url) => url.slice(3)));
+    }
+    return NextResponse.json({ error: "Не вдалося зберегти всі фото. Спробуй ще раз." }, { status: 503 });
   }
 
   let storeName: string | null = null;
@@ -333,6 +356,7 @@ function csvCell(v: unknown): string {
 async function sanitizeAndUploadPhoto(
   supabase: NonNullable<ReturnType<typeof getServerSupabase>>,
   raw: string,
+  maxPhotoBytes: number,
 ): Promise<string | null> {
   // Only accept base64 data URLs for whitelisted image mimes.
   const match = /^data:(image\/[a-z0-9+.-]+);base64,([A-Za-z0-9+/=]+)$/i.exec(raw);
@@ -346,7 +370,7 @@ async function sanitizeAndUploadPhoto(
   } catch {
     return null;
   }
-  if (buf.length === 0 || buf.length > MAX_PHOTO_BYTES) return null;
+  if (buf.length === 0 || buf.length > maxPhotoBytes) return null;
 
   const ext =
     mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : "webp";
@@ -363,4 +387,21 @@ async function sanitizeAndUploadPhoto(
   // Return the storage path (not a public URL). The admin UI resolves this
   // to a short-lived signed URL at render time (see src/app/admin/page.tsx).
   return `sb:${path}`;
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  worker: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (nextIndex < values.length) {
+      const index = nextIndex++;
+      results[index] = await worker(values[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }

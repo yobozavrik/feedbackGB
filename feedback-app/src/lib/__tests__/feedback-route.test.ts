@@ -405,6 +405,28 @@ describe("POST /api/feedback — payload validation", () => {
     );
   });
 
+  it("allows 15 photos only for a photo report", async () => {
+    const { validateFeedbackPayload } = await import("@/lib/feedbackValidation");
+    const result = validateFeedbackPayload({
+      category: "photo_report",
+      fields: {},
+      photo_urls: Array.from({ length: 15 }, () => "data:image/jpeg;base64,aaaa"),
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("requires at least one photo and rejects a sixteenth photo report image", async () => {
+    const { validateFeedbackPayload } = await import("@/lib/feedbackValidation");
+    const empty = validateFeedbackPayload({ category: "photo_report", fields: {} });
+    expect(empty).toMatchObject({ ok: false, error: "Photo report requires at least one photo" });
+    const overflow = validateFeedbackPayload({
+      category: "photo_report",
+      fields: {},
+      photo_urls: Array.from({ length: 16 }, () => "data:image/jpeg;base64,aaaa"),
+    });
+    expect(overflow).toMatchObject({ ok: false, error: "Too many photos: max 15" });
+  });
+
   it("drops a non-data-URL photo instead of storing it", async () => {
     mockInsertResolves({ data: { id: "feedback-id" }, error: null });
     const { POST } = await loadRoute();

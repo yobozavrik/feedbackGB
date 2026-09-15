@@ -19,6 +19,7 @@ import { track } from "@/lib/analytics";
 export function CategoryGrid() {
   const techIssue = getCategory("tech_issue");
   const consumables = getCategory("consumables_request");
+  const photoReport = getCategory("photo_report");
   const secondary = getSecondaryCategories();
 
   return (
@@ -53,12 +54,15 @@ export function CategoryGrid() {
       {/* 3. Consumables request */}
       {consumables && <PriorityCard c={consumables} idx={2} />}
 
-      {/* 4. HR questions flow button */}
+      {/* 4. Daily photo report */}
+      {photoReport && <PriorityCard c={photoReport} idx={3} />}
+
+      {/* 5. HR questions flow button */}
       <Link
         href="/hr-menu"
         onClick={() => track("home_category_open", { category: "hr_menu", section: "priority" })}
         className="group relative flex h-[118px] animate-fade-up items-center overflow-hidden rounded-xl border border-ink-300/20 bg-elev p-4 shadow-soft transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] active:bg-elev2"
-        style={{ animationDelay: "180ms" }}
+        style={{ animationDelay: "240ms" }}
       >
         <div className="relative flex w-full items-center gap-4">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-[30px] leading-none text-brand-500">
@@ -78,9 +82,9 @@ export function CategoryGrid() {
         </div>
       </Link>
 
-      {/* 5. Secondary categories directly rendered in a 2-column grid */}
+      {/* 6. Secondary categories directly rendered in a 2-column grid */}
       {secondary.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 pt-1 animate-fade-up" style={{ animationDelay: "240ms" }}>
+        <div className="grid grid-cols-2 gap-2 pt-1 animate-fade-up" style={{ animationDelay: "300ms" }}>
           {secondary.map((c) => (
             <SecondaryCard key={c.id} c={c} />
           ))}

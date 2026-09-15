@@ -71,6 +71,13 @@ export function FeedbackForm({ category }: Props) {
     const clientSubmissionId = window.crypto.randomUUID();
     const clientCreatedAt = new Date().toISOString();
 
+    if (category.id === "photo_report" && photos.length === 0) {
+      setError("Додай хоча б одне фото для звіту");
+      setSubmitting(false);
+      webApp?.HapticFeedback?.notificationOccurred("error");
+      return;
+    }
+
     const payload = {
       category: category.id,
       store_id: storeIdRaw ? Number(storeIdRaw) : null,
@@ -248,7 +255,16 @@ export function FeedbackForm({ category }: Props) {
 
       {category.fields.map((f) => {
         if (f.kind === "photo") {
-          return <PhotoInput key={f.id} label={f.label} onChange={setPhotos} />;
+          return (
+            <PhotoInput
+              key={f.id}
+              label={f.label}
+              maxPhotos={category.id === "photo_report" ? 15 : undefined}
+              maxOutputBytes={category.id === "photo_report" ? 280 * 1024 : undefined}
+              maxDimension={category.id === "photo_report" ? 1280 : undefined}
+              onChange={setPhotos}
+            />
+          );
         }
         if (f.kind === "textarea") {
           return (

@@ -15,7 +15,8 @@ export type CategoryId =
   | "tech_issue"
   | "customer_voice"
   | "consumables_request"
-  | "hr_question";
+  | "hr_question"
+  | "photo_report";
 
 export type FieldKind = "text" | "textarea" | "number" | "photo" | "date";
 
@@ -48,7 +49,8 @@ export interface Category {
     | "spotted"
     | "tech"
     | "voice"
-    | "hr";
+    | "hr"
+    | "photo";
   /**
    * v1 priority flow: this category captures a structured product
    * reference (product_id from the POS catalog). The UI renders a
@@ -329,6 +331,21 @@ export const CATEGORIES: Category[] = [
         placeholder: "Коли потрібно привезти, особливі побажання",
         kind: "textarea",
       },
+    ],
+  },
+  {
+    id: "photo_report",
+    emoji: "📸",
+    title: "Фото звіт",
+    short: "Надішли до 15 фото магазину",
+    description:
+      "Зроби фото магазину та надішли одним звітом. Можна додати від 1 до 15 фото.",
+    gradient: "bg-cat-idea/40",
+    accent: "text-brand-600",
+    tint: "photo",
+    priority: true,
+    fields: [
+      { id: "photo", label: "Фото магазину", kind: "photo", required: true },
     ],
   },
   {

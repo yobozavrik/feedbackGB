@@ -8,7 +8,8 @@ import type { FeedbackPayload } from "@/lib/types";
 // contract is unchanged.
 
 const VALID_CATEGORY_IDS = new Set<string>(CATEGORIES.map((c) => c.id));
-const MAX_PHOTOS = 5;
+const DEFAULT_MAX_PHOTOS = 5;
+const PHOTO_REPORT_MAX_PHOTOS = 15;
 const MAX_FIELD_LEN = 4000;
 const MAX_FIELDS = 40;
 const MAX_STORE_LABEL_LEN = 80;
@@ -287,12 +288,17 @@ export function validateFeedbackPayload(
     : typeof payload.photo_url === "string"
       ? [payload.photo_url]
       : [];
-  if (rawPhotos.length > MAX_PHOTOS) {
+  const maxPhotos =
+    category.id === "photo_report" ? PHOTO_REPORT_MAX_PHOTOS : DEFAULT_MAX_PHOTOS;
+  if (rawPhotos.length > maxPhotos) {
     return {
       ok: false,
-      error: `Too many photos: max ${MAX_PHOTOS}`,
+      error: `Too many photos: max ${maxPhotos}`,
       status: 400,
     };
+  }
+  if (category.id === "photo_report" && rawPhotos.length === 0) {
+    return { ok: false, error: "Photo report requires at least one photo", status: 400 };
   }
 
   return {

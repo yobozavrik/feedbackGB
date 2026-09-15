@@ -2,13 +2,17 @@
 
 import { useRef, useState } from "react";
 
-const MAX_DIMENSION = 1600;
-const MAX_BYTES = 900 * 1024; // keep multi-photo JSON payloads small
+const DEFAULT_MAX_DIMENSION = 1600;
+const DEFAULT_MAX_OUTPUT_BYTES = 650 * 1024;
 const DEFAULT_MAX_PHOTOS = 5;
+const COMPRESS_CONCURRENCY = 2;
 
 interface Props {
   label: string;
   maxPhotos?: number;
+  /** Decoded JPEG ceiling; photo reports use a tighter ceiling for 15 images. */
+  maxOutputBytes?: number;
+  maxDimension?: number;
   onChange: (dataUrls: string[]) => void;
 }
 
@@ -20,6 +24,8 @@ interface Props {
 export function PhotoInput({
   label,
   maxPhotos = DEFAULT_MAX_PHOTOS,
+  maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
+  maxDimension = DEFAULT_MAX_DIMENSION,
   onChange,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -37,8 +43,12 @@ export function PhotoInput({
       if (selected.length < files.length) {
         setError(`Можна додати максимум ${maxPhotos} фото`);
       }
-      const compressed = await Promise.all(
-        selected.map((file) => compressImage(file)),
+      // iOS WebViews are particularly sensitive to decoding many full-size
+      // camera images at once. Two concurrent canvases keep memory bounded.
+      const compressed = await mapWithConcurrency(
+        selected,
+        COMPRESS_CONCURRENCY,
+        (file) => compressImage(file, maxOutputBytes, maxDimension),
       );
       const next = [...previews, ...compressed];
       setPreviews(next);
@@ -129,31 +139,67 @@ export function PhotoInput({
   );
 }
 
-async function compressImage(file: File): Promise<string> {
+async function compressImage(
+  file: File,
+  maxOutputBytes: number,
+  maxDimension: number,
+): Promise<string> {
   const dataUrl = await readAsDataUrl(file);
   const img = await loadImage(dataUrl);
 
   const ratio = Math.min(
     1,
-    MAX_DIMENSION / Math.max(img.naturalWidth, img.naturalHeight),
+    maxDimension / Math.max(img.naturalWidth, img.naturalHeight),
   );
-  const w = Math.round(img.naturalWidth * ratio);
-  const h = Math.round(img.naturalHeight * ratio);
+  let w = Math.max(1, Math.round(img.naturalWidth * ratio));
+  let h = Math.max(1, Math.round(img.naturalHeight * ratio));
 
   const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas not supported");
-  ctx.drawImage(img, 0, 0, w, h);
 
-  let quality = 0.82;
-  let out = canvas.toDataURL("image/jpeg", quality);
-  while (out.length > MAX_BYTES && quality > 0.35) {
-    quality -= 0.08;
-    out = canvas.toDataURL("image/jpeg", quality);
+  // First lower JPEG quality; then reduce dimensions if the camera image is
+  // still too large. This gives the 15-photo report a deterministic request
+  // budget instead of letting one modern phone exhaust the API body limit.
+  while (w >= 320 && h >= 320) {
+    canvas.width = w;
+    canvas.height = h;
+    ctx.drawImage(img, 0, 0, w, h);
+    for (let quality = 0.82; quality >= 0.34; quality -= 0.08) {
+      const out = canvas.toDataURL("image/jpeg", quality);
+      if (dataUrlByteLength(out) <= maxOutputBytes) return out;
+    }
+    w = Math.round(w * 0.75);
+    h = Math.round(h * 0.75);
   }
-  return out;
+  throw new Error("Фото не вдалося стиснути до безпечного розміру");
+}
+
+function dataUrlByteLength(dataUrl: string): number {
+  const comma = dataUrl.indexOf(",");
+  const base64Length = comma >= 0 ? dataUrl.length - comma - 1 : dataUrl.length;
+  const padding = dataUrl.endsWith("==") ? 2 : dataUrl.endsWith("=") ? 1 : 0;
+  return Math.floor((base64Length * 3) / 4) - padding;
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  worker: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  const runners = Array.from(
+    { length: Math.min(concurrency, values.length) },
+    async () => {
+      while (nextIndex < values.length) {
+        const index = nextIndex++;
+        results[index] = await worker(values[index]);
+      }
+    },
+  );
+  await Promise.all(runners);
+  return results;
 }
 
 function readAsDataUrl(file: File): Promise<string> {
