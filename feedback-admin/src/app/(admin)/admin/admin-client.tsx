@@ -352,7 +352,7 @@ export function AdminClient({
             ? FEEDBACK_STATUS_META[row.status]
             : { text: row.status, color: "default" };
           return (
-            <Tag color={meta.color} bordered={false}>
+            <Tag color={meta.color} bordered={false} className="admin-status-dot">
               {meta.text}
             </Tag>
           );

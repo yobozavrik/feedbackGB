@@ -217,7 +217,7 @@ export function FeedDrawer({
             </span>
             {row.category_title ?? category?.title ?? row.category}
           </Tag>
-          <Tag color={meta.color} bordered={false}>
+          <Tag color={meta.color} bordered={false} className="admin-status-dot">
             {meta.text}
           </Tag>
         </Space>

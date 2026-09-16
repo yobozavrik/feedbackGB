@@ -132,6 +132,10 @@ export function DashboardKPI({ rows }: Props) {
     };
   }, [rows]);
 
+  // D3 — the trend line under each KPI is now an arrow+percent badge
+  // (colored by whether the direction is good or bad for that metric,
+  // not by up/down alone — see `invertColors` for "Дефекти") plus a
+  // muted note, instead of one plain colored text line.
   const trendNode = (
     d: { pct: number; direction: "up" | "down" | "flat" },
     invertColors = false,
@@ -141,12 +145,14 @@ export function DashboardKPI({ rows }: Props) {
     }
     const goodIsUp = !invertColors;
     const isGood = d.direction === "up" ? goodIsUp : !goodIsUp;
-    const color = isGood ? token.colorSuccess : token.colorError;
     return (
-      <Text style={{ color, fontSize: 12, fontWeight: 500 }}>
-        {d.direction === "up" ? <ArrowUpOutlined /> : <ArrowDownOutlined />}{" "}
-        {Math.abs(d.pct)}% vs минулий тиждень
-      </Text>
+      <>
+        <span className={`admin-delta ${isGood ? "admin-delta--good" : "admin-delta--bad"}`}>
+          {d.direction === "up" ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+          {Math.abs(d.pct)}%
+        </span>
+        <span className="admin-kpi-note">до минулого тижня</span>
+      </>
     );
   };
 
