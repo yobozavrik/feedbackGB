@@ -1,7 +1,6 @@
 import { getServerSupabase } from "@/lib/supabase";
-import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 import type { PhotoReportStore } from "@/lib/photoReport";
-import { PhotoReportClient } from "./photo-report-client";
+import { PhotoReportWorkspace } from "./photo-report-workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -24,14 +23,11 @@ async function fetchPhotoReportData(): Promise<{
   };
 }
 
-export default async function PhotoReportPage() {
+export default async function PhotoReportPage({
+  searchParams,
+}: {
+  searchParams: { tab?: string };
+}) {
   const { stores, error } = await fetchPhotoReportData();
-  return (
-    <AdminPageContainer
-      title="Фото звіт"
-      subTitle="Щоденний контроль надходження фото по активних магазинах."
-    >
-      <PhotoReportClient stores={stores} error={error} />
-    </AdminPageContainer>
-  );
+  return <PhotoReportWorkspace stores={stores} error={error} initialTab={searchParams.tab} />;
 }
