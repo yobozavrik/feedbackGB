@@ -6,29 +6,13 @@ import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 import { photoReportTabKey, type PhotoReportTabKey } from "@/lib/photoReportTabs";
 import type { PhotoReportStore } from "@/lib/photoReport";
 import { PhotoReportClient } from "./photo-report-client";
+import { StoreAnalyticsClient } from "./store-analytics-client";
 
 const tabs = [
   { key: "daily", label: "Контроль дня" },
   { key: "stores", label: "Магазини" },
   { key: "attendance", label: "Продавці та зміни" },
 ] as const;
-
-function StoresPlaceholder() {
-  return (
-    <Card>
-      <Empty
-        description="Аналітика за період ще не підключена"
-      />
-      <Alert
-        className="mt-4"
-        type="info"
-        showIcon
-        message="Тут з’являться динаміка магазину, календар контрольних вікон і перехід до галереї."
-        description="Зараз не показуємо умовні графіки: поточний API повертає лише один день, а історичний SQL-агрегат ще не реалізований."
-      />
-    </Card>
-  );
-}
 
 function AttendancePlaceholder() {
   return (
@@ -69,7 +53,7 @@ export function PhotoReportWorkspace({
       tabs={{ activeKey: activeTab, onChange: changeTab, items: [...tabs] }}
     >
       {activeTab === "daily" ? <PhotoReportClient stores={stores} error={error} /> : null}
-      {activeTab === "stores" ? <StoresPlaceholder /> : null}
+      {activeTab === "stores" ? <StoreAnalyticsClient stores={stores} /> : null}
       {activeTab === "attendance" ? <AttendancePlaceholder /> : null}
     </AdminPageContainer>
   );
