@@ -140,6 +140,21 @@ body:has(.admin-shell) {
   background: rgb(var(--elev)) !important;
   border-right: 1px solid rgb(var(--border));
   box-shadow: none;
+  /* M2 — the collapse/expand rail animation. */
+  transition: width var(--dur-slow) var(--ease),
+    min-width var(--dur-slow) var(--ease),
+    max-width var(--dur-slow) var(--ease),
+    flex-basis var(--dur-slow) var(--ease);
+}
+
+/* M2 — the menu label fades out instead of hard-disappearing as the rail
+   collapses (icons/tooltips still work throughout, see S6). */
+.admin-shell .ant-menu-title-content {
+  transition: opacity var(--dur-mid) var(--ease);
+}
+
+.admin-shell .ant-menu-inline-collapsed .ant-menu-title-content {
+  opacity: 0;
 }
 
 /* S6/S7 — 56px logo row, no divider; the mark + name/sub live in
@@ -693,13 +708,14 @@ body:has(.admin-shell) {
   border-collapse: separate;
 }
 
+/* M3 — a stable ring instead of scaling the cell up: scaling shifted the
+   grid and covered neighboring values on hover. */
 .admin-heatmap-card td {
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition: box-shadow var(--dur-fast) var(--ease);
 }
 
 .admin-heatmap-card td:hover {
-  transform: scale(1.08);
-  box-shadow: 0 0 0 2px rgb(var(--brand-50));
+  box-shadow: 0 0 0 1px rgb(var(--elev)), 0 0 0 3px rgb(var(--ink-900));
 }
 
 .admin-feed-table .ant-pro-card {
@@ -854,6 +870,22 @@ body:has(.admin-shell) {
 
 .admin-link-arrow:hover .anticon {
   transform: translateX(2px);
+}
+
+/* M1 — one transition (color/background/border/shadow, 150ms) across the
+   interactive surfaces that don't already get it from an antd component
+   token (Button/Segmented/Tabs/Select already animate via `motionDurationFast`
+   in theme.ts). Deliberately narrow to color-ish properties, not `all` —
+   animating layout properties here would cost real paint time on long
+   tables and lists. */
+.admin-shell .ant-menu-item,
+.admin-shell .ant-table-tbody > tr > td,
+.admin-shell .ant-pagination-item,
+.admin-shell .ant-tag,
+.admin-shell a {
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease);
 }
 
 .admin-funnel-page .ant-card {
