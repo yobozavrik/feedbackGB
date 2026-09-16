@@ -15,6 +15,7 @@ import {
   type StorePhotoReportPeriodSummary,
 } from "@/lib/photoReportAnalytics";
 import { kyivDay, type DailyPhotoReportRow, type PhotoReportStore } from "@/lib/photoReport";
+import { useAdminChartTheme } from "@/lib/admin/useAdminChartTheme";
 
 const DEFAULT_PERIOD_DAYS = 7;
 const MAX_PERIOD_DAYS = 31;
@@ -29,6 +30,7 @@ function defaultRange(days = DEFAULT_PERIOD_DAYS): [string, string] {
 }
 
 export function StoreAnalyticsClient({ stores }: { stores: PhotoReportStore[] }) {
+  const chartTheme = useAdminChartTheme();
   const [storeId, setStoreId] = useState<number | "all">("all");
   const [range, setRange] = useState<[string, string]>(() => defaultRange());
   const [presetDays, setPresetDays] = useState<number | undefined>(DEFAULT_PERIOD_DAYS);
@@ -97,9 +99,9 @@ export function StoreAnalyticsClient({ stores }: { stores: PhotoReportStore[] })
 
   return <div className="space-y-4">
     <Card><div className="flex flex-wrap items-end gap-4">
-      <div><div className="mb-1 text-sm text-gray-500">Період</div><Segmented value={presetDays} onChange={(value) => choosePreset(Number(value))} options={[{ label: "7 днів", value: 7 }, { label: "30 днів", value: 30 }]} /></div>
-      <div><div className="mb-1 text-sm text-gray-500">Свій період</div><DatePicker.RangePicker value={[dayjs(range[0]), dayjs(range[1])]} onChange={changeRange} allowClear={false} format="DD.MM.YYYY" /></div>
-      <div><div className="mb-1 text-sm text-gray-500">Магазин</div><Select className="min-w-64" value={storeId} onChange={setStoreId} options={[{ value: "all", label: "Усі магазини" }, ...stores.map((store) => ({ value: store.id, label: store.name }))]} disabled={!stores.length} /></div>
+      <div><div className="mb-1 text-sm text-ink-500">Період</div><Segmented value={presetDays} onChange={(value) => choosePreset(Number(value))} options={[{ label: "7 днів", value: 7 }, { label: "30 днів", value: 30 }]} /></div>
+      <div><div className="mb-1 text-sm text-ink-500">Свій період</div><DatePicker.RangePicker value={[dayjs(range[0]), dayjs(range[1])]} onChange={changeRange} allowClear={false} format="DD.MM.YYYY" /></div>
+      <div><div className="mb-1 text-sm text-ink-500">Магазин</div><Select className="min-w-64" value={storeId} onChange={setStoreId} options={[{ value: "all", label: "Усі магазини" }, ...stores.map((store) => ({ value: store.id, label: store.name }))]} disabled={!stores.length} /></div>
     </div></Card>
     {error ? <Alert type="error" showIcon message="Аналітика за період недоступна" description={error} /> : null}
     {loading ? <Card><div className="py-12 text-center"><Spin /></div></Card> : null}
@@ -112,8 +114,8 @@ export function StoreAnalyticsClient({ stores }: { stores: PhotoReportStore[] })
         <Card><Statistic title="Фото за період" value={totalPhotos} /></Card>
       </div>
       <Alert type="info" showIcon message={`Фактичні дані за ${dates.length} календарних днів`} description="Відсутній звіт у завантажений день показано як «Не надіслав». При помилці завантаження період не підміняється нулями." />
-      <Card title={storeId === "all" ? "Магазинів, що надіслали звіт за днями" : "Звіти магазину за днями"}><Column data={dailySubmissionCounts} xField="date" yField="submittedStores" {...(storeId === "all" ? { colorField: "level", scale: { color: { domain: ["red", "yellow", "green"], range: ["#ff4d4f", "#faad14", "#52c41a"] } }, legend: false } : { color: "#eb4d83", legend: false })} height={260} tooltip={{ title: "date", items: [{ field: "submittedStores", name: storeId === "all" ? "Магазинів надіслали звіт" : "Звітів" }] }} axis={{ y: { title: storeId === "all" ? "Магазинів" : "Звітів" } }} /></Card>
-      <Card title={storeId === "all" ? "Теплова карта надсилань усіх магазинів" : "Теплова карта надсилань магазину"}><Heatmap data={heatmap} mark="cell" xField="date" yField="store" colorField="level" scale={{ color: { domain: ["none", "one", "two_or_more"], range: ["#ff4d4f", "#faad14", "#52c41a"] } }} style={{ inset: 1 }} height={Math.min(Math.max(scopedStores.length * 24, 280), 720)} tooltip={{ title: "store", items: [{ field: "date", name: "Дата" }, { field: "reports", name: "Звітів" }, { field: "photos", name: "Фото" }, { field: "sellers_label", name: "Надіслали звіт" }] }} meta={{ date: { type: "cat" }, store: { type: "cat" } }} /></Card>
+      <Card title={storeId === "all" ? "Магазинів, що надіслали звіт за днями" : "Звіти магазину за днями"}><Column data={dailySubmissionCounts} xField="date" yField="submittedStores" {...(storeId === "all" ? { colorField: "level", scale: { color: { domain: ["red", "yellow", "green"], range: ["#ff4d4f", "#faad14", "#52c41a"] } }, legend: false } : { color: "#eb4d83", legend: false })} height={260} tooltip={{ title: "date", items: [{ field: "submittedStores", name: storeId === "all" ? "Магазинів надіслали звіт" : "Звітів" }] }} axis={{ y: { title: storeId === "all" ? "Магазинів" : "Звітів" } }} theme={chartTheme} /></Card>
+      <Card title={storeId === "all" ? "Теплова карта надсилань усіх магазинів" : "Теплова карта надсилань магазину"}><Heatmap data={heatmap} mark="cell" xField="date" yField="store" colorField="level" scale={{ color: { domain: ["none", "one", "two_or_more"], range: ["#ff4d4f", "#faad14", "#52c41a"] } }} style={{ inset: 1 }} height={Math.min(Math.max(scopedStores.length * 24, 280), 720)} tooltip={{ title: "store", items: [{ field: "date", name: "Дата" }, { field: "reports", name: "Звітів" }, { field: "photos", name: "Фото" }, { field: "sellers_label", name: "Надіслали звіт" }] }} meta={{ date: { type: "cat" }, store: { type: "cat" } }} theme={chartTheme} /></Card>
       <Card title="Підсумок по магазинах"><Table rowKey="key" columns={columns} dataSource={storeSummaries} pagination={{ pageSize: 26, hideOnSinglePage: true }} /></Card>
     </> : null}
     <Modal open={galleryTarget !== null} title={galleryTarget ? `${galleryTarget.storeName} — фото за ${galleryTarget.date}` : "Фото звіт"} onCancel={() => setGalleryTarget(null)} footer={null} width={980} destroyOnClose>
@@ -121,7 +123,7 @@ export function StoreAnalyticsClient({ stores }: { stores: PhotoReportStore[] })
       {galleryLoading ? <div className="py-12 text-center"><Spin /></div> : null}
       {galleryError ? <Alert type="error" showIcon message="Не вдалося відкрити фото" description={galleryError} /> : null}
       {!galleryLoading && !galleryError && !galleryReports.length ? <Empty description="У звітах немає доступних фото" /> : null}
-      {!galleryLoading && !galleryError ? <Image.PreviewGroup><div className="space-y-5">{galleryReports.map((report, reportIndex) => <section key={report.id} className="rounded-lg border border-gray-200 p-3"><div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600"><strong className="text-gray-800">Звіт {galleryReports.length - reportIndex}</strong><span>{report.seller} · {new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" }).format(new Date(report.created_at))} · {report.photos.length} фото</span></div><div className="flex flex-wrap gap-3">{report.photos.map((url, index) => <Image key={url} src={url} alt={`Фото звіту ${index + 1}`} width={148} height={111} style={{ objectFit: "cover" }} />)}</div></section>)}</div></Image.PreviewGroup> : null}
+      {!galleryLoading && !galleryError ? <Image.PreviewGroup><div className="space-y-5">{galleryReports.map((report, reportIndex) => <section key={report.id} className="rounded-lg border border-[rgb(var(--border-2))] p-3"><div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-ink-700"><strong className="text-ink-900">Звіт {galleryReports.length - reportIndex}</strong><span>{report.seller} · {new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" }).format(new Date(report.created_at))} · {report.photos.length} фото</span></div><div className="flex flex-wrap gap-3">{report.photos.map((url, index) => <Image key={url} src={url} alt={`Фото звіту ${index + 1}`} width={148} height={111} style={{ objectFit: "cover" }} />)}</div></section>)}</div></Image.PreviewGroup> : null}
     </Modal>
   </div>;
 }

@@ -4,6 +4,7 @@ import { Bar } from "@ant-design/plots";
 import { Card, Empty, theme as antdTheme } from "antd";
 import { MetaText } from "@/components/admin/ui/typography";
 import type { DropOffBar } from "@/lib/funnelCharts";
+import { useAdminChartTheme } from "@/lib/admin/useAdminChartTheme";
 
 export function DropOffBarCard({
   bars,
@@ -13,6 +14,7 @@ export function DropOffBarCard({
   loading: boolean;
 }) {
   const { token } = antdTheme.useToken();
+  const chartTheme = useAdminChartTheme();
 
   return (
     <Card
@@ -44,6 +46,7 @@ export function DropOffBarCard({
             return token.colorError;
           }}
           height={Math.max(220, bars.length * 48)}
+          theme={chartTheme}
         />
       )}
     </Card>

@@ -111,7 +111,7 @@ export function PhotoReportClient({
       <Card>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="mb-1 text-sm text-gray-500">Дата за київським часом</div>
+            <div className="mb-1 text-sm text-ink-500">Дата за київським часом</div>
             <DatePicker
               value={selectedDate ? dayjs(selectedDate) : null}
               onChange={(value: Dayjs | null) => setSelectedDate(value?.format("YYYY-MM-DD") ?? todayKyiv())}
@@ -141,9 +141,9 @@ export function PhotoReportClient({
           <Image.PreviewGroup>
             <div className="space-y-5">
               {galleryReports.map((report, reportIndex) => (
-                <section key={report.id} className="rounded-lg border border-gray-200 p-3">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600">
-                    <strong className="text-gray-800">Звіт {galleryReports.length - reportIndex}</strong>
+                <section key={report.id} className="rounded-lg border border-[rgb(var(--border-2))] p-3">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-ink-700">
+                    <strong className="text-ink-900">Звіт {galleryReports.length - reportIndex}</strong>
                     <span>{report.seller} · {new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" }).format(new Date(report.created_at))} · {report.photos.length} фото</span>
                   </div>
                   <div className="flex flex-wrap gap-3">

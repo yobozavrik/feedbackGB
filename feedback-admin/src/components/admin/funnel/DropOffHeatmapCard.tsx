@@ -8,6 +8,7 @@ import {
   formatPct,
   type HeatmapCell,
 } from "@/lib/funnelCharts";
+import { useAdminChartTheme } from "@/lib/admin/useAdminChartTheme";
 
 export function DropOffHeatmapCard({
   cells,
@@ -17,6 +18,7 @@ export function DropOffHeatmapCard({
   loading: boolean;
 }) {
   const { token } = antdTheme.useToken();
+  const chartTheme = useAdminChartTheme();
 
   return (
     <Card
@@ -56,6 +58,7 @@ export function DropOffHeatmapCard({
             day: { type: "cat", values: DAY_LABELS_UA },
           }}
           height={320}
+          theme={chartTheme}
         />
       )}
     </Card>

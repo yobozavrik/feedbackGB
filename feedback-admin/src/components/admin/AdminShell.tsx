@@ -21,6 +21,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
 import { NotificationsBell } from "@/components/admin/NotificationsBell";
+import { ThemeModeSwitch } from "@/components/admin/ThemeModeSwitch";
 import {
   adminBreadcrumbNames,
   adminPathToGroup,
@@ -222,9 +223,11 @@ export function AdminShell({ children, user }: AdminShellProps) {
           </Tooltip>
         );
       }}
-      // H2 (theme switch) is wired in stage 8, once AdminThemeProvider exists;
-      // for now the header only carries the H3 notifications bell.
-      actionsRender={() => [<NotificationsBell key="notifications" />]}
+      // H2/H3 — theme switch and notifications, in the shared header.
+      actionsRender={() => [
+        <ThemeModeSwitch key="theme" />,
+        <NotificationsBell key="notifications" />,
+      ]}
       // S8 — profile + sign-out replaces the old hard-coded "Supabase OK" line,
       // which never reflected a real health check.
       menuFooterRender={() => (

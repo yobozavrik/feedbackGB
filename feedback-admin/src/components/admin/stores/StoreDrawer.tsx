@@ -23,6 +23,7 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MetaText } from "@/components/admin/ui/typography";
+import { useAdminChartTheme } from "@/lib/admin/useAdminChartTheme";
 import {
   categoryTagColor,
   fmtRel,
@@ -44,6 +45,7 @@ interface Props {
 
 export function StoreDrawer({ summary, detail, onClose }: Props) {
   const { token } = antdTheme.useToken();
+  const chartTheme = useAdminChartTheme();
   // Ширина Drawer-а рахується після mount, щоб не було SSR vs CSR
   // hydration mismatch на вузьких viewports (375 тощо).
   const [drawerWidth, setDrawerWidth] = useState(720);
@@ -156,6 +158,7 @@ export function StoreDrawer({ summary, detail, onClose }: Props) {
                     stroke: token.colorPrimary,
                     lineWidth: 2,
                   }}
+                  theme={chartTheme}
                 />
               </div>
             ) : (
@@ -187,6 +190,7 @@ export function StoreDrawer({ summary, detail, onClose }: Props) {
                         title: "type",
                         items: [{ field: "value", name: "Кількість" }],
                       }}
+                      theme={chartTheme}
                     />
                   </div>
                 ) : (
@@ -216,6 +220,7 @@ export function StoreDrawer({ summary, detail, onClose }: Props) {
                         title: "type",
                         items: [{ field: "value", name: "Кількість" }],
                       }}
+                      theme={chartTheme}
                     />
                   </div>
                 ) : (

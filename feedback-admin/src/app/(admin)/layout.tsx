@@ -1,10 +1,10 @@
 import { AntdRegistry } from "@ant-design/nextjs-registry";
-import { ConfigProvider } from "antd";
-import ukUA from "antd/locale/uk_UA";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { adminTheme } from "@/lib/admin/theme";
+import { AdminThemeProvider } from "@/components/admin/AdminThemeProvider";
+import { AdminThemeScript } from "@/components/admin/AdminThemeScript";
+import { ADMIN_THEME_COOKIE, isAdminThemeMode } from "@/lib/admin/themeMode";
 import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,10 @@ export const dynamic = "force-dynamic";
 /**
  * Layout-каркас для всієї адмін-панелі. Відповідає за:
  *   - antd 5 SSR-реєстр (через `@ant-design/nextjs-registry`)
- *   - `ConfigProvider` з українською локаллю та токенами теплої FeedbackGB-теми
+ *   - `AdminThemeScript` + `AdminThemeProvider` — light/dark/system тема
+ *     (план N1/N6): нема жодного окремого `ConfigProvider` тут — обидва
+ *     антд-теми (`adminLightTheme`/`adminDarkTheme`, `theme.ts`) і сам
+ *     `ConfigProvider` живуть всередині `AdminThemeProvider`.
  *   - `AdminShell` (ProLayout) — sider, header, breadcrumbs
  *   - перевірку сесії: тільки `admin` або `super_admin` бачать /admin/*
  *
@@ -29,15 +32,17 @@ export default async function AdminGroupLayout({
     redirect("/login?next=/admin");
   }
 
+  const rawMode = cookies().get(ADMIN_THEME_COOKIE)?.value;
+  const initialMode = isAdminThemeMode(rawMode) ? rawMode : "system";
+
   return (
     <AntdRegistry>
-      {/* B4 — the ripple/"wave" click effect reads as noisy on a dense
-          admin grid; off admin-wide, kept for the seller Mini App. */}
-      <ConfigProvider locale={ukUA} theme={adminTheme} wave={{ disabled: true }}>
+      <AdminThemeScript />
+      <AdminThemeProvider initialMode={initialMode}>
         <AdminShell user={{ full_name: sess.full_name, role: sess.role }}>
           {children}
         </AdminShell>
-      </ConfigProvider>
+      </AdminThemeProvider>
     </AntdRegistry>
   );
 }

@@ -78,6 +78,38 @@ body {
 }
 
 .admin-shell {
+  /* T1 — one radius scale: controls 6, containers 12. T4 — cards/tables sit
+     flush (border only); the shadow is reserved for floating elements.
+     Same in both themes, so it lives outside the light/dark split below. */
+  --admin-radius: 6px;
+  --admin-radius-lg: 12px;
+  --admin-rowpad: 10px;
+  --admin-shadow: none;
+  --admin-shadow-popover: 0 8px 24px rgba(16, 12, 12, 0.12),
+    0 2px 6px rgba(16, 12, 12, 0.08);
+
+  /* T5 — one duration/easing set for every admin transition. */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur-mid: 200ms;
+  --dur-slow: 300ms;
+
+  min-height: 100vh;
+  background: rgb(var(--bg));
+  color: rgb(var(--ink-900));
+}
+
+/* N3 — `data-admin-theme` is set on `<html>` (not `.admin-shell`) by the
+   no-flash inline script (AdminThemeScript, N6) before this element even
+   exists, then kept in sync by AdminThemeProvider (N1) once React mounts.
+   `.admin-shell` alone (no ancestor attribute yet, e.g. a stale SSR frame)
+   falls back to light, matching the default `adminLightTheme` antd uses in
+   that same instant.
+   Deliberately NOT `:root`/`prefers-color-scheme` here: those stay scoped
+   to the Mini-App-styled login/not-found pages (see the top of this file)
+   and must not shift just because an admin toggled their own theme. */
+.admin-shell,
+html[data-admin-theme="light"] .admin-shell {
   /* T2 — nearly-neutral warm gray base, replacing the cream (#fdf8f3) tint;
      accent split from primary (#e85a8a -> #c93a6f, AA on white) and info
      given its own blue so it stops reading as the accent. */
@@ -102,32 +134,45 @@ body {
   --info-bg: 239 246 255;
   --success-bg: 220 252 231;
   --error-bg: 254 226 226;
-
-  /* T1 — one radius scale: controls 6, containers 12. T4 — cards/tables sit
-     flush (border only); the shadow is reserved for floating elements. */
-  --admin-radius: 6px;
-  --admin-radius-lg: 12px;
-  --admin-rowpad: 10px;
-  --admin-shadow: none;
-  --admin-shadow-popover: 0 8px 24px rgba(16, 12, 12, 0.12),
-    0 2px 6px rgba(16, 12, 12, 0.08);
-
-  /* T5 — one duration/easing set for every admin transition. */
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --dur-fast: 150ms;
-  --dur-mid: 200ms;
-  --dur-slow: 300ms;
-
   color-scheme: light;
-  min-height: 100vh;
-  background: rgb(var(--bg));
-  color: rgb(var(--ink-900));
+}
+
+/* N2/N3 — dark palette, matching adminDarkTheme (theme.ts). */
+html[data-admin-theme="dark"] .admin-shell {
+  --bg: 18 16 16;
+  --elev: 27 24 24;
+  --elev-2: 34 30 30;
+  --surface: 31 27 27;
+  --surface-2: 27 24 24;
+  --ink-900: 243 238 236;
+  --ink-700: 185 176 173;
+  --ink-500: 154 145 141;
+  --ink-300: 94 86 84;
+  --border: 46 41 41;
+  --border-2: 38 34 34;
+  --brand-500: 240 113 159;
+  --brand-600: 240 113 159;
+  --brand-50: 58 22 38;
+  --success: 74 222 128;
+  --warning: 251 191 36;
+  --error: 248 113 113;
+  --info: 96 165 250;
+  --info-bg: 15 30 58;
+  --success-bg: 16 48 28;
+  --error-bg: 61 22 22;
+  color-scheme: dark;
 }
 
 html:has(.admin-shell),
 body:has(.admin-shell) {
   background: rgb(247 246 245);
   color-scheme: light;
+}
+
+html[data-admin-theme="dark"]:has(.admin-shell),
+html[data-admin-theme="dark"] body:has(.admin-shell) {
+  background: rgb(18 16 16);
+  color-scheme: dark;
 }
 
 .admin-shell .ant-layout,
@@ -320,6 +365,40 @@ body:has(.admin-shell) {
 .admin-shell__breadcrumb-arrow {
   font-size: 10px;
   color: rgb(var(--ink-300));
+}
+
+/* H2 — the light/system/dark switch in the shared header. */
+.admin-theme-switch {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid rgb(var(--border));
+  border-radius: 999px;
+  background: rgb(var(--elev));
+}
+
+.admin-theme-switch__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: rgb(var(--ink-500));
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.admin-theme-switch__btn:hover {
+  color: rgb(var(--ink-900));
+}
+
+.admin-theme-switch__btn.is-active {
+  background: rgb(var(--ink-900) / 0.08);
+  color: rgb(var(--ink-900));
 }
 
 .admin-shell__breadcrumb-muted,
