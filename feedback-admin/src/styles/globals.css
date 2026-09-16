@@ -551,6 +551,37 @@ body:has(.admin-shell) {
   border-color: rgb(var(--border));
 }
 
+/* B3 — 16px button icons (14px in the small size), muted on default/text
+   buttons, darkening on hover. Primary/danger buttons keep their own
+   (already-contrasted) icon color. */
+.admin-shell .ant-btn > .anticon {
+  font-size: 16px;
+}
+
+.admin-shell .ant-btn-sm > .anticon {
+  font-size: 14px;
+}
+
+.admin-shell
+  .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous)
+  > .anticon {
+  color: rgb(var(--ink-500));
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.admin-shell
+  .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):hover
+  > .anticon {
+  color: rgb(var(--ink-900));
+}
+
+/* B4 — a visible 3px focus ring for keyboard navigation; mouse clicks
+   don't trigger :focus-visible. */
+.admin-shell .ant-btn:focus-visible {
+  outline: 3px solid rgb(var(--brand-600) / 0.28);
+  outline-offset: 1px;
+}
+
 .admin-kpi-grid {
   gap: 12px;
 }

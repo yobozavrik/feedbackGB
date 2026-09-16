@@ -837,6 +837,7 @@ export function UsersClient({ users, stores, feedbacks, directions, currentUserI
                 type="link"
                 size="small"
                 icon={<HistoryOutlined />}
+                aria-label="Відгуки"
                 onClick={() => setActivityTarget(row)}
               />
             </Tooltip>,
@@ -845,6 +846,7 @@ export function UsersClient({ users, stores, feedbacks, directions, currentUserI
                 type="link"
                 size="small"
                 icon={<EditOutlined />}
+                aria-label="Редагувати"
                 disabled={!isEditable}
                 onClick={() => {
                   setEditTarget(row);
@@ -863,6 +865,7 @@ export function UsersClient({ users, stores, feedbacks, directions, currentUserI
                 type="link"
                 size="small"
                 icon={row.has_pin ? <ReloadOutlined /> : <KeyOutlined />}
+                aria-label={row.has_pin ? "Змінити PIN" : "Створити PIN"}
                 disabled={!isEditable}
                 onClick={() => setResetTarget(row)}
               />

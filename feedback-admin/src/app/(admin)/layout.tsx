@@ -31,7 +31,9 @@ export default async function AdminGroupLayout({
 
   return (
     <AntdRegistry>
-      <ConfigProvider locale={ukUA} theme={adminTheme}>
+      {/* B4 — the ripple/"wave" click effect reads as noisy on a dense
+          admin grid; off admin-wide, kept for the seller Mini App. */}
+      <ConfigProvider locale={ukUA} theme={adminTheme} wave={{ disabled: true }}>
         <AdminShell user={{ full_name: sess.full_name, role: sess.role }}>
           {children}
         </AdminShell>
