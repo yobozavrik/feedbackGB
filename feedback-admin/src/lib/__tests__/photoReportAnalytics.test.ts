@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDailySubmissionCounts, buildPhotoReportHeatmap, buildStorePhotoReportDays, recentCalendarDates } from "@/lib/photoReportAnalytics";
+import { buildDailySubmissionCounts, buildPhotoReportHeatmap, buildStorePhotoReportDays, buildStorePhotoReportPeriodSummaries, calendarDatesBetween, recentCalendarDates } from "@/lib/photoReportAnalytics";
 
 describe("recentCalendarDates", () => {
   it("returns an inclusive, ordered seven-day calendar interval across a month boundary", () => {
@@ -7,6 +7,14 @@ describe("recentCalendarDates", () => {
       "2026-08-30",
       "2026-08-31",
       "2026-09-01",
+    ]);
+  });
+});
+
+describe("calendarDatesBetween", () => {
+  it("returns an inclusive range across a month boundary", () => {
+    expect(calendarDatesBetween("2026-08-30", "2026-09-01")).toEqual([
+      "2026-08-30", "2026-08-31", "2026-09-01",
     ]);
   });
 });
@@ -30,6 +38,21 @@ describe("buildDailySubmissionCounts", () => {
       { date: "2026-09-14", submittedStores: 23, level: "red" },
       { date: "2026-09-15", submittedStores: 24, level: "yellow" },
       { date: "2026-09-16", submittedStores: 26, level: "green" },
+    ]);
+  });
+});
+
+describe("buildStorePhotoReportPeriodSummaries", () => {
+  it("aggregates sellers, reports, photos and the latest submitted day per store", () => {
+    expect(buildStorePhotoReportPeriodSummaries(
+      [{ id: 1, name: "A" }, { id: 2, name: "B" }],
+      [
+        { date: "2026-09-15", rows: [{ key: 1, store: "A", submitted: true, reports: 1, photos: 2, sellers: ["Олена"], lastSubmittedAt: null }] },
+        { date: "2026-09-16", rows: [{ key: 1, store: "A", submitted: true, reports: 2, photos: 5, sellers: ["Олена", "Ірина"], lastSubmittedAt: null }] },
+      ],
+    )).toEqual([
+      { key: 2, store: "B", submittedDays: 0, reports: 0, photos: 0, sellers: [], lastSubmittedDate: null },
+      { key: 1, store: "A", submittedDays: 2, reports: 3, photos: 7, sellers: ["Олена", "Ірина"], lastSubmittedDate: "2026-09-16" },
     ]);
   });
 });

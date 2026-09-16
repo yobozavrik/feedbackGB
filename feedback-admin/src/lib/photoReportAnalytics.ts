@@ -28,6 +28,16 @@ export interface DailySubmissionCount {
   level: "red" | "yellow" | "green";
 }
 
+export interface StorePhotoReportPeriodSummary {
+  key: number;
+  store: string;
+  submittedDays: number;
+  reports: number;
+  photos: number;
+  sellers: string[];
+  lastSubmittedDate: string | null;
+}
+
 /** Returns calendar dates ending on endDate, without relying on browser time zone. */
 export function recentCalendarDates(endDate: string, days: number): string[] {
   const [year, month, day] = endDate.split("-").map(Number);
@@ -37,6 +47,18 @@ export function recentCalendarDates(endDate: string, days: number): string[] {
     const value = new Date(Date.UTC(year, month - 1, day - (days - 1 - index)));
     return value.toISOString().slice(0, 10);
   });
+}
+
+export function calendarDatesBetween(startDate: string, endDate: string): string[] {
+  const [startYear, startMonth, startDay] = startDate.split("-").map(Number);
+  const [endYear, endMonth, endDay] = endDate.split("-").map(Number);
+  if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) return [];
+
+  const start = Date.UTC(startYear, startMonth - 1, startDay);
+  const end = Date.UTC(endYear, endMonth - 1, endDay);
+  if (start > end) return [];
+  const days = Math.floor((end - start) / 86_400_000) + 1;
+  return Array.from({ length: days }, (_, index) => new Date(start + index * 86_400_000).toISOString().slice(0, 10));
 }
 
 /** Keeps a missing store-day distinct from a failed request: callers only pass successful snapshots. */
@@ -87,4 +109,26 @@ export function buildDailySubmissionCounts(
       level: submittedStores >= 26 ? "green" : submittedStores >= 24 ? "yellow" : "red",
     };
   });
+}
+
+export function buildStorePhotoReportPeriodSummaries(
+  stores: { id: number; name: string }[],
+  snapshots: DailyPhotoReportSnapshot[],
+): StorePhotoReportPeriodSummary[] {
+  return stores.map((store) => {
+    const rows = snapshots.map((snapshot) => ({
+      date: snapshot.date,
+      row: snapshot.rows.find((row) => row.key === store.id),
+    }));
+    const submitted = rows.filter(({ row }) => row?.submitted);
+    return {
+      key: store.id,
+      store: store.name,
+      submittedDays: submitted.length,
+      reports: submitted.reduce((total, { row }) => total + (row?.reports ?? 0), 0),
+      photos: submitted.reduce((total, { row }) => total + (row?.photos ?? 0), 0),
+      sellers: Array.from(new Set(submitted.flatMap(({ row }) => row?.sellers ?? []))),
+      lastSubmittedDate: submitted.at(-1)?.date ?? null,
+    };
+  }).sort((a, b) => a.submittedDays - b.submittedDays || a.store.localeCompare(b.store, "uk"));
 }
