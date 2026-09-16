@@ -1,6 +1,10 @@
 "use client";
 
-import { EnvironmentOutlined, ShopOutlined } from "@ant-design/icons";
+import {
+  ArrowRightOutlined,
+  EnvironmentOutlined,
+  ShopOutlined,
+} from "@ant-design/icons";
 import { Line, Pie } from "@ant-design/plots";
 import { StatisticCard } from "@ant-design/pro-components";
 import {
@@ -272,9 +276,10 @@ export function StoreDrawer({ summary, detail, onClose }: Props) {
                       <Link
                         key="users"
                         href="/admin/users"
+                        className="admin-link-arrow"
                         style={{ fontSize: 12 }}
                       >
-                        відкрити в Користувачах →
+                        відкрити в Користувачах <ArrowRightOutlined />
                       </Link>,
                     ]}
                   >
@@ -310,8 +315,8 @@ export function StoreDrawer({ summary, detail, onClose }: Props) {
             title={`Останні фідбеки`}
             size="small"
             extra={
-              <Link href="/admin" style={{ fontSize: 12 }}>
-                Уся стрічка →
+              <Link href="/admin" className="admin-link-arrow" style={{ fontSize: 12 }}>
+                Уся стрічка <ArrowRightOutlined />
               </Link>
             }
           >

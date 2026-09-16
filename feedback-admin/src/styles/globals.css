@@ -532,13 +532,9 @@ body:has(.admin-shell) {
   background: rgb(var(--surface));
 }
 
-.admin-shell .ant-input,
-.admin-shell .ant-select-selector,
-.admin-shell .ant-picker,
-.admin-shell .ant-input-number {
-  border-color: rgb(var(--border)) !important;
-  border-radius: var(--admin-radius) !important;
-}
+/* C5 — radius/border/hover/focus now come from the Input/Select/DatePicker
+   component tokens (theme.ts, stage 1); the old `!important` pair fought
+   the focus/hover states those tokens drive, so it's gone. */
 
 .admin-shell .ant-drawer-content,
 .admin-shell .ant-modal-content {
@@ -636,18 +632,8 @@ body:has(.admin-shell) {
   font-weight: 700;
 }
 
-.admin-feed-table .ant-segmented {
-  border-radius: 9px;
-  background: rgb(var(--surface));
-}
-
-.admin-feed-table .ant-segmented-item-selected {
-  color: rgb(var(--brand-600));
-  font-weight: 600;
-}
-
 .admin-feed-drawer .ant-drawer-content {
-  box-shadow: -12px 0 40px rgba(31, 18, 18, 0.16);
+  box-shadow: -8px 0 24px rgba(16, 12, 12, 0.12);
 }
 
 .admin-feed-drawer .ant-drawer-header {
@@ -684,7 +670,7 @@ body:has(.admin-shell) {
 }
 
 .admin-store-drawer .ant-drawer-content {
-  box-shadow: -12px 0 40px rgba(31, 18, 18, 0.16);
+  box-shadow: -8px 0 24px rgba(16, 12, 12, 0.12);
 }
 
 .admin-store-drawer .ant-drawer-body {
@@ -700,15 +686,89 @@ body:has(.admin-shell) {
   margin-top: 12px;
 }
 
-.admin-page .ant-segmented {
-  border-radius: 10px;
-  background: rgb(var(--surface));
-  padding: 4px;
+/* C1 — track/selected-segment colors come from the Segmented component
+   token (theme.ts, stage 1); only the hairline border is CSS-only. */
+.admin-shell .ant-segmented {
+  border: 1px solid rgb(var(--border-2));
 }
 
-.admin-page .ant-segmented-item-selected {
-  color: rgb(var(--brand-600));
-  font-weight: 600;
+/* C2 — the active tab is the primary text color + weight 500, not the
+   accent; inkBarColor (theme.ts) keeps the 2px accent underline. */
+.admin-page .ant-tabs-tab-active .ant-tabs-tab-btn {
+  font-weight: 500;
+}
+
+/* C3 — the current page reads like a pressed default button (border +
+   faint shadow), not accent-colored text. */
+.admin-shell .ant-pagination-item-active {
+  border-color: rgb(var(--border));
+  box-shadow: 0 1px 2px rgba(16, 12, 12, 0.05);
+}
+
+.admin-shell .ant-pagination-item-active a {
+  color: rgb(var(--ink-900));
+  font-weight: 500;
+}
+
+.admin-shell .ant-pagination-total-text {
+  color: rgb(var(--ink-500));
+  font-size: 13px;
+}
+
+/* C4 — one arrow/chevron treatment: muted, 200ms rotation on open/expand;
+   link arrows nudge 2px on hover instead of just changing color. */
+.admin-shell .ant-select-arrow,
+.admin-shell .ant-picker-suffix {
+  color: rgb(var(--ink-500));
+  transition: transform var(--dur-mid) var(--ease);
+}
+
+.admin-shell .ant-select-open .ant-select-arrow {
+  transform: rotate(180deg);
+}
+
+/* C4 — custom row-expand trigger (AuditDetails): a chevron that rotates
+   90deg open, instead of antd's default "+"/"-" square button. */
+.admin-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: rgb(var(--ink-500));
+  cursor: pointer;
+  border-radius: var(--admin-radius);
+}
+
+.admin-expand-btn:hover {
+  color: rgb(var(--ink-900));
+  background: rgb(var(--ink-900) / 0.05);
+}
+
+.admin-expand-btn .anticon {
+  font-size: 12px;
+  transition: transform var(--dur-mid) var(--ease);
+}
+
+.admin-expand-btn .anticon.is-open {
+  transform: rotate(90deg);
+}
+
+.admin-link-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.admin-link-arrow .anticon {
+  font-size: 12px;
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.admin-link-arrow:hover .anticon {
+  transform: translateX(2px);
 }
 
 .admin-funnel-page .ant-card {

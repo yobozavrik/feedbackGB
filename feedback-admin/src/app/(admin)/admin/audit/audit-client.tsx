@@ -4,6 +4,7 @@ import {
   ApartmentOutlined,
   KeyOutlined,
   MessageOutlined,
+  RightOutlined,
   ToolOutlined,
 } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
@@ -263,6 +264,20 @@ export function AuditClient({ rows }: Props) {
           (row.meta != null && Object.keys(row.meta).length > 0) ||
           (row.diff != null && Object.keys(row.diff).length > 0) ||
           row.user_agent != null,
+        // C4 — a chevron that rotates 90deg open, instead of antd's default
+        // "+"/"-" square button.
+        expandIcon: ({ expanded, onExpand, record, expandable: canExpand }) =>
+          canExpand ? (
+            <button
+              type="button"
+              className="admin-expand-btn"
+              onClick={(event) => onExpand(record, event)}
+              aria-label={expanded ? "Згорнути деталі" : "Розгорнути деталі"}
+              aria-expanded={expanded}
+            >
+              <RightOutlined className={expanded ? "is-open" : undefined} />
+            </button>
+          ) : null,
       }}
       headerTitle={
         <Space size={8}>

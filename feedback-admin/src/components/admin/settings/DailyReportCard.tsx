@@ -1,6 +1,10 @@
 "use client";
 
-import { ClockCircleOutlined, SendOutlined } from "@ant-design/icons";
+import {
+  ArrowRightOutlined,
+  ClockCircleOutlined,
+  SendOutlined,
+} from "@ant-design/icons";
 import {
   Alert,
   Card,
@@ -38,8 +42,8 @@ export function DailyReportCard({ crons, lastManualReport }: Props) {
         </Space>
       }
       extra={
-        <Link href="/admin/tools" style={{ fontSize: 12 }}>
-          Запустити вручну →
+        <Link href="/admin/tools" className="admin-link-arrow" style={{ fontSize: 12 }}>
+          Запустити вручну <ArrowRightOutlined />
         </Link>
       }
     >

@@ -1,6 +1,6 @@
 "use client";
 
-import { CloudUploadOutlined } from "@ant-design/icons";
+import { ArrowRightOutlined, CloudUploadOutlined } from "@ant-design/icons";
 import {
   Card,
   Space,
@@ -31,8 +31,8 @@ export function MirrorCard({ lastManualMirror }: Props) {
         </Space>
       }
       extra={
-        <Link href="/admin/tools" style={{ fontSize: 12 }}>
-          Запустити вручну →
+        <Link href="/admin/tools" className="admin-link-arrow" style={{ fontSize: 12 }}>
+          Запустити вручну <ArrowRightOutlined />
         </Link>
       }
     >
