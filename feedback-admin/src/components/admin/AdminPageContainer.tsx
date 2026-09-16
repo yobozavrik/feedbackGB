@@ -2,7 +2,6 @@
 
 import { PageContainer } from "@ant-design/pro-components";
 import type { ReactNode } from "react";
-import { NotificationsBell } from "@/components/admin/NotificationsBell";
 
 interface AdminPageContainerProps {
   title: string;
@@ -23,6 +22,10 @@ interface AdminPageContainerProps {
  *
  * Створена як client component, щоб PageContainer працював з табами/extra
  * без додаткового boilerplate в page-файлах (page.tsx залишаються server).
+ *
+ * H3: дзвіночок сповіщень більше не рендериться тут — він переїхав у
+ * загальну шапку (`AdminShell.actionsRender`), щоб бути на кожній сторінці
+ * один раз, а не в `extra` кожного заголовка.
  */
 export function AdminPageContainer({
   title,
@@ -38,12 +41,7 @@ export function AdminPageContainer({
         title,
         subTitle,
         breadcrumb: undefined, // ProLayout сам рендерить breadcrumbs
-        extra: (
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {extra}
-            <NotificationsBell />
-          </div>
-        ),
+        extra,
       }}
       tabList={tabs?.items.map((it) => ({ tab: it.label, key: it.key }))}
       tabActiveKey={tabs?.activeKey}

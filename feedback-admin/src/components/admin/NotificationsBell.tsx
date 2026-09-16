@@ -193,7 +193,8 @@ export function NotificationsBell() {
         <Button
           type="text"
           shape="circle"
-          icon={<BellOutlined style={{ fontSize: 18 }} />}
+          size="small"
+          icon={<BellOutlined style={{ fontSize: 16 }} />}
           aria-label="Сповіщення"
         />
       </Badge>
