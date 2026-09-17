@@ -26,7 +26,11 @@ interface MeResponse {
 interface PhotoReportStore {
   id: number;
   name: string;
-  source: "home_store" | "replacement_permission";
+}
+
+interface PhotoReportStoresResponse {
+  home_store: PhotoReportStore | null;
+  replacement_stores: PhotoReportStore[];
 }
 
 export function FeedbackForm({ category }: Props) {
@@ -39,8 +43,10 @@ export function FeedbackForm({ category }: Props) {
   const [storeName, setStoreName] = useState<string | null>(null);
   const [meReady, setMeReady] = useState(false);
   const [offlineSaved, setOfflineSaved] = useState(false);
-  const [photoReportStores, setPhotoReportStores] = useState<PhotoReportStore[]>([]);
-  const [selectedPhotoReportStoreId, setSelectedPhotoReportStoreId] = useState<number | null>(null);
+  const [homePhotoReportStore, setHomePhotoReportStore] = useState<PhotoReportStore | null>(null);
+  const [replacementPhotoReportStores, setReplacementPhotoReportStores] = useState<PhotoReportStore[]>([]);
+  const [selectedReplacementStoreId, setSelectedReplacementStoreId] = useState<number | null>(null);
+  const [photoReportStoresReady, setPhotoReportStoresReady] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -55,20 +61,32 @@ export function FeedbackForm({ category }: Props) {
 
   useEffect(() => {
     if (category.id !== "photo_report") return;
+    setPhotoReportStoresReady(false);
+    setSelectedReplacementStoreId(null);
     fetch("/api/auth/photo-report-stores")
-      .then((response) => response.ok ? response.json() : { stores: [] })
-      .then((data: { stores?: PhotoReportStore[] }) => {
-        const stores = data.stores ?? [];
-        setPhotoReportStores(stores);
-        if (stores.length === 1) setSelectedPhotoReportStoreId(stores[0].id);
+      .then((response) => response.ok ? response.json() : { home_store: null, replacement_stores: [] })
+      .then((data: Partial<PhotoReportStoresResponse>) => {
+        setHomePhotoReportStore(data.home_store ?? null);
+        setReplacementPhotoReportStores(data.replacement_stores ?? []);
       })
-      .catch(() => setPhotoReportStores([]));
+      .catch(() => {
+        setHomePhotoReportStore(null);
+        setReplacementPhotoReportStores([]);
+      })
+      .finally(() => setPhotoReportStoresReady(true));
   }, [category.id]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
+
+    if (category.id === "photo_report" && !currentPhotoReportStore) {
+      setError("Оберіть магазин, де працюєте зараз");
+      setSubmitting(false);
+      webApp?.HapticFeedback?.notificationOccurred("error");
+      return;
+    }
 
     const data = new FormData(e.currentTarget);
     const fields: Record<string, string | number | null> = {};
@@ -216,8 +234,20 @@ export function FeedbackForm({ category }: Props) {
     );
   }
 
-  const lockedStoreId = me?.role === "seller" ? me.store_id : null;
   const isSellerPhotoReport = me?.role === "seller" && category.id === "photo_report";
+  const selectedReplacementStore = replacementPhotoReportStores.find((store) => store.id === selectedReplacementStoreId) ?? null;
+  const currentPhotoReportStore = selectedReplacementStore ?? homePhotoReportStore;
+
+  if (isSellerPhotoReport && !photoReportStoresReady) {
+    return (
+      <div className="card space-y-4 p-5">
+        <div className="skeleton h-4 w-40 rounded-full" />
+        <div className="skeleton h-28 w-full rounded-2xl" />
+        <div className="skeleton h-4 w-32 rounded-full" />
+        <div className="skeleton h-13 w-full rounded-2xl" />
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={onSubmit} className="card animate-fade-up space-y-4 p-5 pb-24">
@@ -237,27 +267,55 @@ export function FeedbackForm({ category }: Props) {
 
       {/* Store: locked chip for sellers, search for admins */}
       {isSellerPhotoReport ? (
-        <div>
-          <label className="field-label" htmlFor="photo-report-store">Де працюю зараз</label>
-          {photoReportStores.length === 0 ? (
-            <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Для вас не призначено магазин для фото звіту. Зверніться до адміністратора.</p>
+        <div className="space-y-4">
+          {currentPhotoReportStore ? (
+            <>
+              <input type="hidden" name="store_id" value={currentPhotoReportStore.id} />
+              <section className="rounded-2xl bg-brand-600 p-4 text-white shadow-soft" aria-live="polite">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">Зараз працюю в магазині</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <h2 className="font-display text-[24px] font-bold leading-tight">{currentPhotoReportStore.name}</h2>
+                  {selectedReplacementStore ? <span className="pill bg-white/95 text-brand-600">Заміна</span> : null}
+                </div>
+                <p className="mt-2 text-[13px] leading-relaxed text-white/90">
+                  Фото звіт буде зараховано для {selectedReplacementStore ? `магазину ${currentPhotoReportStore.name}` : "цього магазину"}
+                </p>
+              </section>
+            </>
           ) : (
-            <select
-              id="photo-report-store"
-              name="store_id"
-              className="field-input"
-              value={selectedPhotoReportStoreId ?? ""}
-              required
-              onChange={(event) => setSelectedPhotoReportStoreId(event.target.value ? Number(event.target.value) : null)}
-            >
-              <option value="" disabled>Виберіть магазин</option>
-              {photoReportStores.map((store) => <option key={store.id} value={store.id}>{store.name}{store.source === "replacement_permission" ? " — заміна" : ""}</option>)}
-            </select>
+            <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">Де працюю зараз</p>
+              <h2 className="mt-1 font-display text-[20px] font-bold">Оберіть магазин</h2>
+              <p className="mt-2 text-[13px] leading-relaxed">Оберіть магазин для заміни, щоб надіслати фото звіт.</p>
+            </section>
+          )}
+
+          {replacementPhotoReportStores.length > 0 ? (
+            <section className="rounded-2xl border border-line bg-white p-4">
+              <label className="field-label" htmlFor="photo-report-replacement-store">{selectedReplacementStore ? "Працюю на заміні" : "Працюю на заміні?"}</label>
+              <p className="mb-3 text-[13px] leading-relaxed text-ink-500">Обери магазин, якщо сьогодні ти на заміні</p>
+              <select
+                id="photo-report-replacement-store"
+                className="field-input"
+                value={selectedReplacementStoreId ?? ""}
+                onChange={(event) => setSelectedReplacementStoreId(event.target.value ? Number(event.target.value) : null)}
+              >
+                <option value="">Обрати магазин для заміни</option>
+                {replacementPhotoReportStores.map((store) => <option key={store.id} value={store.id}>{store.name} — заміна</option>)}
+              </select>
+              {selectedReplacementStore && homePhotoReportStore ? (
+                <button type="button" onClick={() => setSelectedReplacementStoreId(null)} className="mt-3 text-[13px] font-medium text-brand-600">
+                  Повернутися до основного магазину
+                </button>
+              ) : null}
+            </section>
+          ) : currentPhotoReportStore ? null : (
+            <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Для вас не призначено магазин для фото звіту. Зверніться до адміністратора.</p>
           )}
         </div>
-      ) : lockedStoreId ? (
+      ) : me?.role === "seller" && me.store_id ? (
         <>
-          <input type="hidden" name="store_id" value={lockedStoreId} />
+          <input type="hidden" name="store_id" value={me.store_id} />
           {storeName ? (
             <div>
               <label className="field-label">Магазин</label>
@@ -361,7 +419,7 @@ export function FeedbackForm({ category }: Props) {
           >
             Назад
           </button>
-          <button type="submit" disabled={submitting || (isSellerPhotoReport && (photoReportStores.length === 0 || selectedPhotoReportStoreId == null))} className="btn-primary flex-1">
+          <button type="submit" disabled={submitting || (isSellerPhotoReport && !currentPhotoReportStore)} className="btn-primary flex-1">
             {submitting ? (
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
             ) : (

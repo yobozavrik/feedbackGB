@@ -10,7 +10,9 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await verifySession(cookies().get(SESSION_COOKIE)?.value);
   if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
-  if (session.role !== "seller") return NextResponse.json({ stores: [] });
+  if (session.role !== "seller") {
+    return NextResponse.json({ home_store: null, replacement_stores: [] });
+  }
 
   const supabase = getServerSupabase();
   if (!supabase) return NextResponse.json({ error: "db_error" }, { status: 503 });
@@ -24,17 +26,22 @@ export async function GET() {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const replacementIds = new Set((permissions ?? []).map((row) => row.store_id as number));
-  const allowedIds = new Set<number>(replacementIds);
-  if (user.store_id != null) allowedIds.add(user.store_id as number);
+  const storesById = new Map(
+    (stores ?? []).map((store) => [store.id as number, { id: store.id as number, name: store.name as string }]),
+  );
+  const homeStoreId = user.store_id as number | null;
+  const homeStore = homeStoreId == null ? null : storesById.get(homeStoreId) ?? null;
+  const replacementIds = new Set(
+    (permissions ?? [])
+      .map((row) => row.store_id as number)
+      .filter((storeId) => storeId !== homeStoreId),
+  );
 
   return NextResponse.json({
-    stores: (stores ?? [])
-      .filter((store) => allowedIds.has(store.id as number))
-      .map((store) => ({
-        id: store.id as number,
-        name: store.name as string,
-        source: store.id === user.store_id ? "home_store" : "replacement_permission",
-      })),
+    home_store: homeStore,
+    replacement_stores: [...replacementIds]
+      .map((storeId) => storesById.get(storeId))
+      .filter((store): store is { id: number; name: string } => store != null)
+      .sort((left, right) => left.name.localeCompare(right.name, "uk")),
   });
 }
