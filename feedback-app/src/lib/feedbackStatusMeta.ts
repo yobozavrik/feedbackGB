@@ -6,14 +6,19 @@
 
 export type FeedbackStatus = "new" | "in_progress" | "resolved" | "rejected";
 
+// C4: each status gets its own color AND its own mark (dot/check/cross), so
+// it still reads correctly without relying on color alone.
+export type FeedbackStatusIcon = "dot" | "check" | "cross";
+
 export interface FeedbackStatusMeta {
   label: string;
   className: string;
+  icon: FeedbackStatusIcon;
 }
 
 export const STATUS_META: Record<FeedbackStatus, FeedbackStatusMeta> = {
-  new: { label: "На розгляді", className: "bg-elev2 text-ink-700" },
-  in_progress: { label: "В роботі", className: "bg-brand-50 text-brand-600" },
-  resolved: { label: "Погоджено", className: "bg-success/15 text-success" },
-  rejected: { label: "Не погоджено", className: "bg-danger/15 text-danger" },
+  new: { label: "На розгляді", className: "bg-elev2 text-ink-700", icon: "dot" },
+  in_progress: { label: "В роботі", className: "bg-brand-50 text-brand-600", icon: "dot" },
+  resolved: { label: "Погоджено", className: "bg-success-soft text-success", icon: "check" },
+  rejected: { label: "Не погоджено", className: "bg-danger-soft text-danger", icon: "cross" },
 };

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { STATUS_META, type FeedbackStatus } from "@/lib/feedbackStatusMeta";
+import { StatusPill } from "@/components/StatusPill";
+import type { FeedbackStatus } from "@/lib/feedbackStatusMeta";
 
 interface TransferRequestRow {
   id: string;
@@ -39,21 +40,20 @@ export function TransferRequests() {
         Мої заявки на переведення
       </h3>
       {rows.map((r) => {
-        const meta = STATUS_META[r.status] ?? STATUS_META.new;
         return (
           <div
             key={r.id}
-            className="flex items-center justify-between rounded-xl border border-ink-300/20 bg-elev p-3 shadow-soft"
+            className="flex items-center justify-between rounded-card border border-ink-300/20 bg-elev p-3 shadow-soft"
           >
             <div className="min-w-0">
-              <p className="text-[13px] font-medium text-ink-900">
+              <p className="text-[14px] font-medium text-ink-900">
                 {r.fields.target_store_name ?? "магазин не вказано"}
               </p>
               {r.fields.comment ? (
-                <p className="mt-0.5 truncate text-[12px] text-ink-500">{r.fields.comment}</p>
+                <p className="mt-0.5 truncate text-[13px] text-ink-700">{r.fields.comment}</p>
               ) : null}
             </div>
-            <span className={`pill flex-shrink-0 ${meta.className}`}>{meta.label}</span>
+            <StatusPill status={r.status} className="flex-shrink-0" />
           </div>
         );
       })}

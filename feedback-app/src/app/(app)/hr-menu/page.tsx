@@ -1,5 +1,6 @@
 import { Header } from "@/components/Header";
 import Link from "next/link";
+import { ChevronRightIcon } from "@/components/icons";
 import { HR_TOPICS } from "@/lib/hrTopics";
 
 export const dynamic = "force-dynamic";
@@ -18,24 +19,22 @@ export default function HrMenuPage() {
           <Link
             key={topic.id}
             href={`/hr-menu/${topic.id}`}
-            className="group relative flex min-h-[100px] animate-fade-up items-center overflow-hidden rounded-xl border border-ink-300/20 bg-elev p-4 shadow-soft transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] active:bg-elev2"
-            style={{ animationDelay: `${idx * 60}ms` }}
+            className="group relative flex min-h-[80px] animate-fade-up items-center rounded-card border border-ink-300/20 bg-elev p-4 shadow-soft transition-all duration-200 active:scale-[0.985] active:bg-elev2 [@media(hover:hover)]:hover:-translate-y-0.5"
+            style={{ animationDelay: `${idx * 40}ms` }}
           >
             <div className="relative flex w-full items-center gap-4">
-              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-[26px] leading-none text-brand-500">
+              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[14px] bg-cat-hr text-[24px] leading-none">
                 {topic.emoji}
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="font-display text-[17px] font-semibold leading-tight text-ink-900">
+                <h3 className="font-display text-[17px] font-bold leading-tight text-ink-900">
                   {topic.title}
                 </h3>
-                <p className="mt-1 text-[13px] leading-snug text-ink-500">
+                <p className="mt-0.5 text-body leading-snug text-ink-700">
                   {topic.short}
                 </p>
               </div>
-              <span aria-hidden className="text-[22px] text-brand-500">
-                →
-              </span>
+              <ChevronRightIcon size={20} className="flex-shrink-0 text-ink-500" />
             </div>
           </Link>
         ))}

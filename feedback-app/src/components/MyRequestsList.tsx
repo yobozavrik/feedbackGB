@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { STATUS_META, type FeedbackStatus } from "@/lib/feedbackStatusMeta";
+import { StatusPill } from "@/components/StatusPill";
+import { getCategory } from "@/lib/categories";
+import { CATEGORY_TINT_BG } from "@/lib/categoryTint";
+import type { FeedbackStatus } from "@/lib/feedbackStatusMeta";
 
 interface MyFeedbackRow {
   id: string;
@@ -68,11 +71,12 @@ export function MyRequestsList() {
 
   return (
     <div className="mt-4">
+      {/* C6: taller, more legible tab switch. */}
       <div className="mb-3 flex gap-1 rounded-full bg-elev2 p-1">
         <button
           type="button"
           onClick={() => setTab("active")}
-          className={`flex-1 rounded-full py-1.5 text-[12px] font-semibold transition ${
+          className={`flex-1 rounded-full py-2 text-[14px] font-semibold transition ${
             tab === "active" ? "bg-elev text-ink-900 shadow-soft" : "text-ink-500"
           }`}
         >
@@ -81,7 +85,7 @@ export function MyRequestsList() {
         <button
           type="button"
           onClick={() => setTab("archive")}
-          className={`flex-1 rounded-full py-1.5 text-[12px] font-semibold transition ${
+          className={`flex-1 rounded-full py-2 text-[14px] font-semibold transition ${
             tab === "archive" ? "bg-elev text-ink-900 shadow-soft" : "text-ink-500"
           }`}
         >
@@ -90,42 +94,46 @@ export function MyRequestsList() {
       </div>
 
       {visibleRows.length === 0 ? (
-        <p className="mt-8 text-center text-[13px] text-ink-500">
+        <p className="mt-8 text-center text-body text-ink-500">
           {tab === "archive" ? "Архів порожній" : "Немає активних заявок"}
         </p>
       ) : (
         <div className="space-y-2">
           {visibleRows.map((r) => {
-            const meta = STATUS_META[r.status] ?? STATUS_META.new;
+            // C5: category icon on its own tint, like the home-screen cards.
+            const tint = getCategory(r.category)?.tint;
             return (
               <Link
                 key={r.id}
                 href={`/my-requests/${r.id}`}
-                className="block rounded-xl border border-ink-300/20 bg-elev p-3 shadow-soft"
+                className="block rounded-card border border-ink-300/20 bg-elev p-3 shadow-soft"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex min-w-0 gap-2">
-                    <span className="flex-shrink-0 text-base" aria-hidden>
+                  <div className="flex min-w-0 gap-2.5">
+                    <span
+                      className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-base ${tint ? CATEGORY_TINT_BG[tint] : "bg-elev2"}`}
+                      aria-hidden
+                    >
                       {r.category_emoji ?? "📝"}
                     </span>
                     <div className="min-w-0">
-                      <p className="text-[13px] font-medium text-ink-900">
+                      <p className="text-[14.5px] font-semibold text-ink-900">
                         {r.category_title ?? r.category}
                       </p>
                       {r.summary ? (
-                        <p className="mt-0.5 truncate text-[12px] text-ink-500">{r.summary}</p>
+                        <p className="mt-0.5 truncate text-[13px] text-ink-700">{r.summary}</p>
                       ) : null}
                     </div>
                   </div>
-                  <span className={`pill flex-shrink-0 ${meta.className}`}>{meta.label}</span>
+                  <StatusPill status={r.status} className="flex-shrink-0" />
                 </div>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="text-[11px] text-ink-500">
+                <div className="mt-2 flex items-center justify-between pl-[46px] text-meta text-ink-500">
+                  <span>
                     {r.assigned_full_name
                       ? `Відповідальний: ${r.assigned_full_name}`
-                      : "Ще не призначено"}
+                      : "Відповідального ще не призначено"}
                   </span>
-                  <span className="text-[11px] text-ink-500">{formatRelative(r.created_at)}</span>
+                  <span>{formatRelative(r.created_at)}</span>
                 </div>
               </Link>
             );

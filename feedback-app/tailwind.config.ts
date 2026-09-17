@@ -30,6 +30,8 @@ const config: Config = {
           spotted: "rgb(var(--cat-spotted) / <alpha-value>)",
           tech: "rgb(var(--cat-tech) / <alpha-value>)",
           voice: "rgb(var(--cat-voice) / <alpha-value>)",
+          hr: "rgb(var(--cat-hr) / <alpha-value>)",
+          photo: "rgb(var(--cat-photo) / <alpha-value>)",
         },
         success: "rgb(var(--success) / <alpha-value>)",
         "success-soft": "rgb(var(--success-soft) / <alpha-value>)",

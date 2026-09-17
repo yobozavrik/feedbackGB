@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { STATUS_META, type FeedbackStatus } from "@/lib/feedbackStatusMeta";
+import { StatusPill } from "@/components/StatusPill";
+import type { FeedbackStatus } from "@/lib/feedbackStatusMeta";
 
 interface FeedbackDetail {
   id: string;
@@ -96,7 +97,6 @@ export function RequestDetail({ id }: Props) {
   }
 
   const { feedback, comments } = data;
-  const meta = STATUS_META[feedback.status] ?? STATUS_META.new;
   const fieldEntries = Object.entries(feedback.fields ?? {}).filter(
     ([key, value]) => !HIDDEN_FIELD_KEYS.has(key) && value !== null && value !== undefined && value !== "",
   );
@@ -104,20 +104,20 @@ export function RequestDetail({ id }: Props) {
   return (
     <div className="mt-4 space-y-4">
       <div className="flex items-center gap-2">
-        <span className={`pill ${meta.className}`}>{meta.label}</span>
-        <span className="text-[11px] text-ink-500">
+        <StatusPill status={feedback.status} />
+        <span className="text-meta text-ink-500">
           подано {formatDateTime(feedback.created_at)}
         </span>
       </div>
 
       {fieldEntries.length > 0 ? (
-        <div className="rounded-xl border border-ink-300/20 bg-elev p-3 shadow-soft">
-          <table className="w-full text-[13px]">
+        <div className="rounded-card border border-ink-300/20 bg-elev p-3 shadow-soft">
+          <table className="w-full text-body">
             <tbody>
               {fieldEntries.map(([key, value]) => (
-                <tr key={key}>
-                  <td className="py-1 pr-2 text-ink-500">{fieldLabel(key)}</td>
-                  <td className="py-1 text-right font-medium text-ink-900">{String(value)}</td>
+                <tr key={key} className="border-b border-ink-300/50 last:border-0">
+                  <td className="py-2 pr-2 text-[13px] text-ink-500">{fieldLabel(key)}</td>
+                  <td className="py-2 text-right text-[14px] font-medium text-ink-900">{String(value)}</td>
                 </tr>
               ))}
             </tbody>
@@ -125,8 +125,8 @@ export function RequestDetail({ id }: Props) {
         </div>
       ) : null}
 
-      <div className="flex items-center gap-2 rounded-xl px-1 py-1">
-        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-brand-50 text-[11px] font-semibold text-brand-600">
+      <div className="flex items-center gap-2.5 rounded-xl px-1 py-1">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-semibold text-brand-600">
           {feedback.assigned_full_name
             ? feedback.assigned_full_name
                 .split(/\s+/)
@@ -137,30 +137,30 @@ export function RequestDetail({ id }: Props) {
             : "?"}
         </div>
         <div>
-          <p className="text-[12px] text-ink-500">Відповідальний</p>
-          <p className="text-[13px] font-medium text-ink-900">
-            {feedback.assigned_full_name ?? "Ще не призначено"}
+          <p className="text-meta text-ink-500">Відповідальний</p>
+          <p className="text-[14px] font-medium text-ink-900">
+            {feedback.assigned_full_name ?? "Відповідального ще не призначено"}
           </p>
         </div>
       </div>
 
       <div>
-        <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.03em] text-ink-500">
+        <p className="mb-2 text-label text-ink-700">
           Коментарі
         </p>
         {comments.length === 0 ? (
-          <p className="text-[13px] text-ink-500">Ще немає коментарів</p>
+          <p className="text-body text-ink-500">Ще немає коментарів</p>
         ) : (
           <div className="space-y-2">
             {comments.map((c) => (
-              <div key={c.id} className="rounded-xl bg-elev2 p-3">
+              <div key={c.id} className="rounded-2xl rounded-tl-md bg-elev2 p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-semibold text-brand-600">
+                  <span className="text-[13px] font-semibold text-brand-600">
                     {c.author_full_name}
                   </span>
-                  <span className="text-[11px] text-ink-500">{formatDateTime(c.created_at)}</span>
+                  <span className="text-meta text-ink-500">{formatDateTime(c.created_at)}</span>
                 </div>
-                <p className="mt-1 text-[13px] leading-relaxed text-ink-900">{c.body}</p>
+                <p className="mt-1 text-body leading-relaxed text-ink-900">{c.body}</p>
               </div>
             ))}
           </div>

@@ -76,7 +76,7 @@ export function NotificationsList() {
 
   if (error) {
     return (
-      <p className="mt-4 text-[13px] text-ink-500">
+      <p className="mt-4 text-body text-ink-500">
         Не вдалося завантажити сповіщення.
       </p>
     );
@@ -90,35 +90,38 @@ export function NotificationsList() {
         <button
           type="button"
           onClick={markAllRead}
-          className="mb-3 text-[12px] font-semibold text-brand-500"
+          className="link mb-3"
         >
           Прочитати всі
         </button>
       ) : null}
       {items.length === 0 ? (
-        <p className="mt-8 text-center text-[13px] text-ink-500">Немає сповіщень</p>
+        <p className="mt-8 text-center text-body text-ink-500">Немає сповіщень</p>
       ) : (
         <div className="space-y-2">
           {items.map((n) => (
+            // C7: unread gets a left brand stripe + bold title on the
+            // neutral surface instead of tinting the whole card brand-50
+            // (which read the same as "in progress" everywhere else).
             <button
               key={n.id}
               type="button"
               onClick={() => onItemClick(n)}
-              className={`w-full rounded-xl border border-ink-300/20 p-3 text-left shadow-soft ${
-                n.is_read ? "bg-elev" : "bg-brand-50"
+              className={`w-full rounded-card border-y border-r border-ink-300/20 bg-elev p-3 text-left shadow-soft ${
+                n.is_read ? "border-l border-l-transparent" : "border-l-[3px] border-l-brand-500"
               }`}
             >
               <div className="flex items-start justify-between gap-2">
-                <p className="text-[13px] font-semibold text-ink-900">{n.title}</p>
+                <p className={`text-[15px] leading-snug text-ink-900 ${n.is_read ? "font-medium" : "font-bold"}`}>{n.title}</p>
                 {!n.is_read ? (
                   <span
                     aria-hidden
-                    className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-brand-500"
+                    className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-brand-500"
                   />
                 ) : null}
               </div>
-              <p className="mt-0.5 text-[12px] text-ink-500">{n.body}</p>
-              <p className="mt-1 text-[11px] text-ink-500">{formatRelative(n.created_at)}</p>
+              <p className="mt-0.5 text-[13px] text-ink-700">{n.body}</p>
+              <p className="mt-1 text-meta text-ink-500">{formatRelative(n.created_at)}</p>
             </button>
           ))}
         </div>
