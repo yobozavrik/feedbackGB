@@ -13,6 +13,10 @@ export const dynamic = "force-dynamic";
 
 const DASHBOARD_WINDOW_DAYS = 30;
 
+// Фото звіти мають власний розділ /admin/photo-report і не є фідбеком,
+// тому не потрапляють ні в стрічку, ні в KPI огляду.
+const PHOTO_REPORT_CATEGORY = "photo_report";
+
 export interface FeedRow {
   id: string;
   created_at: string;
@@ -54,6 +58,7 @@ async function fetchRows(): Promise<{ rows: FeedRow[]; error: string | null }> {
   const { data, error } = await supabase
     .from("feedback_feed")
     .select("*")
+    .neq("category", PHOTO_REPORT_CATEGORY)
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) return { rows: [], error: error.message };
@@ -80,6 +85,7 @@ async function fetchDashboardStats(): Promise<any[]> {
     .from("feedback_feed")
     .select("created_at,category,category_title,store_name,status,product_id,product_name")
     .gte("created_at", since)
+    .neq("category", PHOTO_REPORT_CATEGORY)
     .limit(5000);
   if (error) return [];
   return (data as any[]) ?? [];
@@ -174,7 +180,7 @@ export default async function AdminPage() {
         stores={stores}
         admins={admins}
         currentAdminId={currentAdminId}
-        categories={CATEGORIES.map((c) => ({
+        categories={CATEGORIES.filter((c) => c.id !== PHOTO_REPORT_CATEGORY).map((c) => ({
           id: c.id,
           title: c.title,
           emoji: c.emoji,
