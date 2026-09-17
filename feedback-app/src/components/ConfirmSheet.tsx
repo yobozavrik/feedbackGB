@@ -72,7 +72,7 @@ export function ConfirmSheet({
             disabled={submitting}
             className="btn-ghost flex-1"
           >
-            Ні, поправлю
+            Виправити
           </button>
           <button
             type="button"
@@ -86,7 +86,7 @@ export function ConfirmSheet({
                 Надсилаємо…
               </>
             ) : (
-              <>Так, надіслати ✓</>
+              <>Надіслати</>
             )}
           </button>
         </div>

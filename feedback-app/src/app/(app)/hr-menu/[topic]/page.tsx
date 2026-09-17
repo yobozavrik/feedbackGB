@@ -11,7 +11,7 @@ export default function HrTopicPage({ params }: { params: { topic: string } }) {
 
   return (
     <main className="relative">
-      <Header subtitle="Питання по HR" back={{ href: "/hr-menu", label: "Назад" }} />
+      <Header subtitle="Питання до HR" back={{ href: "/hr-menu", label: "Назад" }} />
 
       <div className="flex flex-col items-center rounded-xl border border-ink-300/20 bg-elev p-6 text-center shadow-soft">
         <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-brand-50 text-[32px] leading-none">

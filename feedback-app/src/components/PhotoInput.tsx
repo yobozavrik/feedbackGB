@@ -58,7 +58,7 @@ export function PhotoInput({
       onChange(next);
     } catch (e) {
       console.error(e);
-      setError("Не вдалося обробити фото");
+      setError("Не вдалося додати фото. Спробуй інше або зроби знімок ще раз.");
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";

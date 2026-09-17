@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default function HrMenuPage() {
   return (
     <main className="relative">
-      <Header subtitle="Питання по HR" back={{ href: "/", label: "Назад" }} />
+      <Header subtitle="Питання до HR" back={{ href: "/", label: "Назад" }} />
 
       <h2 className="mb-4 px-1 font-display text-[15px] font-semibold text-ink-900">
         Обери, що тебе цікавить

@@ -69,7 +69,7 @@ export function CategoryGrid() {
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="font-display text-[17px] font-bold leading-tight text-ink-900">
-              Питання по HR
+              Питання до HR
             </h3>
             <p className="mt-0.5 text-body leading-snug text-ink-700">
               Відпустка, вихідні, лікарняний, звільнення

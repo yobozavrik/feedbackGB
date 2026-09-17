@@ -80,7 +80,7 @@ export function ProductPicker({ open, storeId, onSelect, onClose }: Props) {
       })
       .catch(() => {
         if (cancelled) return;
-        setError("Не вдалось завантажити товари. Спробуй ще раз.");
+        setError("Не вдалося завантажити товари. Закрий список і відкрий знову.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

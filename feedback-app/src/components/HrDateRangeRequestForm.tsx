@@ -163,7 +163,7 @@ export function HrDateRangeRequestForm({
         }
       } else {
         setError(
-          err instanceof Error ? err.message : "Не вдалось відправити. Спробуй ще раз.",
+          err instanceof Error ? err.message : "Не вдалося відправити. Спробуй ще раз.",
         );
         webApp?.HapticFeedback?.notificationOccurred("error");
       }
@@ -183,10 +183,10 @@ export function HrDateRangeRequestForm({
             Збережено офлайн
           </h2>
           <p className="text-[14px] leading-relaxed text-ink-700">
-            Наразі немає зв&apos;язку. Заявку на {requestNoun} збережено в пам&apos;яті пристрою.
+            Зараз немає інтернету. Заявку на {requestNoun} збережено на телефоні.
           </p>
-          <p className="text-[13px] font-medium text-brand-600">
-            Вона буде надіслана автоматично, коли з&apos;явиться інтернет і додаток буде відкритим.
+          <p className="text-[13px] text-ink-500">
+            Надішлемо самі, щойно з&apos;явиться зв&apos;язок — тримай додаток відкритим.
           </p>
         </div>
         <button type="button" onClick={() => router.push("/")} className="btn-primary w-full">
@@ -287,7 +287,7 @@ export function HrDateRangeRequestForm({
                 Надсилаємо…
               </>
             ) : (
-              <>Відправити <span aria-hidden>💌</span></>
+              "Надіслати"
             )}
           </button>
         </div>

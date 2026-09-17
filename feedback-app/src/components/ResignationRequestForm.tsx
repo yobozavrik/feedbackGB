@@ -140,7 +140,7 @@ export function ResignationRequestForm() {
         }
       } else {
         setError(
-          err instanceof Error ? err.message : "Не вдалось відправити. Спробуй ще раз.",
+          err instanceof Error ? err.message : "Не вдалося відправити. Спробуй ще раз.",
         );
         webApp?.HapticFeedback?.notificationOccurred("error");
       }
@@ -160,10 +160,10 @@ export function ResignationRequestForm() {
             Збережено офлайн
           </h2>
           <p className="text-[14px] leading-relaxed text-ink-700">
-            Наразі немає зв&apos;язку. Заявку збережено в пам&apos;яті пристрою.
+            Зараз немає інтернету. Заявку збережено на телефоні.
           </p>
-          <p className="text-[13px] font-medium text-brand-600">
-            Вона буде надіслана автоматично, коли з&apos;явиться інтернет і додаток буде відкритим.
+          <p className="text-[13px] text-ink-500">
+            Надішлемо самі, щойно з&apos;явиться зв&apos;язок — тримай додаток відкритим.
           </p>
         </div>
         <button type="button" onClick={() => router.push("/")} className="btn-primary w-full">
@@ -249,7 +249,7 @@ export function ResignationRequestForm() {
                 Надсилаємо…
               </>
             ) : (
-              <>Відправити <span aria-hidden>💌</span></>
+              "Надіслати"
             )}
           </button>
         </div>

@@ -184,7 +184,7 @@ export function FeedbackForm({ category }: Props) {
         }
       } else {
         setError(
-          err instanceof Error ? err.message : "Не вдалось відправити. Спробуй ще раз.",
+          err instanceof Error ? err.message : "Не вдалося відправити. Спробуй ще раз.",
         );
         webApp?.HapticFeedback?.notificationOccurred("error");
       }
@@ -207,10 +207,10 @@ export function FeedbackForm({ category }: Props) {
             Збережено офлайн
           </h2>
           <p className="text-[14px] leading-relaxed text-ink-700">
-          Наразі немає зв&apos;язку. Ваш відгук успішно збережено в пам&apos;яті пристрою.
+            Зараз немає інтернету. Заявку збережено на телефоні.
           </p>
-          <p className="text-[13px] font-medium text-brand-600">
-            Він буде надісланий автоматично, коли з&apos;явиться інтернет і додаток буде відкритим.
+          <p className="text-[13px] text-ink-500">
+            Надішлемо самі, щойно з&apos;явиться зв&apos;язок — тримай додаток відкритим.
           </p>
         </div>
         <button
@@ -425,7 +425,7 @@ export function FeedbackForm({ category }: Props) {
                 Надсилаємо…
               </>
             ) : (
-              <>Відправити <span aria-hidden>💌</span></>
+              "Надіслати"
             )}
           </button>
         </div>

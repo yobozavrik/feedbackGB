@@ -82,7 +82,7 @@ export function PinPad() {
       router.refresh();
     } catch {
       track("login_failure", { status: 0, reason: "network" });
-      setErr("Не вдалось увійти");
+      setErr("Немає зв'язку. Перевір інтернет і введи PIN ще раз.");
       setPin("");
       setBusy(false);
     }

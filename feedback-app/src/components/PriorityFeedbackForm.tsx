@@ -12,7 +12,7 @@ import { StoreSelect } from "./StoreSelect";
 import { ProductPicker } from "./ProductPicker";
 import { QuantityStepper } from "./QuantityStepper";
 import { ConfirmSheet } from "./ConfirmSheet";
-import { AlertTriangleIcon, CloudUploadIcon, MapPinIcon } from "@/components/icons";
+import { AlertTriangleIcon, ChevronRightIcon, CloudUploadIcon, MapPinIcon } from "@/components/icons";
 
 interface Props {
   category: Category;
@@ -144,7 +144,7 @@ export function PriorityFeedbackForm({ category }: Props) {
     setError(null);
 
     if (!product && !useFreeName) {
-      setError("Обери товар із каталогу або позначай вручну.");
+      setError("Обери товар зі списку або натисни «Нема в каталозі».");
       webApp?.HapticFeedback?.notificationOccurred("error");
       return;
     }
@@ -154,7 +154,7 @@ export function PriorityFeedbackForm({ category }: Props) {
       return;
     }
     if (!Number.isFinite(quantity) || quantity <= 0) {
-      setError("Кількість має бути більше 0.");
+      setError("Вкажи кількість — хоча б 1.");
       webApp?.HapticFeedback?.notificationOccurred("error");
       return;
     }
@@ -269,7 +269,7 @@ export function PriorityFeedbackForm({ category }: Props) {
         setError(
           err instanceof Error
             ? err.message
-            : "Не вдалось відправити. Спробуй ще раз.",
+            : "Не вдалося відправити. Спробуй ще раз.",
         );
         webApp?.HapticFeedback?.notificationOccurred("error");
         setConfirmOpen(false);
@@ -290,10 +290,10 @@ export function PriorityFeedbackForm({ category }: Props) {
             Збережено офлайн
           </h2>
           <p className="text-[14px] leading-relaxed text-ink-700">
-          Наразі немає зв&apos;язку. Ваш відгук успішно збережено в пам&apos;яті пристрою.
+            Зараз немає інтернету. Заявку збережено на телефоні.
           </p>
-          <p className="text-[13px] font-medium text-brand-600">
-            Він буде надісланий автоматично, коли з&apos;явиться інтернет і додаток буде відкритим.
+          <p className="text-[13px] text-ink-500">
+            Надішлемо самі, щойно з&apos;явиться зв&apos;язок — тримай додаток відкритим.
           </p>
         </div>
         <button
@@ -471,7 +471,7 @@ export function PriorityFeedbackForm({ category }: Props) {
             disabled={submitting || (!product && !useFreeName)}
             className="btn-primary flex-1"
           >
-            Далі →
+            Далі <ChevronRightIcon size={18} />
           </button>
         </div>
       </div>

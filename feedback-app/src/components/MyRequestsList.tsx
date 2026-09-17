@@ -28,7 +28,7 @@ function formatRelative(iso: string): string {
   if (min < 60) return `${min} хв тому`;
   const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr} год тому`;
-  return `${Math.floor(hr / 24)} дн тому`;
+  return `${Math.floor(hr / 24)} дн. тому`;
 }
 
 const ARCHIVE_STATUSES = new Set<FeedbackStatus>(["resolved", "rejected"]);
