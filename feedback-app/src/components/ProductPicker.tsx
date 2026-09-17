@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProductRow } from "@/app/api/products/route";
+import { ChevronDownIcon, ChevronRightIcon, SearchIcon, XIcon } from "@/components/icons";
 
 interface Props {
   open: boolean;
@@ -160,36 +161,39 @@ export function ProductPicker({ open, storeId, onSelect, onClose }: Props) {
       <div
         role="dialog"
         aria-label="Оберіть товар"
-        className="absolute inset-x-0 bottom-0 top-10 flex flex-col rounded-t-3xl bg-bg shadow-2xl animate-slide-up sm:left-1/2 sm:max-w-md sm:-translate-x-1/2"
+        className="absolute inset-x-0 bottom-0 top-[max(40px,env(safe-area-inset-top))] flex flex-col rounded-t-3xl bg-bg shadow-sheet animate-slide-up sm:left-1/2 sm:max-w-md sm:-translate-x-1/2"
       >
-        {/* Drag handle + header */}
-        <div className="flex items-center justify-between border-b border-ink-300/20 px-4 pb-2 pt-3">
-          <div className="mx-auto h-1.5 w-10 rounded-full bg-ink-300/40" />
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute right-3 top-3 rounded-full bg-elev2 px-3 py-1 text-[13px] font-medium text-ink-700"
-          >
-            Скасувати
-          </button>
-        </div>
-        <div className="px-4 pb-3 pt-2">
-          <h2 className="font-display text-[18px] font-semibold text-ink-900">
-            Оберіть товар
-          </h2>
+        {/* N3: handle centered above a proper header row; the close action
+            moves into that row as a plain icon button instead of a pill
+            sitting on top of the handle. */}
+        <div className="flex flex-col border-b border-ink-300/20">
+          <div className="flex justify-center pb-1 pt-2">
+            <div className="h-[5px] w-10 rounded-full bg-ink-300" />
+          </div>
+          <div className="flex items-center justify-between px-4 pb-3">
+            <h2 className="font-display text-[18px] font-semibold text-ink-900">
+              Оберіть товар
+            </h2>
+            <button type="button" onClick={onClose} aria-label="Закрити" className="btn-icon">
+              <XIcon size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Search */}
         <div className="sticky top-0 z-10 border-b border-ink-300/15 bg-bg/95 px-4 pb-3 backdrop-blur">
-          <input
-            ref={searchRef}
-            type="search"
-            inputMode="search"
-            placeholder="Пошук: молоко, пельмені, котлети…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="field-input"
-          />
+          <div className="relative">
+            <SearchIcon size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
+            <input
+              ref={searchRef}
+              type="search"
+              inputMode="search"
+              placeholder="Пошук: молоко, пельмені, котлети…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="field-input pl-11"
+            />
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 pb-6">
@@ -202,9 +206,9 @@ export function ProductPicker({ open, storeId, onSelect, onClose }: Props) {
           {loading && allProducts.length === 0 ? (
             <div className="mt-4 space-y-3">
               <div className="skeleton h-7 w-32 rounded-full" />
-              <div className="skeleton h-13 w-full rounded-2xl" />
-              <div className="skeleton h-13 w-full rounded-2xl" />
-              <div className="skeleton h-13 w-full rounded-2xl" />
+              <div className="skeleton h-13 w-full rounded-app" />
+              <div className="skeleton h-13 w-full rounded-app" />
+              <div className="skeleton h-13 w-full rounded-app" />
             </div>
           ) : null}
 
@@ -220,12 +224,11 @@ export function ProductPicker({ open, storeId, onSelect, onClose }: Props) {
                     key={`pop-${p.id}`}
                     type="button"
                     onClick={() => onSelect(p)}
-                    className="inline-flex items-center gap-2 rounded-full bg-cat-missing/40 px-3 py-1.5 text-[13px] font-medium text-ink-900 hover:bg-cat-missing/60 active:scale-[0.97]"
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-brand-50 px-3 py-2 text-[14px] font-medium text-brand-600 active:scale-[0.97]"
                   >
-                    <span aria-hidden>🌿</span>
-                    <span className="max-w-[200px] truncate">{p.name}</span>
+                    <span className="max-w-full truncate">{p.name}</span>
                     {p.uses_7d > 1 ? (
-                      <span className="text-[11px] text-ink-700">
+                      <span className="flex-shrink-0 text-[12px] text-brand-600/70">
                         ×{p.uses_7d}
                       </span>
                     ) : null}
@@ -249,29 +252,27 @@ export function ProductPicker({ open, storeId, onSelect, onClose }: Props) {
                 return (
                   <li
                     key={g.id}
-                    className="overflow-hidden rounded-lg border border-ink-300/20 bg-elev"
+                    className="overflow-hidden rounded-app border border-ink-300/20 bg-elev"
                   >
                     <button
                       type="button"
                       onClick={() => toggleGroup(g.id)}
-                      className="flex w-full items-center justify-between px-4 py-3 text-left"
+                      className="flex min-h-[48px] w-full items-center justify-between px-4 py-3 text-left"
                       aria-expanded={isOpen}
                     >
-                      <span className="font-medium text-ink-900">
+                      <span className="text-[15px] font-semibold text-ink-900">
                         {g.name}
                       </span>
                       <span className="flex items-center gap-2">
-                        <span className="text-[12px] text-ink-500">
+                        <span className="pill bg-elev2 text-ink-700">
                           {items.length}
                         </span>
-                        <span
-                          aria-hidden
-                          className={`transition-transform ${
+                        <ChevronDownIcon
+                          size={18}
+                          className={`text-ink-500 transition-transform ${
                             isOpen ? "rotate-180" : ""
                           }`}
-                        >
-                          ▾
-                        </span>
+                        />
                       </span>
                     </button>
                     {isOpen ? (
@@ -281,23 +282,21 @@ export function ProductPicker({ open, storeId, onSelect, onClose }: Props) {
                             <button
                               type="button"
                               onClick={() => onSelect(p)}
-                              className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-elev2 active:bg-elev2"
+                              className="flex min-h-[56px] w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-elev2 active:bg-elev2"
                             >
                               <ProductThumb photo={p.photo} />
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-[14px] font-medium text-ink-900">
                                   {p.name}
                                 </span>
-                                <span className="block text-[12px] text-ink-500">
+                                <span className="block text-meta text-ink-500">
                                   {p.unit ? p.unit : "шт"}
                                   {p.uses_7d > 0
                                     ? ` · ×${p.uses_7d} за 7 днів`
                                     : ""}
                                 </span>
                               </span>
-                              <span aria-hidden className="text-ink-300">
-                                →
-                              </span>
+                              <ChevronRightIcon size={18} className="flex-shrink-0 text-ink-300" />
                             </button>
                           </li>
                         ))}
@@ -317,7 +316,7 @@ export function ProductPicker({ open, storeId, onSelect, onClose }: Props) {
 function ProductThumb({ photo }: { photo: string | null }) {
   if (!photo) {
     return (
-      <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-elev2 text-[18px]">
+      <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[10px] bg-elev2 text-[18px]">
         🥟
       </span>
     );
@@ -328,7 +327,7 @@ function ProductThumb({ photo }: { photo: string | null }) {
     <img
       src={url}
       alt=""
-      className="h-10 w-10 flex-shrink-0 rounded-xl bg-elev2 object-cover"
+      className="h-11 w-11 flex-shrink-0 rounded-[10px] bg-elev2 object-cover"
       loading="lazy"
     />
   );

@@ -12,6 +12,7 @@ import { StoreSelect } from "./StoreSelect";
 import { ProductPicker } from "./ProductPicker";
 import { QuantityStepper } from "./QuantityStepper";
 import { ConfirmSheet } from "./ConfirmSheet";
+import { MapPinIcon } from "@/components/icons";
 
 interface Props {
   category: Category;
@@ -319,10 +320,10 @@ export function PriorityFeedbackForm({ category }: Props) {
           </span>
         ) : null}
         {lockedStoreId && storeName ? (
-          <span className="pill bg-cat-missing/40 text-ink-900">
-            <span aria-hidden>📍</span>
-            {storeName}
-          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-elev2 px-3 py-1.5 text-[14px] font-medium text-ink-900">
+                <MapPinIcon size={16} className="text-ink-500" />
+                {storeName}
+              </span>
         ) : null}
       </div>
 

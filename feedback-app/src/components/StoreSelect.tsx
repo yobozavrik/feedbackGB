@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MapPinIcon, SearchIcon } from "@/components/icons";
 
 const STORAGE_KEY = "feedback-gb:store_id";
 
@@ -71,8 +72,8 @@ export function StoreSelect({ name = "store_id", onChange }: Props) {
       <label className="field-label">Магазин</label>
       {selected ? (
         <div className="flex items-center gap-2">
-          <span className="pill bg-cat-missing/40 text-ink-900">
-            <span aria-hidden>📍</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-elev2 px-3 py-1.5 text-[14px] font-medium text-ink-900">
+            <MapPinIcon size={16} className="text-ink-500" />
             {selected.name}
           </span>
           <button
@@ -81,26 +82,29 @@ export function StoreSelect({ name = "store_id", onChange }: Props) {
               setStoreId(null);
               setOpen(true);
             }}
-            className="text-[12px] text-ink-500 underline-offset-2 hover:underline"
+            className="link"
           >
             змінити
           </button>
         </div>
       ) : (
         <>
-          <input
-            type="text"
-            className="field-input"
-            placeholder="🔍 Знайти магазин"
-            value={query}
-            onFocus={() => setOpen(true)}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setOpen(true);
-            }}
-          />
+          <div className="relative">
+            <SearchIcon size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
+            <input
+              type="text"
+              className="field-input pl-11"
+              placeholder="Знайти магазин"
+              value={query}
+              onFocus={() => setOpen(true)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setOpen(true);
+              }}
+            />
+          </div>
           {open && filtered.length > 0 ? (
-            <ul className="mt-1 max-h-60 overflow-y-auto rounded-lg border border-ink-300/30 bg-elev shadow-soft">
+            <ul className="mt-1 max-h-60 overflow-y-auto rounded-app border border-ink-300/30 bg-elev shadow-soft">
               {filtered.map((s) => (
                 <li key={s.id}>
                   <button
@@ -110,7 +114,7 @@ export function StoreSelect({ name = "store_id", onChange }: Props) {
                       setQuery("");
                       setOpen(false);
                     }}
-                    className="block w-full px-4 py-2.5 text-left text-[14px] text-ink-900 hover:bg-elev2"
+                    className="flex min-h-[44px] w-full items-center px-4 text-left text-[14px] text-ink-900 hover:bg-elev2"
                   >
                     {s.name}
                   </button>

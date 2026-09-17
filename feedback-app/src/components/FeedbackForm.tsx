@@ -6,6 +6,7 @@ import type { Category } from "@/lib/categories";
 import { useTelegram } from "./TelegramProvider";
 import { PhotoInput } from "./PhotoInput";
 import { StoreSelect } from "./StoreSelect";
+import { MapPinIcon } from "@/components/icons";
 
 interface Props {
   category: Category;
@@ -319,8 +320,8 @@ export function FeedbackForm({ category }: Props) {
           {storeName ? (
             <div>
               <label className="field-label">Магазин</label>
-              <span className="pill bg-cat-missing/40 text-ink-900">
-                <span aria-hidden>📍</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-elev2 px-3 py-1.5 text-[14px] font-medium text-ink-900">
+                <MapPinIcon size={16} className="text-ink-500" />
                 {storeName}
               </span>
             </div>

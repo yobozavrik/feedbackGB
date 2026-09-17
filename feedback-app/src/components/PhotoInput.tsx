@@ -1,6 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { CameraIcon, XIcon } from "@/components/icons";
+
+const THUMB_GRID_SIZE = 8;
 
 const DEFAULT_MAX_DIMENSION = 1600;
 const DEFAULT_MAX_OUTPUT_BYTES = 650 * 1024;
@@ -68,11 +71,22 @@ export function PhotoInput({
     onChange(next);
   }
 
+  // F8: the drop zone always just prompts "add a photo" — the thumbnail
+  // grid lives below it, full-size squares instead of 4 sideways slivers
+  // squeezed into the same row.
+  const overflowCount = previews.length - (THUMB_GRID_SIZE - 1);
+  const visibleThumbs = overflowCount > 0 ? previews.slice(0, THUMB_GRID_SIZE - 1) : previews;
+
   return (
     <div>
-      <label className="field-label">{label}</label>
+      <div className="flex items-baseline justify-between">
+        <label className="field-label">{label}</label>
+        <span className="text-meta tabular-nums text-ink-500">
+          {previews.length}/{maxPhotos}
+        </span>
+      </div>
       <div
-        className="flex items-center gap-3 rounded-lg border-2 border-dashed border-ink-300/45 bg-elev2 p-3 transition hover:border-brand-500/40"
+        className="flex items-center gap-3 rounded-app border-[1.5px] border-dashed border-ink-300 bg-elev p-3 transition [@media(hover:hover)]:hover:border-brand-500/40"
         onClick={() => inputRef.current?.click()}
         role="button"
         tabIndex={0}
@@ -80,50 +94,50 @@ export function PhotoInput({
           if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
         }}
       >
-        {previews.length > 0 ? (
-          <div className="grid max-w-[148px] flex-shrink-0 grid-cols-2 gap-1">
-            {previews.slice(0, 4).map((src, index) => (
-              <div key={`${src.slice(0, 32)}-${index}`} className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={src}
-                  alt={`preview ${index + 1}`}
-                  className="h-[34px] w-[68px] rounded-md object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removePhoto(index);
-                  }}
-                  className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-[11px] font-semibold text-white shadow-soft"
-                  aria-label="Видалити фото"
-                >
-                  x
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg bg-elev text-3xl">
-            📷
-          </div>
-        )}
-        <div className="min-w-0 flex-1 text-[14px]">
-          <div className="font-medium text-ink-900">
-            {previews.length > 0
-              ? `Додано ${previews.length}/${maxPhotos} фото`
-              : "Додати фото"}
-          </div>
-          <div className="truncate text-[12px] text-ink-500">
+        <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+          <CameraIcon size={22} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[15px] font-semibold text-ink-900">Додати фото</div>
+          <div className="truncate text-meta text-ink-500">
             {busy
               ? "Обробка..."
               : error
                 ? error
-                : "Камера або галерея, можна кілька фото"}
+                : `Камера або галерея · до ${maxPhotos} фото`}
           </div>
         </div>
       </div>
+      {previews.length > 0 ? (
+        <div className="mt-2 grid grid-cols-4 gap-2">
+          {visibleThumbs.map((src, index) => (
+            <div key={`${src.slice(0, 32)}-${index}`} className="relative aspect-square">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={src}
+                alt={`Фото ${index + 1}`}
+                className="h-full w-full rounded-[10px] object-cover"
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removePhoto(index);
+                }}
+                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-ink-900/70 text-white"
+                aria-label="Видалити фото"
+              >
+                <XIcon size={13} />
+              </button>
+            </div>
+          ))}
+          {overflowCount > 0 ? (
+            <div className="flex aspect-square items-center justify-center rounded-[10px] bg-elev2 text-headline text-ink-700">
+              +{overflowCount}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <input
         ref={inputRef}
         type="file"
