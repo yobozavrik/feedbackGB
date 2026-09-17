@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Manrope } from "next/font/google";
+import { Manrope, Onest } from "next/font/google";
 import Script from "next/script";
 import { Suspense } from "react";
 import "@/styles/globals.css";
@@ -7,7 +7,9 @@ import { PostHogProvider } from "@/components/PostHogProvider";
 import { InteractionTracker } from "@/components/InteractionTracker";
 import { ClientErrorReporter } from "@/components/ClientErrorReporter";
 
-const inter = Inter({
+// T3: Onest reads better at small sizes in Cyrillic (taller x-height, more
+// open "а/е/с", distinct "і/ї/й") than Inter, which this replaces.
+const onest = Onest({
   subsets: ["latin", "cyrillic", "cyrillic-ext"],
   weight: ["400", "500", "600"],
   variable: "--font-sans",
@@ -31,9 +33,12 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // T7: matches --bg (F9F9FF) so there's no seam between the Telegram/browser
+  // chrome and the page. The app is light-only for now (dark theme is tech
+  // debt, see plan §13), so both entries point at the same light value.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fdf8f3" },
-    { media: "(prefers-color-scheme: dark)", color: "#1a1313" },
+    { media: "(prefers-color-scheme: light)", color: "#f9f9ff" },
+    { media: "(prefers-color-scheme: dark)", color: "#f9f9ff" },
   ],
 };
 
@@ -45,7 +50,7 @@ export default function RootLayout({
   return (
     <html
       lang="uk"
-      className={`${inter.variable} ${manrope.variable}`}
+      className={`${onest.variable} ${manrope.variable}`}
       suppressHydrationWarning
     >
       <head>

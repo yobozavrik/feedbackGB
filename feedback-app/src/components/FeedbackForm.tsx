@@ -332,7 +332,7 @@ export function FeedbackForm({ category }: Props) {
 
       {/* Dev notice banner */}
       {(category.id === "tech_issue" || category.id === "consumables_request") && (
-        <div className="rounded-lg border border-amber-500/20 bg-amber-50/50 p-4 backdrop-blur-sm animate-fade-in">
+        <div className="rounded-lg border border-amber-500/20 bg-amber-50/50 p-4 backdrop-blur-sm animate-fade-up">
           <div className="flex gap-3">
             <span className="text-xl" aria-hidden>
               {category.id === "tech_issue" ? "🔧" : "📋"}

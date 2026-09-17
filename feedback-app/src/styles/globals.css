@@ -10,22 +10,29 @@
   --elev-2: 241 243 255;
   --ink-900: 20 27 43;
   --ink-700: 67 70 84;
-  --ink-500: 115 118 134;
+  /* T1: was 115 118 134 (4.3:1 on --bg, below the 4.5 AA floor) */
+  --ink-500: 102 105 121;
   --ink-300: 195 197 215;
   --brand-500: 19 83 216;
   --brand-600: 0 63 177;
   --brand-50: 219 225 255;
-  --accent-amber: 107 216 203;
-  --cat-missing: 219 225 255;
-  --cat-overstock: 214 228 243;
-  --cat-defect: 255 218 214;
-  --cat-supply: 225 232 253;
-  --cat-idea: 137 245 231;
-  --cat-spotted: 233 237 255;
-  --cat-tech: 214 228 243;
-  --cat-voice: 219 225 255;
+  /* T1: text placed on --brand-500 (buttons, PIN "OK") */
+  --on-brand: 255 255 255;
+  /* T1: warm-tinted, distinguishable category backgrounds (icon chips only) */
+  --cat-missing: 253 235 216;
+  --cat-overstock: 227 241 228;
+  --cat-defect: 252 226 226;
+  --cat-supply: 232 228 247;
+  --cat-idea: 255 242 199;
+  --cat-spotted: 221 240 243;
+  --cat-tech: 230 234 242;
+  --cat-voice: 244 228 240;
   --success: 0 110 101;
+  --success-soft: 221 242 238;
+  --warning: 138 83 0;
+  --warning-soft: 253 240 217;
   --danger: 186 26 26;
+  --danger-soft: 253 232 232;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -43,17 +50,18 @@ body {
 }
 
 @layer components {
+  /* T5/T6: one radius for cards/sheets, one thin shadow + border. */
   .card {
-    @apply rounded-xl border border-ink-300/20 bg-elev shadow-soft;
+    @apply rounded-card border border-ink-300/20 bg-elev shadow-soft;
   }
   .card-flat {
-    @apply rounded-xl border border-ink-300/15 bg-elev2;
+    @apply rounded-card border border-ink-300/15 bg-elev2;
   }
   .field-label {
     @apply mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.03em] text-ink-700;
   }
   .field-input {
-    @apply h-13 w-full rounded-lg border border-ink-300/45 bg-elev px-4 text-[15px]
+    @apply h-13 w-full rounded-app border border-ink-300/45 bg-elev px-4 text-[15px]
            text-ink-900 placeholder:text-ink-300
            focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/15
            transition;
@@ -65,19 +73,19 @@ body {
     @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold;
   }
   .btn-primary {
-    @apply inline-flex h-13 items-center justify-center gap-2 rounded-lg
-           bg-brand-500 px-6 font-medium text-white
+    @apply inline-flex h-13 items-center justify-center gap-2 rounded-app
+           bg-brand-500 px-6 font-medium text-on-brand
            hover:bg-brand-600 active:scale-[0.97]
            disabled:opacity-50 disabled:pointer-events-none
            transition-all duration-200;
   }
   .btn-ghost {
-    @apply inline-flex h-13 items-center justify-center gap-2 rounded-lg
+    @apply inline-flex h-13 items-center justify-center gap-2 rounded-app
            border border-ink-300/45 bg-elev px-5 text-ink-900
            hover:bg-elev2/70 active:scale-[0.97] transition-all duration-200;
   }
   .btn-step {
-    @apply inline-flex h-13 items-center justify-center rounded-lg
+    @apply inline-flex h-13 items-center justify-center rounded-app
            border border-ink-300/35 bg-elev text-[24px] font-semibold text-ink-900
            hover:bg-elev2/70 active:scale-[0.95]
            disabled:opacity-40 disabled:pointer-events-none

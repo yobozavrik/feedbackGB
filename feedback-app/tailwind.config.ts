@@ -14,9 +14,7 @@ const config: Config = {
           500: "rgb(var(--brand-500) / <alpha-value>)",
           600: "rgb(var(--brand-600) / <alpha-value>)",
         },
-        amber: {
-          400: "rgb(var(--accent-amber) / <alpha-value>)",
-        },
+        "on-brand": "rgb(var(--on-brand) / <alpha-value>)",
         ink: {
           900: "rgb(var(--ink-900) / <alpha-value>)",
           700: "rgb(var(--ink-700) / <alpha-value>)",
@@ -34,22 +32,44 @@ const config: Config = {
           voice: "rgb(var(--cat-voice) / <alpha-value>)",
         },
         success: "rgb(var(--success) / <alpha-value>)",
+        "success-soft": "rgb(var(--success-soft) / <alpha-value>)",
+        warning: "rgb(var(--warning) / <alpha-value>)",
+        "warning-soft": "rgb(var(--warning-soft) / <alpha-value>)",
         danger: "rgb(var(--danger) / <alpha-value>)",
+        "danger-soft": "rgb(var(--danger-soft) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
         display: ["var(--font-display)", "system-ui", "sans-serif"],
       },
+      // T4: 7-step text scale (min. 12px) replacing 16 ad-hoc text-[Npx] sizes.
+      // "input" stays 16px so iOS never zooms the page on focus (F-1).
+      fontSize: {
+        display: ["28px", { lineHeight: "34px", fontWeight: "700" }],
+        title: ["20px", { lineHeight: "26px", fontWeight: "700" }],
+        headline: ["16px", { lineHeight: "22px", fontWeight: "600" }],
+        body: ["15px", { lineHeight: "22px" }],
+        input: ["16px", { lineHeight: "22px" }],
+        label: ["13px", { lineHeight: "18px", fontWeight: "500" }],
+        meta: ["12px", { lineHeight: "16px" }],
+      },
       boxShadow: {
-        soft: "0 1px 2px rgba(20,27,43,0.05), 0 10px 28px rgba(20,27,43,0.08)",
+        // T6: one thin shadow + border instead of a two-layer floating shadow
+        // stamped on every card.
+        soft: "0 1px 2px rgb(20 27 43 / 0.06)",
+        sheet: "0 -8px 32px rgb(20 27 43 / 0.14)",
         ring: "0 0 0 4px rgb(var(--brand-500) / 0.18)",
       },
       borderRadius: {
+        // T5: one radius for fields/buttons/rows, one for cards/sheets.
+        app: "12px",
+        card: "16px",
         "4xl": "2rem",
       },
       animation: {
-        "fade-up": "fadeUp 0.35s cubic-bezier(0.2, 0.8, 0.2, 1)",
-        "slide-up": "slideUp 0.28s cubic-bezier(0.2, 0.8, 0.2, 1)",
+        // M1: shorter, snappier motion.
+        "fade-up": "fadeUp 0.24s cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "slide-up": "slideUp 0.26s cubic-bezier(0.2, 0.8, 0.2, 1)",
         pop: "pop 0.4s cubic-bezier(0.2, 1.6, 0.4, 1)",
         shake: "shake 0.22s ease-in-out",
         shimmer: "shimmer 1.4s linear infinite",
