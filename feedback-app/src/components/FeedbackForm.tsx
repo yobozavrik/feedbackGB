@@ -296,7 +296,7 @@ export function FeedbackForm({ category }: Props) {
               <p className="mb-3 text-[13px] leading-relaxed text-ink-500">Обери магазин, якщо сьогодні ти на заміні</p>
               <select
                 id="photo-report-replacement-store"
-                className="field-input"
+                className="field-input field-select"
                 value={selectedReplacementStoreId ?? ""}
                 onChange={(event) => setSelectedReplacementStoreId(event.target.value ? Number(event.target.value) : null)}
               >
@@ -410,18 +410,21 @@ export function FeedbackForm({ category }: Props) {
       ) : null}
 
       {/* Sticky CTA bar */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink-300/20 bg-bg/90 px-4 py-3 backdrop-blur-md sm:px-6">
-        <div className="mx-auto flex max-w-md gap-2">
+      <div className="bottom-action-bar">
+        <div className="mx-auto flex w-full max-w-md gap-2">
           <button
             type="button"
             onClick={() => router.back()}
-            className="btn-ghost px-4"
+            className="btn-back"
           >
             Назад
           </button>
           <button type="submit" disabled={submitting || (isSellerPhotoReport && !currentPhotoReportStore)} className="btn-primary flex-1">
             {submitting ? (
-              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              <>
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-on-brand/40 border-t-on-brand" />
+                Надсилаємо…
+              </>
             ) : (
               <>Відправити <span aria-hidden>💌</span></>
             )}

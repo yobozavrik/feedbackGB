@@ -39,10 +39,10 @@
      (plain browser) that variable doesn't exist, so this falls back to the
      dynamic viewport height. */
   --app-h: var(--tg-viewport-stable-height, 100svh);
-  /* R9: rough height of the fixed "Назад / Надіслати" bar (button + its
-     padding + safe-area). Refined once the bar gets its exact safe-area
-     padding in stage 3 (B7); kept generous for now so nothing is hidden. */
-  --bottom-bar-h: 96px;
+  /* R9: exact height of the fixed "Назад / Надіслати" bar — button (48px,
+     .h-13) + its own top/bottom padding + border + the home-indicator
+     safe area (B7's .bottom-action-bar). */
+  --bottom-bar-h: calc(48px + 10px + 12px + 1px + env(safe-area-inset-bottom));
 }
 
 @media (prefers-color-scheme: dark) {
@@ -78,37 +78,81 @@ body {
   .card-flat {
     @apply rounded-card border border-ink-300/15 bg-elev2;
   }
+  /* F1: sentence case, not uppercase — caps at 12px was the slowest thing to
+     read on the page. */
   .field-label {
-    @apply mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.03em] text-ink-700;
+    @apply mb-1.5 block text-label text-ink-700;
   }
   .field-input {
-    @apply h-13 w-full rounded-app border border-ink-300/45 bg-elev px-4 text-[15px]
-           text-ink-900 placeholder:text-ink-300
-           focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/15
+    /* F2: 16px stops iOS from zooming the page on focus (F-1). */
+    @apply h-13 w-full rounded-app border border-ink-300/45 bg-elev px-4 text-input
+           text-ink-900 placeholder:text-ink-500
+           focus:border-brand-500 focus:outline-none focus:ring-[3px] focus:ring-brand-500/20
            transition;
   }
   .field-textarea {
     @apply field-input min-h-[112px] resize-y py-3 leading-relaxed;
   }
+  /* F5: one chevron on every <select>, instead of each phone/OS drawing its
+     own (and a different one on Android vs iOS). */
+  .field-select {
+    @apply appearance-none bg-no-repeat pr-11;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23666979' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right 14px center;
+    background-size: 20px;
+  }
+  /* F6: iOS centers <input type="date"> text by default; keep it aligned
+     like every other field. */
+  .field-input[type="date"] {
+    text-align: left;
+  }
   .pill {
     @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold;
   }
   .btn-primary {
+    /* B1: 600-weight label, darker press color, visible keyboard focus ring. */
     @apply inline-flex h-13 items-center justify-center gap-2 rounded-app
-           bg-brand-500 px-6 font-medium text-on-brand
-           hover:bg-brand-600 active:scale-[0.97]
-           disabled:opacity-50 disabled:pointer-events-none
-           transition-all duration-200;
+           bg-brand-500 px-6 text-input font-semibold text-on-brand
+           hover:bg-brand-600 active:scale-[0.98] active:bg-brand-600
+           focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-500/35 focus-visible:ring-offset-2
+           disabled:opacity-45 disabled:pointer-events-none disabled:cursor-default
+           transition-all duration-150;
   }
+  /* B2: filled "tonal" secondary instead of a white-on-white outline that
+     barely showed up next to a card. */
   .btn-ghost {
     @apply inline-flex h-13 items-center justify-center gap-2 rounded-app
-           border border-ink-300/45 bg-elev px-5 text-ink-900
-           hover:bg-elev2/70 active:scale-[0.97] transition-all duration-200;
+           bg-elev2 px-5 text-input font-semibold text-ink-900
+           hover:bg-ink-300/25 active:scale-[0.98]
+           focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-500/35 focus-visible:ring-offset-2
+           disabled:opacity-45 disabled:pointer-events-none disabled:cursor-default
+           transition-all duration-150;
+  }
+  /* B4: for destructive actions ("Видалити" in the offline queue). */
+  .btn-danger {
+    @apply inline-flex h-13 items-center justify-center gap-2 rounded-app
+           bg-danger-soft px-5 text-input font-semibold text-danger
+           hover:bg-danger/15 active:scale-[0.98]
+           focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-danger/35 focus-visible:ring-offset-2
+           disabled:opacity-45 disabled:pointer-events-none disabled:cursor-default
+           transition-all duration-150;
+  }
+  /* B5: icon-only controls (header actions, queue retry/delete). Visible box
+     is smaller than the tap target, which stays >=44px either way. */
+  .btn-icon {
+    @apply inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full
+           text-ink-700 hover:bg-elev2 active:scale-95
+           focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-500/35
+           transition-all duration-150;
+  }
+  /* B6: text-only action links ("змінити", "Нема в каталозі"). */
+  .link {
+    @apply inline-flex min-h-[40px] items-center gap-1 text-label text-brand-600;
   }
   .btn-step {
     @apply inline-flex h-13 items-center justify-center rounded-app
-           border border-ink-300/35 bg-elev text-[24px] font-semibold text-ink-900
-           hover:bg-elev2/70 active:scale-[0.95]
+           bg-elev2 text-ink-900
+           hover:bg-ink-300/25 active:scale-[0.95]
            disabled:opacity-40 disabled:pointer-events-none
            transition-all duration-150 select-none;
     width: 3.25rem;
@@ -119,8 +163,26 @@ body {
     background-clip: text;
     color: transparent;
   }
+  /* B1/F2: 48px — the shared height for fields, buttons, and their loading
+     skeletons, so a skeleton never changes shape once the real content
+     lands (F-14). */
   .h-13 {
-    height: 3.25rem;
+    height: 3rem;
+  }
+  /* B7: fixed "Назад / Надіслати" bar, padded for the home-indicator area
+     (F-2). --bottom-bar-h (R9) is kept in sync with this value. Its
+     immediate child stays responsible for centering/max-width/gap, same
+     as the page content above it. */
+  .bottom-action-bar {
+    @apply fixed inset-x-0 bottom-0 z-20 border-t border-ink-300/50 bg-bg/90 px-[clamp(12px,4vw,20px)] backdrop-blur-md;
+    padding-top: 10px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  /* R8: "Назад" keeps a stable, narrower width on any screen; "Надіслати"
+     (flex-1 on the button itself) takes the rest. */
+  .btn-back {
+    @apply btn-ghost flex-shrink-0;
+    width: clamp(88px, 28vw, 112px);
   }
 }
 

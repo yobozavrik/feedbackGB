@@ -457,12 +457,12 @@ export function PriorityFeedbackForm({ category }: Props) {
       ) : null}
 
       {/* Sticky CTA */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink-300/20 bg-bg/90 px-4 py-3 backdrop-blur-md sm:px-6">
-        <div className="mx-auto flex max-w-md gap-2">
+      <div className="bottom-action-bar">
+        <div className="mx-auto flex w-full max-w-md gap-2">
           <button
             type="button"
             onClick={() => router.back()}
-            className="btn-ghost px-4"
+            className="btn-back"
           >
             Назад
           </button>
