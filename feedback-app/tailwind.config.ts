@@ -45,8 +45,10 @@ const config: Config = {
       // T4: 7-step text scale (min. 12px) replacing 16 ad-hoc text-[Npx] sizes.
       // "input" stays 16px so iOS never zooms the page on focus (F-1).
       fontSize: {
-        display: ["28px", { lineHeight: "34px", fontWeight: "700" }],
-        title: ["20px", { lineHeight: "26px", fontWeight: "700" }],
+        // R4: only the two largest roles scale with the viewport — small
+        // text and inputs stay fixed (input must stay 16px, see below).
+        display: ["clamp(24px, 7.2vw, 28px)", { lineHeight: "1.2", fontWeight: "700" }],
+        title: ["clamp(18px, 5.4vw, 20px)", { lineHeight: "1.3", fontWeight: "700" }],
         headline: ["16px", { lineHeight: "22px", fontWeight: "600" }],
         body: ["15px", { lineHeight: "22px" }],
         input: ["16px", { lineHeight: "22px" }],

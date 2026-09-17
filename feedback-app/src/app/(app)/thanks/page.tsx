@@ -8,7 +8,7 @@ export default function ThanksPage({
 }) {
   const cat = searchParams.cat ? getCategory(searchParams.cat) : undefined;
   return (
-    <main className="flex min-h-[100svh] flex-col items-center justify-center px-6 pb-12 pt-12 text-center">
+    <main className="flex min-h-[var(--app-h)] flex-col items-center justify-center px-[clamp(16px,6vw,24px)] pb-12 pt-12 text-center">
       <div className="animate-pop flex h-24 w-24 items-center justify-center rounded-full bg-brand-50 text-[56px] shadow-soft">
         {cat?.emoji ?? "💖"}
       </div>

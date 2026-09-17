@@ -98,7 +98,7 @@ export function PinPad() {
   };
 
   return (
-    <main className="flex min-h-[100svh] flex-col items-center justify-center px-6 pb-8 pt-12">
+    <main className="flex min-h-[var(--app-h)] flex-col items-center justify-center px-[clamp(16px,6vw,24px)] pb-8 pt-12">
       <div className="mb-3 text-4xl" aria-hidden>
         🌸
       </div>

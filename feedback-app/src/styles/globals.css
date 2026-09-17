@@ -33,12 +33,33 @@
   --warning-soft: 253 240 217;
   --danger: 186 26 26;
   --danger-soft: 253 232 232;
+  /* R2: Telegram sets --tg-viewport-stable-height on <html> once the Mini
+     App SDK is ready, which is the actual visible height inside the
+     Telegram chrome (smaller than the browser window). Outside Telegram
+     (plain browser) that variable doesn't exist, so this falls back to the
+     dynamic viewport height. */
+  --app-h: var(--tg-viewport-stable-height, 100svh);
+  /* R9: rough height of the fixed "Назад / Надіслати" bar (button + its
+     padding + safe-area). Refined once the bar gets its exact safe-area
+     padding in stage 3 (B7); kept generous for now so nothing is hidden. */
+  --bottom-bar-h: 96px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: light;
   }
+}
+
+html {
+  /* R1: stop Android WebViews from "font boosting" (auto-enlarging text in
+     some blocks but not others) independently of our own type scale. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* R9: when the keyboard focuses a field above the fixed bottom bar, the
+     browser's own "scroll into view" keeps that much clearance instead of
+     tucking the field under "Назад / Надіслати". */
+  scroll-padding-bottom: var(--bottom-bar-h);
 }
 
 html,

@@ -17,7 +17,7 @@ export default function MiniAppLayout({
   return (
     <TelegramProvider>
       <OfflineSyncProvider>
-        <div className="relative mx-auto flex min-h-dvh max-w-md flex-col px-4 pb-10 pt-5 sm:px-6">
+        <div className="relative mx-auto flex min-h-[var(--app-h)] max-w-md flex-col px-[clamp(12px,4vw,20px)] pb-10 pt-5">
           {children}
         </div>
       </OfflineSyncProvider>

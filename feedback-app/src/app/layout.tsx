@@ -65,7 +65,7 @@ export default function RootLayout({
           strategy="beforeInteractive"
         />
       </head>
-      <body className="min-h-dvh font-sans antialiased">
+      <body className="min-h-[var(--app-h)] font-sans antialiased">
         <Suspense fallback={null}>
           <PostHogProvider>
             <ClientErrorReporter />
