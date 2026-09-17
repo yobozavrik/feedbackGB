@@ -176,7 +176,7 @@ export function PinPad() {
         ))}
       </div>
 
-      <p className="mt-10 max-w-xs text-center text-[11px] leading-relaxed text-ink-500">
+      <p className="mt-10 max-w-xs text-center text-[12px] leading-relaxed text-ink-500">
         Якщо забула PIN — попроси адміна (Галя) у чаті.
       </p>
     </main>

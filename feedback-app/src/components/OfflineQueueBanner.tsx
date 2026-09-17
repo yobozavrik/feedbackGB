@@ -26,7 +26,7 @@ function QueueBadge({ status }: { status: string }) {
   switch (status) {
     case "syncing":
       return (
-        <span className="badge inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-600">
+        <span className="badge inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2 py-0.5 text-[12px] font-semibold text-brand-600">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-500 opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-brand-500" />
@@ -36,19 +36,19 @@ function QueueBadge({ status }: { status: string }) {
       );
     case "failed_auth":
       return (
-        <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning">
+        <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[12px] font-semibold text-warning">
           Потрібен вхід
         </span>
       );
     case "failed_validation":
       return (
-        <span className="rounded-full bg-danger-soft px-2 py-0.5 text-[11px] font-semibold text-danger">
+        <span className="rounded-full bg-danger-soft px-2 py-0.5 text-[12px] font-semibold text-danger">
           Помилка даних
         </span>
       );
     default:
       return (
-        <span className="rounded-full bg-elev2 px-2 py-0.5 text-[11px] font-semibold text-ink-700">
+        <span className="rounded-full bg-elev2 px-2 py-0.5 text-[12px] font-semibold text-ink-700">
           Очікує мережі
         </span>
       );

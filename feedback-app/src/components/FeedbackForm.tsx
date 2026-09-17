@@ -275,7 +275,7 @@ export function FeedbackForm({ category }: Props) {
             <>
               <input type="hidden" name="store_id" value={currentPhotoReportStore.id} />
               <section className="rounded-2xl bg-brand-600 p-4 text-white shadow-soft" aria-live="polite">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">Зараз працюю в магазині</p>
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-white/80">Зараз працюю в магазині</p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <h2 className="font-display text-[24px] font-bold leading-tight">{currentPhotoReportStore.name}</h2>
                   {selectedReplacementStore ? <span className="pill bg-white/95 text-brand-600">Заміна</span> : null}

@@ -10,7 +10,7 @@ interface HeaderProps {
 /**
  * Sticky page header. Shows the brand wordmark + an optional subtitle.
  *
- * If `back` is provided, a left-aligned "← <label>" link is rendered above
+ * If `back` is provided, a left-aligned "‹ <label>" link is rendered above
  * the brand to give the user an explicit way out of the current section.
  * (Mobile users can't always rely on browser-level back navigation —
  * especially when the app is launched as a PWA / from a Telegram WebView.)

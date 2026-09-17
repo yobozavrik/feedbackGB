@@ -12,7 +12,14 @@ import { StoreSelect } from "./StoreSelect";
 import { ProductPicker } from "./ProductPicker";
 import { QuantityStepper } from "./QuantityStepper";
 import { ConfirmSheet } from "./ConfirmSheet";
-import { AlertTriangleIcon, ChevronRightIcon, CloudUploadIcon, MapPinIcon } from "@/components/icons";
+import {
+  AlertTriangleIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloudUploadIcon,
+  MapPinIcon,
+  PlusIcon,
+} from "@/components/icons";
 
 interface Props {
   category: Category;
@@ -353,9 +360,13 @@ export function PriorityFeedbackForm({ category }: Props) {
                 return next;
               });
             }}
-            className="text-[12px] font-medium text-brand-600 hover:underline"
+            className="link"
           >
-            {useFreeName ? "← Обрати з каталогу" : "Нема в каталозі →"}
+            {useFreeName ? (
+              <><ChevronLeftIcon size={16} /> Обрати з каталогу</>
+            ) : (
+              <>Нема в каталозі <ChevronRightIcon size={16} /></>
+            )}
           </button>
         </div>
 
@@ -373,29 +384,27 @@ export function PriorityFeedbackForm({ category }: Props) {
           <button
             type="button"
             onClick={() => setPickerOpen(true)}
-            className="flex w-full items-center gap-3 rounded-lg border border-ink-300/35 bg-elev p-3 text-left hover:border-brand-500/40"
+            className="flex w-full items-center gap-3 rounded-app border border-ink-300/35 bg-elev p-3 text-left hover:border-brand-500/40"
           >
             <ProductThumb photo={product.photo} />
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium text-ink-900">
                 {product.name}
               </span>
-              <span className="block text-[12px] text-ink-500">
+              <span className="block text-meta text-ink-500">
                 {product.unit ?? "шт"}
                 {product.category_name ? ` · ${product.category_name}` : ""}
               </span>
             </span>
-            <span className="text-[12px] font-medium text-brand-600">
-              Змінити
-            </span>
+            <span className="link">Змінити</span>
           </button>
         ) : (
           <button
             type="button"
             onClick={() => setPickerOpen(true)}
-            className="flex h-13 w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-ink-300/45 bg-elev2 px-4 text-[15px] font-medium text-ink-700 hover:border-brand-500/40 hover:text-brand-600"
+            className="flex h-13 w-full items-center justify-center gap-2 rounded-app border-[1.5px] border-dashed border-ink-300 bg-elev2 px-4 text-[15px] font-medium text-ink-700 hover:border-brand-500/40 hover:text-brand-600"
           >
-            <span aria-hidden>＋</span> Обрати товар
+            <PlusIcon size={18} /> Обрати товар
           </button>
         )}
 
