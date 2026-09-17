@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { EmptyState } from "@/components/EmptyState";
 import { StatusPill } from "@/components/StatusPill";
+import { AlertTriangleIcon, InboxIcon } from "@/components/icons";
 import { getCategory } from "@/lib/categories";
 import { CATEGORY_TINT_BG } from "@/lib/categoryTint";
 import type { FeedbackStatus } from "@/lib/feedbackStatusMeta";
@@ -51,17 +53,18 @@ export function MyRequestsList() {
   if (rows === null) {
     return (
       <div className="mt-4 space-y-2">
-        <div className="skeleton h-16 w-full rounded-xl" />
-        <div className="skeleton h-16 w-full rounded-xl" />
+        <div className="skeleton h-16 w-full rounded-card" />
+        <div className="skeleton h-16 w-full rounded-card" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <p className="mt-4 text-[13px] text-ink-500">
-        Не вдалося завантажити заявки.
-      </p>
+      <div className="callout callout-danger mt-4">
+        <AlertTriangleIcon size={18} className="callout-icon" />
+        Не вдалося завантажити заявки. Онови сторінку.
+      </div>
     );
   }
 
@@ -94,9 +97,15 @@ export function MyRequestsList() {
       </div>
 
       {visibleRows.length === 0 ? (
-        <p className="mt-8 text-center text-body text-ink-500">
-          {tab === "archive" ? "Архів порожній" : "Немає активних заявок"}
-        </p>
+        <EmptyState
+          icon={<InboxIcon size={26} />}
+          title={tab === "archive" ? "Архів порожній" : "Активних заявок немає"}
+          subtitle={
+            tab === "archive"
+              ? "Сюди потраплять погоджені та відхилені заявки."
+              : "Тут з'являться заявки, які ще розглядають."
+          }
+        />
       ) : (
         <div className="space-y-2">
           {visibleRows.map((r) => {

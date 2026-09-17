@@ -186,6 +186,47 @@ body {
     @apply btn-ghost flex-shrink-0;
     width: clamp(88px, 28vw, 112px);
   }
+  /* A1: one notice component (info/warning/danger/success) replacing every
+     hand-rolled amber/rose/blue/gray block and the dead "dark:" classes on
+     them (F-3, F-4, F-5). The brand is blue (decision D-1), so "info"
+     reuses the brand tokens rather than a separate hue. */
+  .callout {
+    @apply flex gap-2.5 rounded-app p-3.5 text-[13px] leading-relaxed text-ink-900;
+  }
+  .callout-icon {
+    @apply mt-0.5 flex-shrink-0;
+  }
+  .callout-title {
+    @apply mb-0.5 block text-[14px] font-semibold;
+  }
+  .callout-info {
+    @apply bg-brand-50;
+  }
+  .callout-info .callout-icon,
+  .callout-info .callout-title {
+    @apply text-brand-600;
+  }
+  .callout-warning {
+    @apply bg-warning-soft;
+  }
+  .callout-warning .callout-icon,
+  .callout-warning .callout-title {
+    @apply text-warning;
+  }
+  .callout-danger {
+    @apply bg-danger-soft;
+  }
+  .callout-danger .callout-icon,
+  .callout-danger .callout-title {
+    @apply text-danger;
+  }
+  .callout-success {
+    @apply bg-success-soft;
+  }
+  .callout-success .callout-icon,
+  .callout-success .callout-title {
+    @apply text-success;
+  }
 }
 
 /* Skeleton shimmer */

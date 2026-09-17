@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { StatusPill } from "@/components/StatusPill";
+import { AlertTriangleIcon } from "@/components/icons";
 import type { FeedbackStatus } from "@/lib/feedbackStatusMeta";
 
 interface FeedbackDetail {
@@ -83,15 +84,18 @@ export function RequestDetail({ id }: Props) {
 
   if (error) {
     return (
-      <p className="mt-4 text-[13px] text-ink-500">Не вдалося завантажити заявку.</p>
+      <div className="callout callout-danger mt-4">
+        <AlertTriangleIcon size={18} className="callout-icon" />
+        Не вдалося завантажити заявку. Онови сторінку.
+      </div>
     );
   }
 
   if (data === null) {
     return (
       <div className="mt-4 space-y-2">
-        <div className="skeleton h-24 w-full rounded-xl" />
-        <div className="skeleton h-16 w-full rounded-xl" />
+        <div className="skeleton h-24 w-full rounded-card" />
+        <div className="skeleton h-16 w-full rounded-card" />
       </div>
     );
   }

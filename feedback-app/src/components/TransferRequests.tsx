@@ -27,7 +27,7 @@ export function TransferRequests() {
   if (rows === null) {
     return (
       <div className="mt-4 space-y-2">
-        <div className="skeleton h-14 w-full rounded-xl" />
+        <div className="skeleton h-14 w-full rounded-card" />
       </div>
     );
   }

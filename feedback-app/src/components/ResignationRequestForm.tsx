@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTelegram } from "./TelegramProvider";
+import { AlertTriangleIcon, CloudUploadIcon } from "@/components/icons";
 
 const NOTICE_DAYS = 14;
 
@@ -151,8 +152,8 @@ export function ResignationRequestForm() {
   if (offlineSaved) {
     return (
       <div className="card animate-fade-up space-y-6 p-6 text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 text-[32px] text-amber-500 shadow-soft">
-          💾
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-warning-soft text-warning shadow-soft">
+          <CloudUploadIcon size={30} />
         </div>
         <div className="space-y-2">
           <h2 className="font-display text-[20px] font-bold leading-snug text-ink-900">
@@ -176,7 +177,7 @@ export function ResignationRequestForm() {
     return (
       <div className="card space-y-4 p-5">
         <div className="skeleton h-4 w-32 rounded-full" />
-        <div className="skeleton h-13 w-full rounded-2xl" />
+        <div className="skeleton h-13 w-full rounded-app" />
       </div>
     );
   }
@@ -208,17 +209,13 @@ export function ResignationRequestForm() {
       </div>
 
       {shortNotice ? (
-        <div className="rounded-lg border border-amber-500/20 bg-amber-50/50 p-4 backdrop-blur-sm">
-          <div className="flex gap-3">
-            <span className="text-xl" aria-hidden>
-              ℹ️
-            </span>
-            <p className="text-[12px] leading-normal text-amber-700">
-              За законодавством зазвичай потрібно попередити про звільнення за{" "}
-              {NOTICE_DAYS} днів. До обраної дати залишилось менше — це не заблокує заявку,
-              але адміністрація може зв&apos;язатись, щоб узгодити дату.
-            </p>
-          </div>
+        <div className="callout callout-warning">
+          <AlertTriangleIcon size={18} className="callout-icon" />
+          <p>
+            За законодавством зазвичай потрібно попередити про звільнення за{" "}
+            {NOTICE_DAYS} днів. До обраної дати залишилось менше — це не заблокує заявку,
+            але адміністрація може зв&apos;язатись, щоб узгодити дату.
+          </p>
         </div>
       ) : null}
 
@@ -237,9 +234,7 @@ export function ResignationRequestForm() {
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-brand-500/40 bg-brand-50 px-4 py-3 text-[14px] text-brand-600">
-          {error}
-        </div>
+        <div className="callout callout-danger"><AlertTriangleIcon size={18} className="callout-icon" />{error}</div>
       ) : null}
 
       <div className="bottom-action-bar">

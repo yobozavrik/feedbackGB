@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProductRow } from "@/app/api/products/route";
-import { ChevronDownIcon, ChevronRightIcon, SearchIcon, XIcon } from "@/components/icons";
+import { EmptyState } from "@/components/EmptyState";
+import { AlertTriangleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon, XIcon } from "@/components/icons";
 
 interface Props {
   open: boolean;
@@ -198,7 +199,8 @@ export function ProductPicker({ open, storeId, onSelect, onClose }: Props) {
 
         <div className="flex-1 overflow-y-auto px-4 pb-6">
           {error ? (
-            <div className="mt-4 rounded-lg border border-rose-300/40 bg-rose-50 px-4 py-3 text-[14px] text-rose-700">
+            <div className="callout callout-danger mt-4">
+              <AlertTriangleIcon size={18} className="callout-icon" />
               {error}
             </div>
           ) : null}
@@ -241,9 +243,11 @@ export function ProductPicker({ open, storeId, onSelect, onClose }: Props) {
           {/* Grouped accordion */}
           <section className="mt-5">
             {visibleGroups.length === 0 && !loading && !error ? (
-              <p className="py-8 text-center text-[14px] text-ink-500">
-                Нічого не знайшли. Перевір орфографію або скасуй пошук.
-              </p>
+              <EmptyState
+                icon={<SearchIcon size={26} />}
+                title="Нічого не знайшли"
+                subtitle="Спробуй коротше слово або перевір орфографію."
+              />
             ) : null}
             <ul className="space-y-2">
               {visibleGroups.map((g) => {

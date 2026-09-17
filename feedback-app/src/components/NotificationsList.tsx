@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { EmptyState } from "@/components/EmptyState";
+import { AlertTriangleIcon, BellIcon } from "@/components/icons";
 
 interface NotificationItem {
   id: string;
@@ -68,17 +70,18 @@ export function NotificationsList() {
   if (items === null) {
     return (
       <div className="mt-4 space-y-2">
-        <div className="skeleton h-16 w-full rounded-xl" />
-        <div className="skeleton h-16 w-full rounded-xl" />
+        <div className="skeleton h-16 w-full rounded-card" />
+        <div className="skeleton h-16 w-full rounded-card" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <p className="mt-4 text-body text-ink-500">
-        Не вдалося завантажити сповіщення.
-      </p>
+      <div className="callout callout-danger mt-4">
+        <AlertTriangleIcon size={18} className="callout-icon" />
+        Не вдалося завантажити сповіщення. Онови сторінку.
+      </div>
     );
   }
 
@@ -96,7 +99,11 @@ export function NotificationsList() {
         </button>
       ) : null}
       {items.length === 0 ? (
-        <p className="mt-8 text-center text-body text-ink-500">Немає сповіщень</p>
+        <EmptyState
+          icon={<BellIcon size={26} />}
+          title="Сповіщень немає"
+          subtitle="Напишемо, коли зміниться статус твоєї заявки."
+        />
       ) : (
         <div className="space-y-2">
           {items.map((n) => (

@@ -6,7 +6,7 @@ import type { Category } from "@/lib/categories";
 import { useTelegram } from "./TelegramProvider";
 import { PhotoInput } from "./PhotoInput";
 import { StoreSelect } from "./StoreSelect";
-import { MapPinIcon } from "@/components/icons";
+import { AlertTriangleIcon, CloudUploadIcon, InfoIcon, MapPinIcon } from "@/components/icons";
 
 interface Props {
   category: Category;
@@ -197,8 +197,10 @@ export function FeedbackForm({ category }: Props) {
   if (offlineSaved) {
     return (
       <div className="card animate-fade-up space-y-6 p-6 text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 text-[32px] text-amber-500 shadow-soft">
-          💾
+        {/* A6: same warning-toned cloud icon on every "saved offline" screen
+            (FeedbackForm/PriorityFeedbackForm/HrDateRangeRequestForm). */}
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-warning-soft text-warning shadow-soft">
+          <CloudUploadIcon size={30} />
         </div>
         <div className="space-y-2">
           <h2 className="font-display text-[20px] font-bold text-ink-900 leading-snug">
@@ -227,10 +229,10 @@ export function FeedbackForm({ category }: Props) {
     return (
       <div className="card space-y-4 p-5">
         <div className="skeleton h-4 w-32 rounded-full" />
-        <div className="skeleton h-13 w-full rounded-2xl" />
+        <div className="skeleton h-13 w-full rounded-app" />
         <div className="skeleton h-4 w-24 rounded-full" />
-        <div className="skeleton h-13 w-full rounded-2xl" />
-        <div className="skeleton h-13 w-full rounded-2xl" />
+        <div className="skeleton h-13 w-full rounded-app" />
+        <div className="skeleton h-13 w-full rounded-app" />
       </div>
     );
   }
@@ -245,7 +247,7 @@ export function FeedbackForm({ category }: Props) {
         <div className="skeleton h-4 w-40 rounded-full" />
         <div className="skeleton h-28 w-full rounded-2xl" />
         <div className="skeleton h-4 w-32 rounded-full" />
-        <div className="skeleton h-13 w-full rounded-2xl" />
+        <div className="skeleton h-13 w-full rounded-app" />
       </div>
     );
   }
@@ -284,15 +286,15 @@ export function FeedbackForm({ category }: Props) {
               </section>
             </>
           ) : (
-            <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">Де працюю зараз</p>
-              <h2 className="mt-1 font-display text-[20px] font-bold">Оберіть магазин</h2>
-              <p className="mt-2 text-[13px] leading-relaxed">Оберіть магазин для заміни, щоб надіслати фото звіт.</p>
+            <section className="rounded-card bg-warning-soft p-4">
+              <p className="text-label text-warning">Де працюю зараз</p>
+              <h2 className="mt-1 font-display text-title text-ink-900">Оберіть магазин</h2>
+              <p className="mt-2 text-[13px] leading-relaxed text-ink-900">Оберіть магазин для заміни, щоб надіслати фото звіт.</p>
             </section>
           )}
 
           {replacementPhotoReportStores.length > 0 ? (
-            <section className="rounded-2xl border border-line bg-white p-4">
+            <section className="rounded-card border border-ink-300/20 bg-elev p-4">
               <label className="field-label" htmlFor="photo-report-replacement-store">{selectedReplacementStore ? "Працюю на заміні" : "Працюю на заміні?"}</label>
               <p className="mb-3 text-[13px] leading-relaxed text-ink-500">Обери магазин, якщо сьогодні ти на заміні</p>
               <select
@@ -305,13 +307,16 @@ export function FeedbackForm({ category }: Props) {
                 {replacementPhotoReportStores.map((store) => <option key={store.id} value={store.id}>{store.name} — заміна</option>)}
               </select>
               {selectedReplacementStore && homePhotoReportStore ? (
-                <button type="button" onClick={() => setSelectedReplacementStoreId(null)} className="mt-3 text-[13px] font-medium text-brand-600">
+                <button type="button" onClick={() => setSelectedReplacementStoreId(null)} className="link mt-3">
                   Повернутися до основного магазину
                 </button>
               ) : null}
             </section>
           ) : currentPhotoReportStore ? null : (
-            <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Для вас не призначено магазин для фото звіту. Зверніться до адміністратора.</p>
+            <div className="callout callout-warning">
+              <AlertTriangleIcon size={18} className="callout-icon" />
+              Для вас не призначено магазин для фото звіту. Зверніться до адміністратора.
+            </div>
           )}
         </div>
       ) : me?.role === "seller" && me.store_id ? (
@@ -331,23 +336,18 @@ export function FeedbackForm({ category }: Props) {
         <StoreSelect />
       )}
 
-      {/* Dev notice banner */}
+      {/* A3: this is information, not a warning — it says what happens to
+          the request, so it gets the info tone, not amber. */}
       {(category.id === "tech_issue" || category.id === "consumables_request") && (
-        <div className="rounded-lg border border-amber-500/20 bg-amber-50/50 p-4 backdrop-blur-sm animate-fade-up">
-          <div className="flex gap-3">
-            <span className="text-xl" aria-hidden>
-              {category.id === "tech_issue" ? "🔧" : "📋"}
-            </span>
-            <div className="space-y-1">
-              <h4 className="text-[14px] font-semibold text-amber-900 leading-none">
-                Розділ у розробці (Демо-режим)
-              </h4>
-              <p className="mt-1 text-[12px] text-amber-700 leading-normal">
-                {category.id === "tech_issue"
-                  ? "Ця форма працює в тестовому режимі. Незабаром вона буде автоматично інтегрована з модулем технічної служби для миттєвого створення заявок."
-                  : "Ця заявка працює в режимі демо. Вона буде автоматично синхронізуватись зі складським модулем CRM для відвантаження товарів."}
-              </p>
-            </div>
+        <div className="callout callout-info animate-fade-up">
+          <InfoIcon size={18} className="callout-icon" />
+          <div>
+            <h4 className="callout-title">Тестовий режим</h4>
+            <p>
+              {category.id === "tech_issue"
+                ? "Заявка надійде адміністратору, але поки не потрапить у систему техслужби."
+                : "Заявка надійде адміністратору, але поки не потрапить у складську систему."}
+            </p>
           </div>
         </div>
       )}
@@ -405,9 +405,7 @@ export function FeedbackForm({ category }: Props) {
       })}
 
       {error ? (
-        <div className="rounded-lg border border-brand-500/40 bg-brand-50 px-4 py-3 text-[14px] text-brand-600">
-          {error}
-        </div>
+        <div className="callout callout-danger"><AlertTriangleIcon size={18} className="callout-icon" />{error}</div>
       ) : null}
 
       {/* Sticky CTA bar */}

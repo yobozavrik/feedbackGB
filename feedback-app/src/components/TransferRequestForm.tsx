@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTelegram } from "./TelegramProvider";
 import { StoreSelect } from "./StoreSelect";
+import { AlertTriangleIcon, CloudUploadIcon } from "@/components/icons";
 
 interface SessionUser {
   uid: string;
@@ -138,8 +139,8 @@ export function TransferRequestForm() {
   if (offlineSaved) {
     return (
       <div className="card animate-fade-up space-y-6 p-6 text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 text-[32px] text-amber-500 shadow-soft">
-          💾
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-warning-soft text-warning shadow-soft">
+          <CloudUploadIcon size={30} />
         </div>
         <div className="space-y-2">
           <h2 className="font-display text-[20px] font-bold leading-snug text-ink-900">
@@ -163,7 +164,7 @@ export function TransferRequestForm() {
     return (
       <div className="card space-y-4 p-5">
         <div className="skeleton h-4 w-32 rounded-full" />
-        <div className="skeleton h-13 w-full rounded-2xl" />
+        <div className="skeleton h-13 w-full rounded-app" />
       </div>
     );
   }
@@ -206,9 +207,7 @@ export function TransferRequestForm() {
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-brand-500/40 bg-brand-50 px-4 py-3 text-[14px] text-brand-600">
-          {error}
-        </div>
+        <div className="callout callout-danger"><AlertTriangleIcon size={18} className="callout-icon" />{error}</div>
       ) : null}
 
       <div className="bottom-action-bar">
