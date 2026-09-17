@@ -23,7 +23,7 @@ export default function NotFound() {
           <p className="mt-2 text-sm text-ink-700">
             Можливо, ти перейшла за старим посиланням.
           </p>
-          <Link href="/" className="btn-primary mt-5">
+          <Link href="/" className="btn-primary mt-5 w-full">
             На головну
           </Link>
         </section>

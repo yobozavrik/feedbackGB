@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { BellIcon } from "@/components/icons";
 
 const POLL_MS = 30_000;
 
@@ -34,14 +35,10 @@ export function NotificationsBell() {
   }, []);
 
   return (
-    <Link
-      href="/notifications"
-      aria-label="Сповіщення"
-      className="relative inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-lg hover:bg-elev2"
-    >
-      <span aria-hidden>🔔</span>
+    <Link href="/notifications" aria-label="Сповіщення" className="btn-icon relative">
+      <BellIcon size={22} />
       {unreadCount > 0 ? (
-        <span className="absolute right-1 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-white">
+        <span className="absolute right-1 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[11px] font-bold leading-none text-white ring-2 ring-bg">
           {unreadCount > 9 ? "9+" : unreadCount}
         </span>
       ) : null}

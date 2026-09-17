@@ -7,9 +7,17 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { identifyUser, track } from "@/lib/analytics";
+import { CheckIcon, DeleteIcon } from "@/components/icons";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "OK"];
 const PIN_LENGTH = 6;
+
+// R5: the keypad sizes itself from the actual visible height (--app-h, set
+// in globals.css from Telegram's own viewport height) instead of a fixed
+// 68px that could push "0"/"OK" below the fold on a short screen or inside
+// Telegram's compact window (F-19).
+const KEY_SIZE = "clamp(56px, min(19vw, (var(--app-h) - 300px) / 4.6), 72px)";
+const KEY_GAP = "clamp(10px, 3vw, 16px)";
 
 /**
  * PIN-only login pad.
@@ -98,14 +106,20 @@ export function PinPad() {
   };
 
   return (
-    <main className="flex min-h-[var(--app-h)] flex-col items-center justify-center px-[clamp(16px,6vw,24px)] pb-8 pt-12">
+    <main
+      className="flex min-h-[var(--app-h)] flex-col items-center justify-center px-[clamp(16px,6vw,24px)] pb-8"
+      style={{ paddingTop: "min(48px, 6vh)" }}
+    >
       <div className="mb-3 text-4xl" aria-hidden>
         🌸
       </div>
-      <h1 className="font-display text-[30px] font-bold leading-none tracking-tight grad-text">
+      <h1
+        className="font-display font-bold leading-none tracking-tight grad-text"
+        style={{ fontSize: "clamp(26px, 8.5vw, 32px)" }}
+      >
         Галя слухає
       </h1>
-      <p className="mt-2 text-[14px] text-ink-500">Введи свій PIN</p>
+      <p className="mt-2 text-[14px] text-ink-700">Введи свій PIN</p>
 
       <div
         className={`mt-8 flex gap-3 ${shake ? "animate-shake" : ""}`}
@@ -115,22 +129,22 @@ export function PinPad() {
         {Array.from({ length: PIN_LENGTH }).map((_, i) => (
           <span
             key={i}
-            className={`h-4 w-4 rounded-full border-2 transition-all duration-200 ${
+            className={`h-3.5 w-3.5 rounded-full border-2 transition-all duration-200 ${
               busy && i === pin.length
                 ? "animate-pulse-soft border-brand-500/70 bg-brand-500/40"
                 : i < pin.length
                   ? "scale-110 border-brand-500 bg-brand-500"
-                  : "border-ink-300/50 bg-elev"
+                  : "border-ink-300 bg-elev"
             }`}
           />
         ))}
       </div>
 
-      <div className="mt-3 h-5 text-[13px] font-medium text-brand-600">
+      <div className="mt-3 h-5 text-[13px] font-medium text-danger">
         {err ?? "\u00A0"}
       </div>
 
-      <div className="mt-6 grid grid-cols-3 gap-3">
+      <div className="mt-6 grid grid-cols-3" style={{ gap: KEY_GAP }}>
         {KEYS.map((k, i) => (
           <button
             key={i}
@@ -146,15 +160,18 @@ export function PinPad() {
                     ? `Цифра ${k}`
                     : undefined
             }
-            className={`h-[68px] w-[68px] rounded-xl text-[22px] font-medium transition-all duration-150 ${
+            style={{ width: KEY_SIZE, height: KEY_SIZE }}
+            className={`flex items-center justify-center rounded-full font-display text-[24px] font-semibold transition-all duration-150 ${
               !k
                 ? "invisible"
-                : k === "OK"
-                  ? "bg-brand-50 text-brand-500 shadow-soft active:scale-95"
-                  : "bg-elev text-ink-900 shadow-soft hover:bg-brand-50 active:scale-95"
+                : k === "⌫"
+                  ? "text-ink-700 active:scale-95"
+                  : k === "OK"
+                    ? "bg-brand-500 text-on-brand active:scale-95"
+                    : "border border-ink-300/60 bg-elev text-ink-900 active:scale-95 active:bg-elev2"
             } ${busy ? "opacity-50" : ""}`}
           >
-            {k}
+            {k === "⌫" ? <DeleteIcon size={24} /> : k === "OK" ? <CheckIcon size={24} className="stroke-[2.2]" /> : k}
           </button>
         ))}
       </div>
