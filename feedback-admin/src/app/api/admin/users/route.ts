@@ -167,23 +167,21 @@ export async function POST(req: Request) {
   let storeName: string | null = null;
 
   if (role === "seller") {
-    if (storeId == null) {
-      return NextResponse.json(
-        { error: "Продавчиня обов'язково повинна бути прикріплена до магазину" },
-        { status: 400 },
-      );
-    }
-    // Validate store exists in v_stores
-    const { data: store, error: storeErr } = await supabase
-      .from("v_stores")
-      .select("name")
-      .eq("id", storeId)
-      .maybeSingle();
+    // A seller may be created without a home store and later receive only
+    // replacement-store permissions. Validate a home store when supplied.
+    if (storeId != null) {
+      const { data: store, error: storeErr } = await supabase
+        .from("v_stores")
+        .select("name")
+        .eq("id", storeId)
+        .maybeSingle();
 
-    if (storeErr || !store) {
-      return NextResponse.json({ error: "Магазин не знайдено" }, { status: 400 });
+      if (storeErr || !store) {
+        return NextResponse.json({ error: "Магазин не знайдено" }, { status: 400 });
+      }
+      storeName = store.name;
     }
-    storeName = store.name;
+    storeId = storeId ?? null;
   } else {
     // Admin / Super Admin cannot be bound to a store
     storeId = null;

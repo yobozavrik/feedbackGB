@@ -20,6 +20,8 @@ export type AuditAction =
   | "admin.user.update"
   | "admin.user.deactivate"
   | "admin.user.activate"
+  | "admin.user.replacement_store.grant"
+  | "admin.user.replacement_store.revoke"
   | "admin.direction.create"
   | "admin.direction.update"
   | "admin.direction.deactivate"

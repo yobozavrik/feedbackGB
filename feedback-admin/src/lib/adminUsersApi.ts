@@ -48,6 +48,15 @@ export type ApiResult<T> =
   | ({ ok: true } & T)
   | { ok: false; error?: string };
 
+export interface ReplacementStorePermission {
+  id: string;
+  store_id: number;
+  granted_at: string;
+  granted_by: string | null;
+  revoked_at: string | null;
+  revoked_by: string | null;
+}
+
 async function readError(res: Response): Promise<string | undefined> {
   const text = await res.text().catch(() => "");
   let data: { error?: string; code?: string; details?: string } = {};
@@ -116,6 +125,25 @@ export async function patchUser(
   }
   const data = (await res.json()) as { user: AdminUser };
   return { ok: true, user: data.user };
+}
+
+export async function fetchReplacementStores(id: string): Promise<ApiResult<{ permissions: ReplacementStorePermission[] }>> {
+  const res = await fetch(`/api/admin/users/${id}/replacement-stores`);
+  if (!res.ok) return { ok: false, error: await readError(res) };
+  const data = await res.json() as { permissions?: ReplacementStorePermission[] };
+  return { ok: true, permissions: data.permissions ?? [] };
+}
+
+export async function grantReplacementStore(id: string, storeId: number): Promise<ApiResult<{ permission: ReplacementStorePermission }>> {
+  const res = await fetch(`/api/admin/users/${id}/replacement-stores`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ store_id: storeId }) });
+  if (!res.ok) return { ok: false, error: await readError(res) };
+  return { ok: true, permission: (await res.json() as { permission: ReplacementStorePermission }).permission };
+}
+
+export async function revokeReplacementStore(id: string, storeId: number): Promise<ApiResult<object>> {
+  const res = await fetch(`/api/admin/users/${id}/replacement-stores`, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ store_id: storeId }) });
+  if (!res.ok) return { ok: false, error: await readError(res) };
+  return { ok: true };
 }
 
 /** Latest audit-log entries where the user was the actor. Throws on HTTP error. */

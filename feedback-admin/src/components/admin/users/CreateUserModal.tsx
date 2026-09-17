@@ -91,10 +91,9 @@ export function CreateUserModal({
             return (
               <ProFormSelect
                 name="store_id"
-                label="Магазин"
+                label="Основний магазин"
                 options={storeOptions}
                 placeholder="Виберіть магазин для продавчині"
-                rules={[{ required: true, message: "Виберіть магазин" }]}
               />
             );
           }

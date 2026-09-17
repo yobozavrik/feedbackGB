@@ -23,6 +23,12 @@ interface MeResponse {
   store?: { id: number; name: string } | null;
 }
 
+interface PhotoReportStore {
+  id: number;
+  name: string;
+  source: "home_store" | "replacement_permission";
+}
+
 export function FeedbackForm({ category }: Props) {
   const router = useRouter();
   const { initData, webApp } = useTelegram();
@@ -33,6 +39,8 @@ export function FeedbackForm({ category }: Props) {
   const [storeName, setStoreName] = useState<string | null>(null);
   const [meReady, setMeReady] = useState(false);
   const [offlineSaved, setOfflineSaved] = useState(false);
+  const [photoReportStores, setPhotoReportStores] = useState<PhotoReportStore[]>([]);
+  const [selectedPhotoReportStoreId, setSelectedPhotoReportStoreId] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -44,6 +52,18 @@ export function FeedbackForm({ category }: Props) {
       .catch(() => {})
       .finally(() => setMeReady(true));
   }, []);
+
+  useEffect(() => {
+    if (category.id !== "photo_report") return;
+    fetch("/api/auth/photo-report-stores")
+      .then((response) => response.ok ? response.json() : { stores: [] })
+      .then((data: { stores?: PhotoReportStore[] }) => {
+        const stores = data.stores ?? [];
+        setPhotoReportStores(stores);
+        if (stores.length === 1) setSelectedPhotoReportStoreId(stores[0].id);
+      })
+      .catch(() => setPhotoReportStores([]));
+  }, [category.id]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -197,6 +217,7 @@ export function FeedbackForm({ category }: Props) {
   }
 
   const lockedStoreId = me?.role === "seller" ? me.store_id : null;
+  const isSellerPhotoReport = me?.role === "seller" && category.id === "photo_report";
 
   return (
     <form onSubmit={onSubmit} className="card animate-fade-up space-y-4 p-5 pb-24">
@@ -215,7 +236,26 @@ export function FeedbackForm({ category }: Props) {
       ) : null}
 
       {/* Store: locked chip for sellers, search for admins */}
-      {lockedStoreId ? (
+      {isSellerPhotoReport ? (
+        <div>
+          <label className="field-label" htmlFor="photo-report-store">Де працюю зараз</label>
+          {photoReportStores.length === 0 ? (
+            <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Для вас не призначено магазин для фото звіту. Зверніться до адміністратора.</p>
+          ) : (
+            <select
+              id="photo-report-store"
+              name="store_id"
+              className="field-input"
+              value={selectedPhotoReportStoreId ?? ""}
+              required
+              onChange={(event) => setSelectedPhotoReportStoreId(event.target.value ? Number(event.target.value) : null)}
+            >
+              <option value="" disabled>Виберіть магазин</option>
+              {photoReportStores.map((store) => <option key={store.id} value={store.id}>{store.name}{store.source === "replacement_permission" ? " — заміна" : ""}</option>)}
+            </select>
+          )}
+        </div>
+      ) : lockedStoreId ? (
         <>
           <input type="hidden" name="store_id" value={lockedStoreId} />
           {storeName ? (
@@ -321,7 +361,7 @@ export function FeedbackForm({ category }: Props) {
           >
             Назад
           </button>
-          <button type="submit" disabled={submitting} className="btn-primary flex-1">
+          <button type="submit" disabled={submitting || (isSellerPhotoReport && (photoReportStores.length === 0 || selectedPhotoReportStoreId == null))} className="btn-primary flex-1">
             {submitting ? (
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
             ) : (

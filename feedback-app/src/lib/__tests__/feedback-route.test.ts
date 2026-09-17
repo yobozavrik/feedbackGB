@@ -51,6 +51,7 @@ const mockStorageRemove = vi.fn();
 // null = no direction configured (default, matches pre-auto-assignment
 // behavior). Set per-test to simulate a configured direction.
 let mockAdminDirectionAdminId: string | null = null;
+let mockReplacementPermission = false;
 
 vi.mock("@/lib/supabase", () => ({
   isSupabaseConfigured: vi.fn(() => true),
@@ -60,6 +61,24 @@ vi.mock("@/lib/supabase", () => ({
       from: () => ({ upload: mockStorageUpload, remove: mockStorageRemove }),
     },
     from: vi.fn((table) => {
+      if (table === "users") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: { id: "seller-uid-123", role: "seller", is_active: true, store_id: 11 }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "seller_store_permissions") {
+        const chain: any = {
+          select: () => chain,
+          eq: () => chain,
+          is: () => chain,
+          maybeSingle: async () => ({ data: mockReplacementPermission ? { id: "replacement-permission" } : null, error: null }),
+        };
+        return chain;
+      }
       if (table === "v_stores") {
         return {
           select: () => ({
@@ -153,6 +172,7 @@ describe("POST /api/feedback", () => {
     mockStorageRemove.mockResolvedValue({ error: null });
     mockSessionCookieValue = "valid-seller-token";
     mockAdminDirectionAdminId = null;
+    mockReplacementPermission = false;
     process.env.PHOTO_REPORT_ENABLED = "true";
   });
 
@@ -333,6 +353,7 @@ describe("POST /api/feedback — payload validation", () => {
     mockStorageRemove.mockResolvedValue({ error: null });
     mockSessionCookieValue = "valid-seller-token";
     mockAdminDirectionAdminId = null;
+    mockReplacementPermission = false;
     process.env.PHOTO_REPORT_ENABLED = "true";
   });
 
@@ -461,6 +482,32 @@ describe("POST /api/feedback — payload validation", () => {
     const record = mockSupabaseInsert.mock.calls[0][0];
     expect(record.photo_url).toMatch(/^sb:/);
     expect(record.fields.photo_urls).toHaveLength(15);
+  });
+
+  it("accepts a photo report for an active replacement store and persists that factual store", async () => {
+    mockReplacementPermission = true;
+    mockInsertResolves({ data: { id: "replacement-feedback" }, error: null });
+    const { POST } = await loadRoute();
+    const response = await POST(feedbackRequest({
+      category: "photo_report",
+      store_id: 12,
+      fields: {},
+      photo_urls: [VALID_JPEG],
+    }));
+    expect(response.status).toBe(200);
+    expect(mockSupabaseInsert.mock.calls[0][0].store_id).toBe(12);
+  });
+
+  it("rejects a photo report for a store without an active replacement permission before upload", async () => {
+    const { POST } = await loadRoute();
+    const response = await POST(feedbackRequest({
+      category: "photo_report",
+      store_id: 12,
+      fields: {},
+      photo_urls: [VALID_JPEG],
+    }));
+    expect(response.status).toBe(403);
+    expect(mockStorageUpload).not.toHaveBeenCalled();
   });
 
   it("removes successfully uploaded files and does not insert a partial report", async () => {

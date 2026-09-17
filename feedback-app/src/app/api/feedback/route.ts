@@ -101,7 +101,10 @@ export async function POST(req: Request) {
     logPhotoReport("photo_report.received", {
       request_id: requestId,
       user_id: sess.uid,
-      store_id: sess.store_id ?? null,
+      // This is only an untrusted request value. `store_id` is logged after
+      // server-side authorisation once it becomes the effective store.
+      requested_store_id: typeof payload.store_id === "number" ? payload.store_id : null,
+      session_store_id: sess.store_id ?? null,
       photo_count: rawPhotos.length,
       request_bytes: raw.length,
       duration_ms: Date.now() - startedAt,
@@ -119,15 +122,51 @@ export async function POST(req: Request) {
     process.env.TELEGRAM_BOT_TOKEN,
   );
 
-  // For sellers, server-side trusted store_id overrides any client-supplied value.
-  const effectiveStoreId =
+  const supabase = getServerSupabase();
+  let effectiveStoreId =
     sess.role === "seller" && sess.store_id != null
       ? sess.store_id
       : typeof payload.store_id === "number" && Number.isFinite(payload.store_id)
         ? payload.store_id
         : null;
 
-  const supabase = getServerSupabase();
+  // A photo-report store is selected by the seller but authorised only here.
+  // Never trust a hidden input or a modified browser request for this decision.
+  if (category.id === "photo_report" && sess.role === "seller") {
+    if (!supabase) return NextResponse.json({ error: "Backend ще не налаштовано" }, { status: 503 });
+    const { data: currentUser, error: currentUserError } = await supabase
+      .from("users")
+      .select("id, role, is_active, store_id")
+      .eq("id", sess.uid)
+      .maybeSingle();
+    if (currentUserError || !currentUser || !currentUser.is_active || currentUser.role !== "seller") {
+      return NextResponse.json({ error: "Немає доступу до фото звіту" }, { status: 403 });
+    }
+    // Compatibility for an already deployed form: if it has not yet sent a
+    // selected store, it may submit only the current home store, never a
+    // replacement store. The new form always sends an explicit value.
+    const requestedStoreId = typeof payload.store_id === "number" && Number.isInteger(payload.store_id)
+      ? payload.store_id
+      : currentUser.store_id;
+    if (requestedStoreId == null) {
+      return NextResponse.json({ error: "Виберіть магазин для фото звіту" }, { status: 400 });
+    }
+    if (currentUser.store_id === requestedStoreId) {
+      effectiveStoreId = requestedStoreId;
+    } else {
+      const { data: permission, error: permissionError } = await supabase
+        .from("seller_store_permissions")
+        .select("id")
+        .eq("seller_id", sess.uid)
+        .eq("store_id", requestedStoreId)
+        .is("revoked_at", null)
+        .maybeSingle();
+      if (permissionError || !permission) {
+        return NextResponse.json({ error: "Для цього магазину немає доступу" }, { status: 403 });
+      }
+      effectiveStoreId = requestedStoreId;
+    }
+  }
 
   // photo handling: accept ONLY a base64 data: URL for a whitelisted image
   // mime. Anything else (arbitrary http(s):// URLs, javascript:, data: with

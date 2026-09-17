@@ -119,25 +119,19 @@ export async function PATCH(
 
   if (finalRole === "seller") {
     const finalStoreId = storeId !== undefined ? storeId : targetUser.store_id;
-    if (finalStoreId == null) {
-      return NextResponse.json(
-        { error: "Продавчиня обов'язково повинна бути прикріплена до магазину" },
-        { status: 400 },
-      );
-    }
+    if (finalStoreId != null) {
+      const { data: store, error: storeErr } = await supabase
+        .from("v_stores")
+        .select("name")
+        .eq("id", finalStoreId)
+        .maybeSingle();
 
-    // Validate store exists in v_stores
-    const { data: store, error: storeErr } = await supabase
-      .from("v_stores")
-      .select("name")
-      .eq("id", finalStoreId)
-      .maybeSingle();
-
-    if (storeErr || !store) {
-      return NextResponse.json({ error: "Магазин не знайдено" }, { status: 400 });
+      if (storeErr || !store) {
+        return NextResponse.json({ error: "Магазин не знайдено" }, { status: 400 });
+      }
+      storeName = store.name;
     }
-    storeName = store.name;
-    storeId = finalStoreId;
+    storeId = finalStoreId ?? null;
   } else {
     // Admin / Super Admin cannot be bound to a store
     storeId = null;

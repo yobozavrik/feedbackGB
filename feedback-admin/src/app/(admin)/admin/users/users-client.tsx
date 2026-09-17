@@ -11,6 +11,7 @@ import {
   HistoryOutlined,
   TeamOutlined,
   CompassOutlined,
+  MoreOutlined,
 } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
 import {
@@ -20,6 +21,7 @@ import {
   Space,
   Tag,
   Tooltip,
+  Dropdown,
   Typography,
   theme as antdTheme,
   Form,
@@ -31,6 +33,7 @@ import { ActivityDrawer } from "@/components/admin/users/ActivityDrawer";
 import { CreateUserModal } from "@/components/admin/users/CreateUserModal";
 import { DirectionsDrawer } from "@/components/admin/users/DirectionsDrawer";
 import { EditUserModal } from "@/components/admin/users/EditUserModal";
+import { ReplacementStoresModal } from "@/components/admin/users/ReplacementStoresModal";
 import {
   ResetPinModal,
   type ResetPinValues,
@@ -89,6 +92,7 @@ export function UsersClient({ users, stores, feedbacks, directions, currentUserI
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
+  const [replacementStoresTarget, setReplacementStoresTarget] = useState<AdminUser | null>(null);
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
 
@@ -826,51 +830,65 @@ export function UsersClient({ users, stores, feedbacks, directions, currentUserI
         title: "Дії",
         key: "seller_actions",
         valueType: "option",
-        width: 160,
+        width: 72,
         render: (_, row) => {
           const isEditable =
             currentUserRole === "super_admin" ||
             (currentUserRole === "admin" && row.role === "seller");
-          return [
-            <Tooltip key="activity" title="Відгуки">
-              <Button
-                type="link"
-                size="small"
-                icon={<HistoryOutlined />}
-                aria-label="Відгуки"
-                onClick={() => setActivityTarget(row)}
-              />
-            </Tooltip>,
-            <Tooltip key="edit" title="Редагувати">
-              <Button
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
-                aria-label="Редагувати"
-                disabled={!isEditable}
-                onClick={() => {
-                  setEditTarget(row);
-                  editForm.setFieldsValue({
-                    full_name: row.full_name,
-                    display_label: row.display_label,
-                    role: row.role,
-                    store_id: row.store_id,
-                    is_active: row.is_active,
-                  });
-                }}
-              />
-            </Tooltip>,
-            <Tooltip key="pin" title={row.has_pin ? "Змінити PIN" : "Створити PIN"}>
-              <Button
-                type="link"
-                size="small"
-                icon={row.has_pin ? <ReloadOutlined /> : <KeyOutlined />}
-                aria-label={row.has_pin ? "Змінити PIN" : "Створити PIN"}
-                disabled={!isEditable}
-                onClick={() => setResetTarget(row)}
-              />
-            </Tooltip>,
-          ];
+          return (
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: [
+                  {
+                    key: "activity",
+                    label: "Відгуки",
+                    icon: <HistoryOutlined />,
+                    onClick: () => setActivityTarget(row),
+                  },
+                  {
+                    key: "edit",
+                    label: "Редагувати",
+                    icon: <EditOutlined />,
+                    disabled: !isEditable,
+                    onClick: () => {
+                      setEditTarget(row);
+                      editForm.setFieldsValue({
+                        full_name: row.full_name,
+                        display_label: row.display_label,
+                        role: row.role,
+                        store_id: row.store_id,
+                        is_active: row.is_active,
+                      });
+                    },
+                  },
+                  {
+                    key: "pin",
+                    label: row.has_pin ? "Змінити PIN" : "Створити PIN",
+                    icon: row.has_pin ? <ReloadOutlined /> : <KeyOutlined />,
+                    disabled: !isEditable,
+                    onClick: () => setResetTarget(row),
+                  },
+                  {
+                    key: "replacement-stores",
+                    label: "Магазини для заміни",
+                    icon: <CompassOutlined />,
+                    disabled: !isEditable,
+                    onClick: () => setReplacementStoresTarget(row),
+                  },
+                ],
+              }}
+            >
+              <Tooltip title="Дії співробітника">
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<MoreOutlined />}
+                  aria-label="Дії співробітника"
+                />
+              </Tooltip>
+            </Dropdown>
+          );
         },
       },
     ],
@@ -981,6 +999,8 @@ export function UsersClient({ users, stores, feedbacks, directions, currentUserI
         onClose={() => setEditTarget(null)}
         onFinish={handleEditUser}
       />
+
+      <ReplacementStoresModal target={replacementStoresTarget} stores={stores} onClose={() => setReplacementStoresTarget(null)} />
 
       <ResetPinModal
         target={resetTarget}

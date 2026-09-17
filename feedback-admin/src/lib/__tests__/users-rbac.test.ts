@@ -120,9 +120,34 @@ describe("Users CRUD API & RBAC Checks", () => {
       expect(json.error).toContain("Адміністратори можуть створювати лише продавчинь");
     });
 
-    it("should require store_id for seller role", async () => {
+    it("should allow a seller without a home store", async () => {
       const { POST } = await import("@/app/api/admin/users/route");
       const cookie = await makeCookie("admin-id", "admin");
+
+      mockFrom.mockImplementation((table) => {
+        if (table === "users") {
+          return {
+            insert: () => ({
+              select: () => ({
+                single: async () => ({
+                  data: {
+                    id: "seller-without-store",
+                    full_name: "Seller User",
+                    display_label: "Seller Label",
+                    role: "seller",
+                    store_id: null,
+                    is_active: true,
+                    pin_hash: null,
+                    failed_attempts: 0,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        return {};
+      });
 
       const res = await POST(
         mockRequest("POST", "/api/admin/users", {
@@ -132,9 +157,9 @@ describe("Users CRUD API & RBAC Checks", () => {
         }, cookie)
       );
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(200);
       const json = await res.json();
-      expect(json.error).toContain("обов'язково повинна бути прикріплена до магазину");
+      expect(json.user.store_id).toBeNull();
     });
 
     it("should validate that store exists in v_stores for seller", async () => {
