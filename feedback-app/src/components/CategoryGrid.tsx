@@ -16,7 +16,7 @@ import { track } from "@/lib/analytics";
  * - "Заявка на розхідні матеріали" (consumables_request) priority card.
  * - Collapsed "+ Інше" section with secondary categories.
  */
-export function CategoryGrid({ photoReportEnabled }: { photoReportEnabled: boolean }) {
+export function CategoryGrid() {
   const techIssue = getCategory("tech_issue");
   const consumables = getCategory("consumables_request");
   const photoReport = getCategory("photo_report");
@@ -55,7 +55,7 @@ export function CategoryGrid({ photoReportEnabled }: { photoReportEnabled: boole
       {consumables && <PriorityCard c={consumables} idx={2} />}
 
       {/* 4. Daily photo report */}
-      {photoReportEnabled && photoReport && <PriorityCard c={photoReport} idx={3} />}
+      {photoReport && <PriorityCard c={photoReport} idx={3} />}
 
       {/* 5. HR questions flow button */}
       <Link

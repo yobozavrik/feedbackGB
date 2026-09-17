@@ -4,7 +4,6 @@ import { CategoryGrid } from "@/components/CategoryGrid";
 import { LogoutButton } from "@/components/LogoutButton";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 import { OfflineQueueBanner } from "@/components/OfflineQueueBanner";
-import { isPhotoReportEnabled } from "@/lib/photoReportFeature";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +31,7 @@ export default async function HomePage() {
       <h2 className="mb-3 px-1 font-display text-[20px] font-bold text-ink-900">
         Обери категорію
       </h2>
-      <CategoryGrid photoReportEnabled={isPhotoReportEnabled()} />
+      <CategoryGrid />
 
       <div className="mt-8 flex items-center justify-between px-1 text-[12px] text-ink-500">
         <span className="flex items-center gap-2">

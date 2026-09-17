@@ -8,7 +8,6 @@ import { validateInitData } from "@/lib/telegram";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 import { resolveAssignedAdmin } from "@/lib/assignment";
 import { createNotification } from "@/lib/notifications";
-import { isPhotoReportEnabled } from "@/lib/photoReportFeature";
 import type { FeedbackPayload } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -85,9 +84,6 @@ export async function POST(req: Request) {
     rawPhotos,
   } = validated.data;
 
-  if (category.id === "photo_report" && !isPhotoReportEnabled()) {
-    return NextResponse.json({ error: "Фото звіт тимчасово вимкнений" }, { status: 503 });
-  }
   // A photo report is all-or-nothing. Reject malformed or spoofed images
   // before starting any Storage writes, rather than reporting a false 503.
   if (

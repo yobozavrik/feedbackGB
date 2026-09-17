@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Mutable mock value for cookies
 let mockSessionCookieValue = "valid-seller-token";
 const VALID_JPEG = "data:image/jpeg;base64,/9j/2Q==";
-const originalPhotoReportEnabled = process.env.PHOTO_REPORT_ENABLED;
 
 // Mock next/headers cookies
 vi.mock("next/headers", () => ({
@@ -173,13 +172,10 @@ describe("POST /api/feedback", () => {
     mockSessionCookieValue = "valid-seller-token";
     mockAdminDirectionAdminId = null;
     mockReplacementPermission = false;
-    process.env.PHOTO_REPORT_ENABLED = "true";
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    if (originalPhotoReportEnabled === undefined) delete process.env.PHOTO_REPORT_ENABLED;
-    else process.env.PHOTO_REPORT_ENABLED = originalPhotoReportEnabled;
   });
 
   async function loadRoute() {
@@ -354,13 +350,10 @@ describe("POST /api/feedback — payload validation", () => {
     mockSessionCookieValue = "valid-seller-token";
     mockAdminDirectionAdminId = null;
     mockReplacementPermission = false;
-    process.env.PHOTO_REPORT_ENABLED = "true";
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    if (originalPhotoReportEnabled === undefined) delete process.env.PHOTO_REPORT_ENABLED;
-    else process.env.PHOTO_REPORT_ENABLED = originalPhotoReportEnabled;
   });
 
   async function loadRoute() {
@@ -551,20 +544,6 @@ describe("POST /api/feedback — payload validation", () => {
       .find((entry) => entry.event === "photo_report.cleanup_failure");
     expect(cleanup?.photo_paths).toHaveLength(14);
     expect(JSON.stringify(cleanup)).not.toContain("base64");
-  });
-
-  it("rejects a disabled photo report before upload or insert", async () => {
-    process.env.PHOTO_REPORT_ENABLED = "false";
-    const { POST } = await loadRoute();
-    const response = await POST(feedbackRequest({
-      category: "photo_report",
-      fields: {},
-      photo_urls: [VALID_JPEG],
-    }));
-
-    expect(response.status).toBe(503);
-    expect(mockStorageUpload).not.toHaveBeenCalled();
-    expect(mockSupabaseInsert).not.toHaveBeenCalled();
   });
 
   it("removes all new report files after a database insert failure", async () => {
