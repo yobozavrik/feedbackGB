@@ -6,7 +6,7 @@ import {
   ProFormSwitch,
   ProFormText,
 } from "@ant-design/pro-components";
-import { App, Form, type FormInstance } from "antd";
+import { App, Button, Form, type FormInstance } from "antd";
 import { useEffect } from "react";
 import type { AdminUser } from "@/app/(admin)/admin/users/page";
 import { fetchReplacementStores, type EditUserValues } from "@/lib/adminUsersApi";
@@ -121,6 +121,26 @@ export function EditUserModal({
                   fieldProps={{ mode: "multiple" }}
                   extra="Дає право на «Фото звіт» у цих магазинах, але не підтверджує зміну."
                 />
+                <Form.Item noStyle shouldUpdate={(previous, current) => previous.replacement_store_ids !== current.replacement_store_ids}>
+                  {({ getFieldValue }) => {
+                    const selectedIds = (getFieldValue("replacement_store_ids") as number[] | undefined) ?? [];
+                    const allSelected = storeOptions.length > 0 && storeOptions.every((store) => selectedIds.includes(store.value));
+                    return (
+                      <Button
+                        size="small"
+                        type="link"
+                        style={{ padding: 0, marginTop: -12, marginBottom: 12 }}
+                        disabled={storeOptions.length === 0}
+                        onClick={() => form.setFieldValue(
+                          "replacement_store_ids",
+                          allSelected ? [] : storeOptions.map((store) => store.value),
+                        )}
+                      >
+                        {allSelected ? "Зняти вибір усіх магазинів" : `Обрати всі магазини (${storeOptions.length})`}
+                      </Button>
+                    );
+                  }}
+                </Form.Item>
               </>
             );
           }
