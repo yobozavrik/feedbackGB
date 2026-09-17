@@ -42,6 +42,8 @@ export interface EditUserValues {
   role: "seller" | "admin" | "super_admin";
   store_id?: number;
   is_active: boolean;
+  /** Managed only by the edit form; never sent to PATCH /api/admin/users/:id. */
+  replacement_store_ids?: number[];
 }
 
 export type ApiResult<T> =

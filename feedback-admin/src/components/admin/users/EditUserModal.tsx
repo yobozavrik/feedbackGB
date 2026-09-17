@@ -6,9 +6,10 @@ import {
   ProFormSwitch,
   ProFormText,
 } from "@ant-design/pro-components";
-import { Form, type FormInstance } from "antd";
+import { App, Form, type FormInstance } from "antd";
+import { useEffect } from "react";
 import type { AdminUser } from "@/app/(admin)/admin/users/page";
-import type { EditUserValues } from "@/lib/adminUsersApi";
+import { fetchReplacementStores, type EditUserValues } from "@/lib/adminUsersApi";
 
 interface Props {
   target: AdminUser | null;
@@ -29,6 +30,25 @@ export function EditUserModal({
   onClose,
   onFinish,
 }: Props) {
+  const { message } = App.useApp();
+
+  useEffect(() => {
+    if (!target || target.role !== "seller") return;
+    form.setFieldValue("replacement_store_ids", undefined);
+    void fetchReplacementStores(target.id).then((result) => {
+      if (!result.ok) {
+        message.error(result.error ?? "Не вдалося завантажити магазини для заміни");
+        return;
+      }
+      form.setFieldValue(
+        "replacement_store_ids",
+        result.permissions
+          .filter((permission) => permission.revoked_at == null)
+          .map((permission) => permission.store_id),
+      );
+    });
+  }, [form, message, target]);
+
   return (
     <ModalForm<EditUserValues>
       form={form}
@@ -86,12 +106,22 @@ export function EditUserModal({
           const role = getFieldValue("role");
           if (role === "seller") {
             return (
-              <ProFormSelect
-                name="store_id"
-                label="Основний магазин"
-                options={storeOptions}
-                placeholder="Виберіть магазин"
-              />
+              <>
+                <ProFormSelect
+                  name="store_id"
+                  label="Основний магазин"
+                  options={storeOptions}
+                  placeholder="Виберіть магазин"
+                />
+                <ProFormSelect
+                  name="replacement_store_ids"
+                  label="Магазини для заміни"
+                  options={storeOptions}
+                  placeholder="Оберіть магазини, де продавчиня може робити фото звіт"
+                  fieldProps={{ mode: "multiple" }}
+                  extra="Дає право на «Фото звіт» у цих магазинах, але не підтверджує зміну."
+                />
+              </>
             );
           }
           return null;

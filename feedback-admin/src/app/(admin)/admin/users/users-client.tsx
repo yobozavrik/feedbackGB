@@ -33,15 +33,17 @@ import { ActivityDrawer } from "@/components/admin/users/ActivityDrawer";
 import { CreateUserModal } from "@/components/admin/users/CreateUserModal";
 import { DirectionsDrawer } from "@/components/admin/users/DirectionsDrawer";
 import { EditUserModal } from "@/components/admin/users/EditUserModal";
-import { ReplacementStoresModal } from "@/components/admin/users/ReplacementStoresModal";
 import {
   ResetPinModal,
   type ResetPinValues,
 } from "@/components/admin/users/ResetPinModal";
 import {
   createUser,
+  fetchReplacementStores,
+  grantReplacementStore,
   fetchAdminActivity,
   patchUser,
+  revokeReplacementStore,
   setUserPin,
   unlockUser,
   type ActivityLogEntry,
@@ -92,7 +94,6 @@ export function UsersClient({ users, stores, feedbacks, directions, currentUserI
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
-  const [replacementStoresTarget, setReplacementStoresTarget] = useState<AdminUser | null>(null);
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
 
@@ -295,10 +296,35 @@ export function UsersClient({ users, stores, feedbacks, directions, currentUserI
   const handleEditUser = useCallback(
     async (values: EditUserValues) => {
       if (!editTarget) return false;
-      const result = await patchUser(editTarget.id, values);
+      const { replacement_store_ids, ...userValues } = values;
+      const result = await patchUser(editTarget.id, userValues);
       if (!result.ok) {
         message.error(result.error ?? "Помилка при збереженні");
         return false;
+      }
+      if (result.user.role === "seller" && Array.isArray(replacement_store_ids)) {
+        const permissions = await fetchReplacementStores(editTarget.id);
+        if (!permissions.ok) {
+          message.error(permissions.error ?? "Профіль збережено, але не вдалося перевірити магазини для заміни");
+          return false;
+        }
+        const currentIds = permissions.permissions
+          .filter((permission) => permission.revoked_at == null)
+          .map((permission) => permission.store_id);
+        for (const storeId of replacement_store_ids.filter((id) => !currentIds.includes(id))) {
+          const grant = await grantReplacementStore(editTarget.id, storeId);
+          if (!grant.ok) {
+            message.error(grant.error ?? "Профіль збережено, але не вдалося видати доступ до магазину");
+            return false;
+          }
+        }
+        for (const storeId of currentIds.filter((id) => !replacement_store_ids.includes(id))) {
+          const revoke = await revokeReplacementStore(editTarget.id, storeId);
+          if (!revoke.ok) {
+            message.error(revoke.error ?? "Профіль збережено, але не вдалося відкликати доступ до магазину");
+            return false;
+          }
+        }
       }
       updateUser(result.user);
       message.success(`Зміни для ${result.user.full_name} збережено.`);
@@ -869,13 +895,6 @@ export function UsersClient({ users, stores, feedbacks, directions, currentUserI
                     disabled: !isEditable,
                     onClick: () => setResetTarget(row),
                   },
-                  {
-                    key: "replacement-stores",
-                    label: "Магазини для заміни",
-                    icon: <CompassOutlined />,
-                    disabled: !isEditable,
-                    onClick: () => setReplacementStoresTarget(row),
-                  },
                 ],
               }}
             >
@@ -999,8 +1018,6 @@ export function UsersClient({ users, stores, feedbacks, directions, currentUserI
         onClose={() => setEditTarget(null)}
         onFinish={handleEditUser}
       />
-
-      <ReplacementStoresModal target={replacementStoresTarget} stores={stores} onClose={() => setReplacementStoresTarget(null)} />
 
       <ResetPinModal
         target={resetTarget}
