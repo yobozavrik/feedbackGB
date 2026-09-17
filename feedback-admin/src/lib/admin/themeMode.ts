@@ -7,6 +7,8 @@ export type AdminThemeMode = "system" | "light" | "dark";
 export type ResolvedAdminTheme = "light" | "dark";
 
 export const ADMIN_THEME_COOKIE = "admin-theme";
+/** Used when the cookie is absent or invalid (no explicit user choice yet). */
+export const DEFAULT_ADMIN_THEME_MODE: AdminThemeMode = "light";
 /** The attribute the no-flash inline script and AdminThemeProvider both
  * write to, on `<html>` (not `.admin-shell`) so it's set before that
  * element even exists in the DOM. Scoped to admin-only CSS selectors
@@ -35,8 +37,8 @@ export const ADMIN_THEME_INLINE_SCRIPT = `
 (function () {
   try {
     var m = document.cookie.match(/(?:^|; )${ADMIN_THEME_COOKIE}=([^;]*)/);
-    var mode = m ? decodeURIComponent(m[1]) : "system";
-    if (mode !== "light" && mode !== "dark" && mode !== "system") mode = "system";
+    var mode = m ? decodeURIComponent(m[1]) : "${DEFAULT_ADMIN_THEME_MODE}";
+    if (mode !== "light" && mode !== "dark" && mode !== "system") mode = "${DEFAULT_ADMIN_THEME_MODE}";
     var resolved = mode === "system"
       ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
       : mode;

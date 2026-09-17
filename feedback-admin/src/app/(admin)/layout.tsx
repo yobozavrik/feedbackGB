@@ -4,7 +4,11 @@ import { redirect } from "next/navigation";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { AdminThemeProvider } from "@/components/admin/AdminThemeProvider";
 import { AdminThemeScript } from "@/components/admin/AdminThemeScript";
-import { ADMIN_THEME_COOKIE, isAdminThemeMode } from "@/lib/admin/themeMode";
+import {
+  ADMIN_THEME_COOKIE,
+  DEFAULT_ADMIN_THEME_MODE,
+  isAdminThemeMode,
+} from "@/lib/admin/themeMode";
 import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +37,7 @@ export default async function AdminGroupLayout({
   }
 
   const rawMode = cookies().get(ADMIN_THEME_COOKIE)?.value;
-  const initialMode = isAdminThemeMode(rawMode) ? rawMode : "system";
+  const initialMode = isAdminThemeMode(rawMode) ? rawMode : DEFAULT_ADMIN_THEME_MODE;
 
   return (
     <AntdRegistry>
