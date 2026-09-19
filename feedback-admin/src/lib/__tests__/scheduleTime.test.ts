@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentKyivMonth, kyivDateTimeParts, kyivWallTimeToIso } from "../scheduleTime";
+import { currentKyivMonth, kyivDateTimeParts, kyivMonthDates, kyivWallTimeToIso, moveSameDayShiftToKyivDate } from "../scheduleTime";
 
 describe("Kyiv schedule time conversion", () => {
   it("preserves a regular Kyiv wall-clock shift", () => {
@@ -13,5 +13,30 @@ describe("Kyiv schedule time conversion", () => {
 
   it("returns a YYYY-MM current Kyiv month", () => {
     expect(currentKyivMonth()).toMatch(/^\d{4}-(0[1-9]|1[0-2])$/);
+  });
+
+  it("returns every date in September, including the 30th", () => {
+    const dates = kyivMonthDates("2026-09");
+    expect(dates).toHaveLength(30);
+    expect(dates[0]).toBe("2026-09-01");
+    expect(dates.at(-1)).toBe("2026-09-30");
+  });
+
+  it("preserves Kyiv wall-clock times when a grid card is moved to another day", () => {
+    const moved = moveSameDayShiftToKyivDate(
+      kyivWallTimeToIso("2026-09-04", "09:00"),
+      kyivWallTimeToIso("2026-09-04", "20:00"),
+      "2026-09-16",
+    );
+    expect(kyivDateTimeParts(moved.starts_at)).toEqual({ date: "2026-09-16", time: "09:00" });
+    expect(kyivDateTimeParts(moved.ends_at)).toEqual({ date: "2026-09-16", time: "20:00" });
+  });
+
+  it("does not permit an overnight shift to be moved through a one-day grid cell", () => {
+    expect(() => moveSameDayShiftToKyivDate(
+      kyivWallTimeToIso("2026-09-04", "22:00"),
+      kyivWallTimeToIso("2026-09-05", "06:00"),
+      "2026-09-16",
+    )).toThrow("Нічну зміну");
   });
 });

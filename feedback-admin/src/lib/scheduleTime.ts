@@ -77,3 +77,37 @@ export function currentKyivMonth(): string {
   const parts = kyivParts(new Date());
   return `${parts.year}-${parts.month}`;
 }
+
+const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
+
+/** All Kyiv-local calendar dates that belong to a selected schedule month. */
+export function kyivMonthDates(month: string): string[] {
+  const match = MONTH.exec(month);
+  if (!match) throw new Error("Некоректний місяць графіка");
+
+  const year = Number(match[1]);
+  const monthNumber = Number(match[2]);
+  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  return Array.from({ length: lastDay }, (_, index) => `${month}-${String(index + 1).padStart(2, "0")}`);
+}
+
+/**
+ * Builds the new interval after dropping a same-day shift into a new Kyiv date.
+ * Overnight shifts deliberately require the regular edit form: moving them by a
+ * single day cell would otherwise make their end date ambiguous.
+ */
+export function moveSameDayShiftToKyivDate(startsAt: string, endsAt: string, targetDate: string) {
+  const start = kyivDateTimeParts(startsAt);
+  const end = kyivDateTimeParts(endsAt);
+  if (start.date !== end.date) {
+    throw new Error("Нічну зміну потрібно перемістити через форму редагування");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+    throw new Error("Некоректна дата призначення");
+  }
+
+  return {
+    starts_at: kyivWallTimeToIso(targetDate, start.time),
+    ends_at: kyivWallTimeToIso(targetDate, end.time),
+  };
+}

@@ -170,4 +170,63 @@ describe("store schedules API", () => {
     expect((await response.json()).code).toBe("schedule_conflict");
     expect(mockLogAudit).not.toHaveBeenCalled();
   });
+
+  it("requires a reason before changing a published shift", async () => {
+    const { PATCH } = await import("../route");
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "store_work_shifts") {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: shiftId, period_id: periodId, employee_id: sellerId, store_id: 7, starts_at: "2026-09-01T06:00:00.000Z", ends_at: "2026-09-01T15:00:00.000Z", break_minutes: 30, status: "scheduled", is_replacement: false, replacement_permission_id: null, row_version: 2 }, error: null }) }) }) };
+      }
+      if (table === "work_schedule_periods") return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: periodId, status: "published" }, error: null }) }) }) };
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const response = await PATCH(request("PATCH", `/api/admin/network/schedules?id=${shiftId}`, {
+      row_version: 2, starts_at: "2026-09-02T06:00:00.000Z", ends_at: "2026-09-02T15:00:00.000Z",
+    }));
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).code).toBe("change_reason_required");
+    expect(mockLogAudit).not.toHaveBeenCalled();
+  });
+
+  it("moves a shift to an allowed replacement store and records the change", async () => {
+    const { PATCH } = await import("../route");
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "store_work_shifts") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: shiftId, period_id: periodId, employee_id: sellerId, store_id: 7, starts_at: "2026-09-01T06:00:00.000Z", ends_at: "2026-09-01T15:00:00.000Z", break_minutes: 30, status: "scheduled", is_replacement: false, replacement_permission_id: null, row_version: 2 }, error: null }) }) }),
+          update: (payload: Record<string, unknown>) => {
+            expect(payload.store_id).toBe(8);
+            expect(payload.is_replacement).toBe(true);
+            expect(payload.replacement_permission_id).toBe("44444444-4444-4444-4444-444444444444");
+            return { eq: () => ({ eq: () => ({ select: () => ({ maybeSingle: async () => ({ data: { id: shiftId, row_version: 3, status: "scheduled" }, error: null }) }) }) }) };
+          },
+        };
+      }
+      if (table === "work_schedule_periods") return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: periodId, status: "draft" }, error: null }) }) }) };
+      if (table === "users") return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: sellerId, role: "seller", is_active: true, store_id: 7 }, error: null }) }) }) };
+      if (table === "seller_store_permissions") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                is: () => ({
+                  maybeSingle: async () => ({ data: { id: "44444444-4444-4444-4444-444444444444" }, error: null }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const response = await PATCH(request("PATCH", `/api/admin/network/schedules?id=${shiftId}`, {
+      row_version: 2, store_id: 8, starts_at: "2026-09-02T06:00:00.000Z", ends_at: "2026-09-02T15:00:00.000Z",
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockLogAudit).toHaveBeenCalledWith("admin.schedule.update", expect.objectContaining({ actorUserId: adminSession.uid }));
+  });
 });
