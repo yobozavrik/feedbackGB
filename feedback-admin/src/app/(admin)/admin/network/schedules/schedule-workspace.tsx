@@ -17,9 +17,11 @@ interface Shift {
   shift_status: "scheduled" | "cancelled"; is_replacement: boolean; replacement_permission_id: string | null;
   change_reason: string | null; row_version: number;
 }
+interface ShiftEvent { id: string; event_type: "created" | "updated" | "cancelled"; actor_name: string; occurred_at: string; reason: string | null; }
+interface EmployeeMonthSummary { employee_id: string; employee_full_name: string; employee_display_label: string | null; scheduled_shift_count: number; cancelled_shift_count: number; replacement_shift_count: number; planned_minutes: number; }
 
 interface FormValues { employee_id: string; store_id: number; date: string; starts_time: string; ends_time: string; break_minutes?: number; change_reason?: string; }
-interface Props { stores: ScheduleStore[]; sellers: ScheduleSeller[]; bootstrapError: string | null; }
+interface Props { stores: ScheduleStore[]; sellers: ScheduleSeller[]; bootstrapError: string | null; canManagePeriod: boolean; }
 
 function readableDateTime(iso: string) {
   return new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
@@ -29,17 +31,24 @@ function periodIsReadonly(period: SchedulePeriod | null) {
   return period?.status === "locked" || period?.status === "archived";
 }
 
-export function ScheduleWorkspace({ stores, sellers, bootstrapError }: Props) {
+export function ScheduleWorkspace({ stores, sellers, bootstrapError, canManagePeriod }: Props) {
   const [month, setMonth] = useState(currentKyivMonth);
   const [storeId, setStoreId] = useState<number | undefined>();
   const [employeeId, setEmployeeId] = useState<string | undefined>();
   const [period, setPeriod] = useState<SchedulePeriod | null>(null);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [employeeSummary, setEmployeeSummary] = useState<EmployeeMonthSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(bootstrapError);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Shift | null>(null);
+  const [periodAction, setPeriodAction] = useState<"publish" | "lock" | null>(null);
+  const [lockReason, setLockReason] = useState("");
+  const [historyShift, setHistoryShift] = useState<Shift | null>(null);
+  const [historyEvents, setHistoryEvents] = useState<ShiftEvent[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [form] = Form.useForm<FormValues>();
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -48,15 +57,18 @@ export function ScheduleWorkspace({ stores, sellers, bootstrapError }: Props) {
       const params = new URLSearchParams({ month });
       if (storeId) params.set("storeId", String(storeId));
       if (employeeId) params.set("employeeId", employeeId);
-      const [periodResponse, shiftsResponse] = await Promise.all([
+      const [periodResponse, shiftsResponse, employeesResponse] = await Promise.all([
         fetch(`/api/admin/network/schedule-periods?month=${month}`, { signal }),
         fetch(`/api/admin/network/schedules?${params.toString()}`, { signal }),
+        fetch(`/api/admin/network/schedule-employees?month=${month}`, { signal }),
       ]);
       const periodBody = await periodResponse.json() as { period?: SchedulePeriod | null; error?: string };
       const shiftsBody = await shiftsResponse.json() as { shifts?: Shift[]; error?: string };
+      const employeesBody = await employeesResponse.json() as { employees?: EmployeeMonthSummary[]; error?: string };
       if (!periodResponse.ok) throw new Error(periodBody.error ?? "Не вдалося завантажити період");
       if (!shiftsResponse.ok) throw new Error(shiftsBody.error ?? "Не вдалося завантажити зміни");
-      setPeriod(periodBody.period ?? null); setShifts(shiftsBody.shifts ?? []);
+      if (!employeesResponse.ok) throw new Error(employeesBody.error ?? "Не вдалося завантажити підсумок працівників");
+      setPeriod(periodBody.period ?? null); setShifts(shiftsBody.shifts ?? []); setEmployeeSummary(employeesBody.employees ?? []);
     } catch (requestError: unknown) {
       if (!signal?.aborted) setError(requestError instanceof Error ? requestError.message : "Не вдалося завантажити графік");
     } finally { if (!signal?.aborted) setLoading(false); }
@@ -117,25 +129,59 @@ export function ScheduleWorkspace({ stores, sellers, bootstrapError }: Props) {
     finally { setSaving(false); }
   };
 
+  const runPeriodAction = async () => {
+    if (!periodAction || !period) return;
+    setSaving(true); setError(null);
+    try {
+      const response = await fetch(`/api/admin/network/schedule-periods?id=${period.id}`, {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: periodAction, row_version: period.row_version, ...(periodAction === "lock" ? { lock_reason: lockReason } : {}) }),
+      });
+      const body = await response.json() as { period?: SchedulePeriod; error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Не вдалося оновити статус графіка");
+      setPeriodAction(null); setLockReason(""); setPeriod(body.period ?? period); await load();
+    } catch (requestError: unknown) { setError(requestError instanceof Error ? requestError.message : "Не вдалося оновити статус графіка"); }
+    finally { setSaving(false); }
+  };
+
+  const openHistory = async (shift: Shift) => {
+    setHistoryShift(shift); setHistoryEvents([]); setHistoryError(null); setHistoryLoading(true);
+    try {
+      const response = await fetch(`/api/admin/network/schedules/${shift.shift_id}/events`);
+      const body = await response.json() as { events?: ShiftEvent[]; error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Не вдалося завантажити історію");
+      setHistoryEvents(body.events ?? []);
+    } catch (requestError: unknown) { setHistoryError(requestError instanceof Error ? requestError.message : "Не вдалося завантажити історію"); }
+    finally { setHistoryLoading(false); }
+  };
+
   const columns: ColumnsType<Shift> = useMemo(() => [
     { title: "Дата і час", key: "time", width: 175, render: (_, row) => `${readableDateTime(row.starts_at)} — ${readableDateTime(row.ends_at)}` },
     { title: "Працівник", key: "employee", render: (_, row) => <Space size={6}>{row.employee_display_label ?? row.employee_full_name}{row.is_replacement ? <Tag color="gold">Заміна</Tag> : null}</Space> },
     { title: "Магазин", dataIndex: "store_name", key: "store" },
     { title: "Перерва", dataIndex: "break_minutes", key: "break", width: 90, render: (value: number) => `${value} хв` },
     { title: "Статус", dataIndex: "shift_status", key: "status", width: 115, render: (value: Shift["shift_status"]) => <Tag color={value === "scheduled" ? "green" : "default"}>{value === "scheduled" ? "Заплановано" : "Скасовано"}</Tag> },
-    { title: "", key: "actions", width: 125, render: (_, row) => row.shift_status === "scheduled" && !periodIsReadonly(period) ? <Space size={2}><Button type="text" aria-label={`Редагувати ${row.employee_full_name}`} icon={<EditOutlined />} onClick={() => openEdit(row)} /><Popconfirm title="Скасувати цю зміну?" okText="Скасувати" cancelText="Назад" onConfirm={() => void cancelShift(row)}><Button danger type="link" size="small" loading={saving}>Скасувати</Button></Popconfirm></Space> : null },
+    { title: "", key: "actions", width: 180, render: (_, row) => <Space size={2}><Button type="link" size="small" onClick={() => void openHistory(row)}>Історія</Button>{row.shift_status === "scheduled" && !periodIsReadonly(period) ? <><Button type="text" aria-label={`Редагувати ${row.employee_full_name}`} icon={<EditOutlined />} onClick={() => openEdit(row)} /><Popconfirm title="Скасувати цю зміну?" okText="Скасувати" cancelText="Назад" onConfirm={() => void cancelShift(row)}><Button danger type="link" size="small" loading={saving}>Скасувати</Button></Popconfirm></> : null}</Space> },
   ], [cancelShift, openEdit, period, saving]);
+
+  const employeeColumns: ColumnsType<EmployeeMonthSummary> = useMemo(() => [
+    { title: "Працівник", key: "employee", render: (_, row) => row.employee_display_label ?? row.employee_full_name },
+    { title: "Змін", dataIndex: "scheduled_shift_count", align: "right", width: 90 },
+    { title: "Заміни", dataIndex: "replacement_shift_count", align: "right", width: 100 },
+    { title: "Скасовано", dataIndex: "cancelled_shift_count", align: "right", width: 115 },
+    { title: "Планові години", dataIndex: "planned_minutes", align: "right", width: 145, render: (value: number) => `${(value / 60).toFixed(1)} год` },
+  ], []);
 
   const periodLabel = period ? `Період: ${period.period_start} — ${period.period_end} · ${period.status}` : "Період ще не створено";
   const readonly = periodIsReadonly(period);
 
   return <div className="space-y-4">
     {error ? <Alert type="error" showIcon message="Графік недоступний" description={error} closable onClose={() => setError(null)} /> : null}
-    <Card><div className="flex flex-wrap items-end justify-between gap-4"><Space wrap size="middle"><label className="grid gap-1 text-sm text-ink-600">Місяць<Input aria-label="Місяць графіка" type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="w-40" /></label><label className="grid gap-1 text-sm text-ink-600">Магазин<Select allowClear placeholder="Усі магазини" value={storeId} onChange={setStoreId} className="min-w-52" options={stores.map((store) => ({ value: store.id, label: store.name }))} /></label><label className="grid gap-1 text-sm text-ink-600">Працівник<Select allowClear showSearch optionFilterProp="label" placeholder="Усі продавці" value={employeeId} onChange={setEmployeeId} className="min-w-56" options={sellers.map((seller) => ({ value: seller.id, label: seller.display_label ?? seller.full_name }))} /></label></Space><Space>{period ? <Tag color={readonly ? "default" : "blue"}>{periodLabel}</Tag> : <Button type="primary" icon={<PlusOutlined />} loading={saving} onClick={() => void createPeriod()}>Створити графік</Button>}{period && !readonly ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Додати зміну</Button> : null}</Space></div></Card>
+    <Card><div className="flex flex-wrap items-end justify-between gap-4"><Space wrap size="middle"><label className="grid gap-1 text-sm text-ink-600">Місяць<Input aria-label="Місяць графіка" type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="w-40" /></label><label className="grid gap-1 text-sm text-ink-600">Магазин<Select allowClear placeholder="Усі магазини" value={storeId} onChange={setStoreId} className="min-w-52" options={stores.map((store) => ({ value: store.id, label: store.name }))} /></label><label className="grid gap-1 text-sm text-ink-600">Працівник<Select allowClear showSearch optionFilterProp="label" placeholder="Усі продавці" value={employeeId} onChange={setEmployeeId} className="min-w-56" options={sellers.map((seller) => ({ value: seller.id, label: seller.display_label ?? seller.full_name }))} /></label></Space><Space>{period ? <Tag color={readonly ? "default" : "blue"}>{periodLabel}</Tag> : <Button type="primary" icon={<PlusOutlined />} loading={saving} onClick={() => void createPeriod()}>Створити графік</Button>}{period && !readonly ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Додати зміну</Button> : null}{period?.status === "draft" && canManagePeriod ? <Button onClick={() => setPeriodAction("publish")}>Опублікувати</Button> : null}{period?.status === "published" && canManagePeriod ? <Button danger onClick={() => setPeriodAction("lock")}>Закрити місяць</Button> : null}</Space></div></Card>
     {loading ? <Card><div className="py-14 text-center"><Spin /></div></Card> : null}
     {!loading && !period ? <Card><Empty description={`На ${month} ще немає графіка`}><Button type="primary" loading={saving} onClick={() => void createPeriod()}>Створити чернетку графіка</Button></Empty></Card> : null}
-    {!loading && period ? <Card title="Зміни"><Table rowKey="shift_id" columns={columns} dataSource={shifts} pagination={{ pageSize: 30, hideOnSinglePage: true }} locale={{ emptyText: "У вибраному фільтрі змін ще немає" }} scroll={{ x: 850 }} /></Card> : null}
-    <Modal destroyOnClose open={modalOpen} title={editing ? "Редагувати зміну" : "Додати зміну"} okText={editing ? "Зберегти" : "Додати"} cancelText="Скасувати" confirmLoading={saving} onCancel={() => setModalOpen(false)} onOk={() => form.submit()}>
+    {!loading && period ? <><Card title="Зміни"><Table rowKey="shift_id" columns={columns} dataSource={shifts} pagination={{ pageSize: 30, hideOnSinglePage: true }} locale={{ emptyText: "У вибраному фільтрі змін ще немає" }} scroll={{ x: 850 }} /></Card><Card title="Працівники за місяць"><Table rowKey="employee_id" columns={employeeColumns} dataSource={employeeSummary} pagination={{ pageSize: 20, hideOnSinglePage: true }} locale={{ emptyText: "За цей місяць немає запланованих змін" }} /></Card></> : null}
+    <Modal destroyOnHidden open={modalOpen} title={editing ? "Редагувати зміну" : "Додати зміну"} okText={editing ? "Зберегти" : "Додати"} cancelText="Скасувати" confirmLoading={saving} onCancel={() => setModalOpen(false)} onOk={() => form.submit()}>
       <Form form={form} layout="vertical" onFinish={(values) => void submit(values)}>
         <Form.Item name="employee_id" label="Продавець" rules={[{ required: true, message: "Оберіть продавця" }]}><Select showSearch optionFilterProp="label" options={sellers.map((seller) => ({ value: seller.id, label: seller.display_label ?? seller.full_name }))} /></Form.Item>
         <Form.Item name="store_id" label="Магазин" rules={[{ required: true, message: "Оберіть магазин" }]}><Select options={stores.map((store) => ({ value: store.id, label: store.name }))} /></Form.Item>
@@ -143,6 +189,15 @@ export function ScheduleWorkspace({ stores, sellers, bootstrapError }: Props) {
         <div className="grid grid-cols-2 gap-3"><Form.Item name="starts_time" label="Початок (Київ)" rules={[{ required: true, message: "Вкажіть початок" }]}><Input type="time" /></Form.Item><Form.Item name="ends_time" label="Кінець (Київ)" rules={[{ required: true, message: "Вкажіть кінець" }]}><Input type="time" /></Form.Item></div>
         {editing?.period_status === "published" ? <Form.Item name="change_reason" label="Причина зміни" rules={[{ required: true, min: 3, message: "Вкажіть причину (мінімум 3 символи)" }]}><Input.TextArea maxLength={500} /></Form.Item> : null}
       </Form>
+    </Modal>
+    <Modal destroyOnHidden open={periodAction !== null} title={periodAction === "publish" ? "Опублікувати графік" : "Закрити графік"} okText={periodAction === "publish" ? "Опублікувати" : "Закрити"} cancelText="Назад" confirmLoading={saving} okButtonProps={{ danger: periodAction === "lock", disabled: periodAction === "lock" && lockReason.trim().length < 3 }} onCancel={() => { setPeriodAction(null); setLockReason(""); }} onOk={() => void runPeriodAction()}>
+      {periodAction === "publish" ? <p>Графік стане операційним. Перед публікацією система перевірить непридатні призначення та заміни.</p> : <div className="grid gap-2"><p>Закритий місяць доступний лише для перегляду та не є фактом для зарплати.</p><Input.TextArea aria-label="Причина закриття" value={lockReason} onChange={(event) => setLockReason(event.target.value)} maxLength={500} placeholder="Причина закриття (мінімум 3 символи)" /></div>}
+    </Modal>
+    <Modal destroyOnHidden open={historyShift !== null} title={historyShift ? `Історія зміни: ${historyShift.employee_display_label ?? historyShift.employee_full_name}` : "Історія зміни"} footer={null} onCancel={() => setHistoryShift(null)}>
+      {historyLoading ? <div className="py-8 text-center"><Spin /></div> : null}
+      {historyError ? <Alert type="error" showIcon message="Історія недоступна" description={historyError} /> : null}
+      {!historyLoading && !historyError && !historyEvents.length ? <Empty description="Подій ще немає" /> : null}
+      {!historyLoading && !historyError && historyEvents.length ? <div className="space-y-3">{historyEvents.map((event) => <div key={event.id} className="rounded-lg border border-[rgb(var(--border))] p-3 text-sm"><div className="flex flex-wrap justify-between gap-2"><strong>{event.event_type === "created" ? "Створено" : event.event_type === "cancelled" ? "Скасовано" : "Змінено"}</strong><span className="text-ink-500">{readableDateTime(event.occurred_at)}</span></div><div className="mt-1 text-ink-700">{event.actor_name}{event.reason ? ` · ${event.reason}` : ""}</div></div>)}</div> : null}
     </Modal>
   </div>;
 }

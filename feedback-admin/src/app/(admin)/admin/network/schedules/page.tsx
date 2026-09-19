@@ -1,4 +1,6 @@
+import { cookies } from "next/headers";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
+import { SESSION_COOKIE, isSuperAdmin, verifySession } from "@/lib/session";
 import { getServerSupabase } from "@/lib/supabase";
 import { ScheduleWorkspace, type ScheduleSeller, type ScheduleStore } from "./schedule-workspace";
 
@@ -18,12 +20,13 @@ async function fetchScheduleDirectory(): Promise<{ stores: ScheduleStore[]; sell
 
 export default async function NetworkSchedulesPage() {
   const { stores, sellers, error } = await fetchScheduleDirectory();
+  const session = await verifySession(cookies().get(SESSION_COOKIE)?.value);
   return (
     <AdminPageContainer
       title="Графіки роботи"
       subTitle="Планування змін працівників магазинів"
     >
-      <ScheduleWorkspace stores={stores} sellers={sellers} bootstrapError={error} />
+      <ScheduleWorkspace stores={stores} sellers={sellers} bootstrapError={error} canManagePeriod={Boolean(session && isSuperAdmin(session.role))} />
     </AdminPageContainer>
   );
 }

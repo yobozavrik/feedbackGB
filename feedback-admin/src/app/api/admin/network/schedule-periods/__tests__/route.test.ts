@@ -13,6 +13,8 @@ vi.mock("@/lib/audit", () => ({
 }));
 
 const adminSession = { uid: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", role: "admin" };
+const superAdminSession = { uid: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", role: "super_admin" };
+const periodId = "11111111-1111-1111-1111-111111111111";
 
 function request(method: string, path: string, body?: unknown) {
   return new Request(`http://localhost${path}`, {
@@ -72,5 +74,58 @@ describe("store schedule periods API", () => {
 
     expect(response.status).toBe(409);
     expect((await response.json()).code).toBe("schedule_period_exists");
+  });
+
+  it("does not allow a regular admin to publish a period", async () => {
+    mockRequireAdminSession.mockImplementation(async (tier?: string) => tier === "super_admin" ? null : adminSession);
+    const { PATCH } = await import("../route");
+
+    const response = await PATCH(request("PATCH", `/api/admin/network/schedule-periods?id=${periodId}`, {
+      action: "publish", row_version: 1,
+    }));
+
+    expect(response.status).toBe(403);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("requires a close reason before touching the database", async () => {
+    mockRequireAdminSession.mockResolvedValue(superAdminSession);
+    const { PATCH } = await import("../route");
+
+    const response = await PATCH(request("PATCH", `/api/admin/network/schedule-periods?id=${periodId}`, {
+      action: "lock", row_version: 1, lock_reason: "x",
+    }));
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).code).toBe("lock_reason_required");
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("publishes a clean draft with optimistic concurrency and audit", async () => {
+    mockRequireAdminSession.mockResolvedValue(superAdminSession);
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "work_schedule_periods") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: periodId, status: "draft", row_version: 3, period_start: "2026-09-01", period_end: "2026-09-30" }, error: null }) }) }),
+          update: (payload: Record<string, unknown>) => {
+            expect(payload.status).toBe("published");
+            expect(payload.published_by).toBe(superAdminSession.uid);
+            return { eq: () => ({ eq: () => ({ select: () => ({ maybeSingle: async () => ({ data: { id: periodId, status: "published", row_version: 4 }, error: null }) }) }) }) };
+          },
+        };
+      }
+      if (table === "v_store_schedule_issues") {
+        return { select: () => ({ eq: () => ({ limit: async () => ({ data: [], error: null }) }) }) };
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+    const { PATCH } = await import("../route");
+
+    const response = await PATCH(request("PATCH", `/api/admin/network/schedule-periods?id=${periodId}`, {
+      action: "publish", row_version: 3,
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockLogAudit).toHaveBeenCalledWith("admin.schedule.period_publish", expect.objectContaining({ actorUserId: superAdminSession.uid }));
   });
 });

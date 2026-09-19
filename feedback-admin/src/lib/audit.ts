@@ -23,6 +23,8 @@ export type AuditAction =
   | "admin.user.replacement_store.grant"
   | "admin.user.replacement_store.revoke"
   | "admin.schedule.period_create"
+  | "admin.schedule.period_publish"
+  | "admin.schedule.period_lock"
   | "admin.schedule.create"
   | "admin.schedule.update"
   | "admin.schedule.cancel"
