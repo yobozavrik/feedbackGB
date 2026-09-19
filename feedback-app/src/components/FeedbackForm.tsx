@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Category } from "@/lib/categories";
+import { PHOTO_REPORT_MAX_PHOTOS, PHOTO_REPORT_MIN_PHOTOS } from "@/lib/feedbackValidation";
 import { useTelegram } from "./TelegramProvider";
 import { PhotoInput } from "./PhotoInput";
 import { StoreSelect } from "./StoreSelect";
@@ -48,6 +49,9 @@ export function FeedbackForm({ category }: Props) {
   const [replacementPhotoReportStores, setReplacementPhotoReportStores] = useState<PhotoReportStore[]>([]);
   const [selectedReplacementStoreId, setSelectedReplacementStoreId] = useState<number | null>(null);
   const [photoReportStoresReady, setPhotoReportStoresReady] = useState(false);
+  const isPhotoReport = category.id === "photo_report";
+  const missingPhotoReportPhotos = Math.max(0, PHOTO_REPORT_MIN_PHOTOS - photos.length);
+  const hasEnoughPhotoReportPhotos = !isPhotoReport || missingPhotoReportPhotos === 0;
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -110,8 +114,8 @@ export function FeedbackForm({ category }: Props) {
     const clientSubmissionId = window.crypto.randomUUID();
     const clientCreatedAt = new Date().toISOString();
 
-    if (category.id === "photo_report" && photos.length === 0) {
-      setError("Додай хоча б одне фото для звіту");
+    if (isPhotoReport && !hasEnoughPhotoReportPhotos) {
+      setError(`Додайте ще ${missingPhotoReportPhotos} фото. Мінімум — ${PHOTO_REPORT_MIN_PHOTOS}.`);
       setSubmitting(false);
       webApp?.HapticFeedback?.notificationOccurred("error");
       return;
@@ -358,9 +362,9 @@ export function FeedbackForm({ category }: Props) {
             <PhotoInput
               key={f.id}
               label={f.label}
-              maxPhotos={category.id === "photo_report" ? 15 : undefined}
-              maxOutputBytes={category.id === "photo_report" ? 280 * 1024 : undefined}
-              maxDimension={category.id === "photo_report" ? 1280 : undefined}
+              maxPhotos={isPhotoReport ? PHOTO_REPORT_MAX_PHOTOS : undefined}
+              maxOutputBytes={isPhotoReport ? 280 * 1024 : undefined}
+              maxDimension={isPhotoReport ? 1280 : undefined}
               onChange={setPhotos}
             />
           );
@@ -404,6 +408,14 @@ export function FeedbackForm({ category }: Props) {
         );
       })}
 
+      {isPhotoReport ? (
+        <p className={hasEnoughPhotoReportPhotos ? "text-meta text-success" : "text-meta text-warning"} aria-live="polite">
+          {hasEnoughPhotoReportPhotos
+            ? `Мінімум виконано: ${photos.length}/${PHOTO_REPORT_MAX_PHOTOS} фото.`
+            : `Додайте ще ${missingPhotoReportPhotos} фото. Мінімум — ${PHOTO_REPORT_MIN_PHOTOS}.`}
+        </p>
+      ) : null}
+
       {error ? (
         <div className="callout callout-danger"><AlertTriangleIcon size={18} className="callout-icon" />{error}</div>
       ) : null}
@@ -418,7 +430,11 @@ export function FeedbackForm({ category }: Props) {
           >
             Назад
           </button>
-          <button type="submit" disabled={submitting || (isSellerPhotoReport && !currentPhotoReportStore)} className="btn-primary flex-1">
+          <button
+            type="submit"
+            disabled={submitting || (isSellerPhotoReport && !currentPhotoReportStore) || !hasEnoughPhotoReportPhotos}
+            className="btn-primary flex-1"
+          >
             {submitting ? (
               <>
                 <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-on-brand/40 border-t-on-brand" />

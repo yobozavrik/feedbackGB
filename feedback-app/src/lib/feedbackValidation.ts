@@ -9,7 +9,8 @@ import type { FeedbackPayload } from "@/lib/types";
 
 const VALID_CATEGORY_IDS = new Set<string>(CATEGORIES.map((c) => c.id));
 const DEFAULT_MAX_PHOTOS = 5;
-const PHOTO_REPORT_MAX_PHOTOS = 15;
+export const PHOTO_REPORT_MIN_PHOTOS = 6;
+export const PHOTO_REPORT_MAX_PHOTOS = 15;
 const MAX_FIELD_LEN = 4000;
 const MAX_FIELDS = 40;
 const MAX_STORE_LABEL_LEN = 80;
@@ -297,8 +298,12 @@ export function validateFeedbackPayload(
       status: 400,
     };
   }
-  if (category.id === "photo_report" && rawPhotos.length === 0) {
-    return { ok: false, error: "Photo report requires at least one photo", status: 400 };
+  if (category.id === "photo_report" && rawPhotos.length < PHOTO_REPORT_MIN_PHOTOS) {
+    return {
+      ok: false,
+      error: `Потрібно щонайменше ${PHOTO_REPORT_MIN_PHOTOS} фото для звіту`,
+      status: 400,
+    };
   }
 
   return {

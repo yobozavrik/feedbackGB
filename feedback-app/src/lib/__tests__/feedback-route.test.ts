@@ -450,16 +450,43 @@ describe("POST /api/feedback — payload validation", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("requires at least one photo and rejects a sixteenth photo report image", async () => {
+  it.each([0, 1, 5])("rejects a photo report with %i photos", async (photoCount) => {
     const { validateFeedbackPayload } = await import("@/lib/feedbackValidation");
-    const empty = validateFeedbackPayload({ category: "photo_report", fields: {} });
-    expect(empty).toMatchObject({ ok: false, error: "Photo report requires at least one photo" });
+    const result = validateFeedbackPayload({
+      category: "photo_report",
+      fields: {},
+      photo_urls: Array.from({ length: photoCount }, () => "data:image/jpeg;base64,aaaa"),
+    });
+    expect(result).toMatchObject({ ok: false, error: "Потрібно щонайменше 6 фото для звіту", status: 400 });
+  });
+
+  it("accepts exactly six photos and rejects a sixteenth photo report image", async () => {
+    const { validateFeedbackPayload } = await import("@/lib/feedbackValidation");
+    const minimum = validateFeedbackPayload({
+      category: "photo_report",
+      fields: {},
+      photo_urls: Array.from({ length: 6 }, () => "data:image/jpeg;base64,aaaa"),
+    });
+    expect(minimum.ok).toBe(true);
     const overflow = validateFeedbackPayload({
       category: "photo_report",
       fields: {},
       photo_urls: Array.from({ length: 16 }, () => "data:image/jpeg;base64,aaaa"),
     });
     expect(overflow).toMatchObject({ ok: false, error: "Too many photos: max 15" });
+  });
+
+  it("rejects five photo report images before Storage or database writes", async () => {
+    const { POST } = await loadRoute();
+    const response = await POST(feedbackRequest({
+      category: "photo_report",
+      fields: {},
+      photo_urls: Array.from({ length: 5 }, () => VALID_JPEG),
+    }));
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: "Потрібно щонайменше 6 фото для звіту" });
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+    expect(mockSupabaseInsert).not.toHaveBeenCalled();
   });
 
   it("uploads all fifteen photos of a report and persists their private paths", async () => {
@@ -485,7 +512,7 @@ describe("POST /api/feedback — payload validation", () => {
       category: "photo_report",
       store_id: 12,
       fields: {},
-      photo_urls: [VALID_JPEG],
+      photo_urls: Array.from({ length: 6 }, () => VALID_JPEG),
     }));
     expect(response.status).toBe(200);
     expect(mockSupabaseInsert.mock.calls[0][0].store_id).toBe(12);
@@ -497,7 +524,7 @@ describe("POST /api/feedback — payload validation", () => {
       category: "photo_report",
       store_id: 12,
       fields: {},
-      photo_urls: [VALID_JPEG],
+      photo_urls: Array.from({ length: 6 }, () => VALID_JPEG),
     }));
     expect(response.status).toBe(403);
     expect(mockStorageUpload).not.toHaveBeenCalled();

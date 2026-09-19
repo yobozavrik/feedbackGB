@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { validateFeedbackPayload } from "@/lib/feedbackValidation";
+import { PHOTO_REPORT_MIN_PHOTOS, validateFeedbackPayload } from "@/lib/feedbackValidation";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { buildSummary } from "@/lib/summary";
 import { validateInitData } from "@/lib/telegram";
@@ -68,6 +68,17 @@ export async function POST(req: Request) {
 
   const validated = validateFeedbackPayload(payload);
   if (!validated.ok) {
+    const submittedPhotoCount = Array.isArray(payload.photo_urls)
+      ? payload.photo_urls.length
+      : typeof payload.photo_url === "string" ? 1 : 0;
+    if (payload.category === "photo_report" && submittedPhotoCount < PHOTO_REPORT_MIN_PHOTOS) {
+      logPhotoReport("photo_report.rejected_min_photo_count", {
+        request_id: requestId,
+        user_id: sess.uid,
+        photo_count: submittedPhotoCount,
+        min_photo_count: PHOTO_REPORT_MIN_PHOTOS,
+      });
+    }
     return NextResponse.json(
       { error: validated.error },
       { status: validated.status },
