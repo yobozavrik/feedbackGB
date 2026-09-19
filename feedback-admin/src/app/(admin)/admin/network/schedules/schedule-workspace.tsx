@@ -244,7 +244,7 @@ export function ScheduleWorkspace({ stores, sellers, bootstrapError, canManagePe
     {!loading && !period ? <Card><Empty description={`На ${month} ще немає графіка`}><Button type="primary" loading={saving} onClick={() => void createPeriod()}>Створити чернетку графіка</Button></Empty></Card> : null}
     {!loading && period ? <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
       {
-        key: "grid", label: "Сітка місяця", children: <Card title="Сітка магазинів" extra={<span className="text-xs text-ink-500">Перетягніть картку продавця у потрібний день або магазин</span>}>
+        key: "grid", label: "Сітка місяця", children: <Card title="Сітка магазинів" extra={<span className="text-xs text-ink-500">Компактна сітка: весь місяць і всі магазини на одному екрані</span>}>
           <ScheduleMonthGrid stores={visibleStores} month={month} shifts={shifts} readonly={readonly} onRequestMove={requestGridMove} onEdit={openEdit} onError={setError} />
           <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink-600"><span><Tag color="blue">Звичайна зміна</Tag></span><span><Tag color="gold">Заміна</Tag></span><span>Нічні зміни переміщуються через форму редагування.</span></div>
         </Card>,
