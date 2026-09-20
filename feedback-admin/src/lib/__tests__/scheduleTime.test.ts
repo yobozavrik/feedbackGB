@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentKyivMonth, kyivDateTimeParts, kyivMonthDates, kyivWallTimeToIso, moveSameDayShiftToKyivDate } from "../scheduleTime";
+import { currentKyivMonth, isSaturdayOrSunday, kyivDateTimeParts, kyivMonthDates, kyivWallTimeToIso, moveSameDayShiftToKyivDate, ukraineHolidayName } from "../scheduleTime";
 
 describe("Kyiv schedule time conversion", () => {
   it("preserves a regular Kyiv wall-clock shift", () => {
@@ -38,5 +38,17 @@ describe("Kyiv schedule time conversion", () => {
       kyivWallTimeToIso("2026-09-05", "06:00"),
       "2026-09-16",
     )).toThrow("Нічну зміну");
+  });
+
+  it("identifies Ukraine's fixed and Orthodox movable holidays", () => {
+    expect(ukraineHolidayName("2026-08-24")).toBe("День Незалежності України");
+    expect(ukraineHolidayName("2026-04-12")).toBe("Великдень");
+    expect(ukraineHolidayName("2026-05-31")).toBe("Трійця");
+  });
+
+  it("marks Saturday and Sunday as calendar highlights without making them unavailable", () => {
+    expect(isSaturdayOrSunday("2026-09-19")).toBe(true);
+    expect(isSaturdayOrSunday("2026-09-20")).toBe(true);
+    expect(isSaturdayOrSunday("2026-09-21")).toBe(false);
   });
 });

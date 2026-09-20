@@ -111,3 +111,61 @@ export function moveSameDayShiftToKyivDate(startsAt: string, endsAt: string, tar
     ends_at: kyivWallTimeToIso(targetDate, end.time),
   };
 }
+
+const UKRAINE_FIXED_HOLIDAYS: Record<string, string> = {
+  "01-01": "Новий рік",
+  "03-08": "Міжнародний жіночий день",
+  "05-01": "День праці",
+  "05-08": "День пам’яті та перемоги",
+  "06-28": "День Конституції України",
+  "07-15": "День Української Державності",
+  "08-24": "День Незалежності України",
+  "10-01": "День захисників і захисниць України",
+  "12-25": "Різдво Христове",
+};
+
+function asDateKey(date: Date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function addUtcDays(date: Date, days: number) {
+  const copy = new Date(date.getTime());
+  copy.setUTCDate(copy.getUTCDate() + days);
+  return copy;
+}
+
+/** Orthodox Easter in the Gregorian calendar, valid for the app's modern schedule years. */
+function orthodoxEasterDate(year: number) {
+  const a = year % 4;
+  const b = year % 7;
+  const c = year % 19;
+  const d = (19 * c + 15) % 30;
+  const e = (2 * a + 4 * b - d + 34) % 7;
+  const julianMonth = Math.floor((d + e + 114) / 31);
+  const julianDay = ((d + e + 114) % 31) + 1;
+  // The Julian/Gregorian offset is 13 days from 1900 through 2099.
+  return addUtcDays(new Date(Date.UTC(year, julianMonth - 1, julianDay)), 13);
+}
+
+/**
+ * Calendar-only signal for Ukrainian public/religious holidays. It does not
+ * decide whether the network works or whether a seller receives time off.
+ */
+export function ukraineHolidayName(date: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) throw new Error("Некоректна календарна дата");
+  const fixed = UKRAINE_FIXED_HOLIDAYS[`${match[2]}-${match[3]}`];
+  if (fixed) return fixed;
+
+  const year = Number(match[1]);
+  const easter = orthodoxEasterDate(year);
+  if (date === asDateKey(easter)) return "Великдень";
+  if (date === asDateKey(addUtcDays(easter, 49))) return "Трійця";
+  return null;
+}
+
+export function isSaturdayOrSunday(date: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Некоректна календарна дата");
+  const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+  return day === 0 || day === 6;
+}
