@@ -6,6 +6,7 @@ import {
   HistoryOutlined,
   InboxOutlined,
   ScheduleOutlined,
+  CalendarOutlined,
   SettingOutlined,
   ShopOutlined,
   TeamOutlined,
@@ -31,6 +32,7 @@ import { createElement } from "react";
  *   /admin/photo-report — Фотозвіт
  *   /admin/stores     — Магазини (список з метриками + Drawer-деталь)
  *   /admin/network/schedules — Графіки роботи магазинів
+ *   /admin/network/absences — Графік відсутностей продавчинь
  *   /admin/production/* — Виробництво (тільки super_admin на MVP)
  *   /admin/users      — Співробітники
  *   /admin/analytics  — Кліки (теплові карти взаємодій Mini App)
@@ -69,6 +71,7 @@ const adminGroups: AdminGroupDef[] = [
       { path: "/admin/stores", name: "Магазини", icon: createElement(ShopOutlined) },
       { path: "/admin/users", name: "Співробітники", icon: createElement(TeamOutlined) },
       { path: "/admin/network/schedules", name: "Графіки роботи", icon: createElement(ScheduleOutlined) },
+      { path: "/admin/network/absences", name: "Графік відсутностей", icon: createElement(CalendarOutlined) },
     ],
   },
   {
@@ -134,6 +137,7 @@ export const adminBreadcrumbNames: Record<string, string> = {
   "/admin/funnel": "Воронка",
   "/admin/stores": "Магазини",
   "/admin/network/schedules": "Графіки роботи",
+  "/admin/network/absences": "Графік відсутностей",
   "/admin/production/schedules": "Графіки роботи",
   "/admin/production/workshops": "Цехи",
   "/admin/production/supplies": "Постачання",

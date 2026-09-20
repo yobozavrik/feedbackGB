@@ -16,8 +16,9 @@ function routePaths(isSuperAdmin: boolean): string[] {
 }
 
 describe("admin sidebar navigation", () => {
-  it("shows network schedules to every admin tier", () => {
+  it("shows network schedules and absences to every admin tier", () => {
     expect(routePaths(false)).toContain("/admin/network/schedules");
+    expect(routePaths(false)).toContain("/admin/network/absences");
   });
 
   it("keeps every production page exclusive to super admins", () => {
@@ -37,6 +38,8 @@ describe("admin sidebar navigation", () => {
   it("maps each new route to a stable breadcrumb and sidebar group", () => {
     expect(adminBreadcrumbNames["/admin/network/schedules"]).toBe("Графіки роботи");
     expect(adminPathToGroup["/admin/network/schedules"]).toBe("Мережа");
+    expect(adminBreadcrumbNames["/admin/network/absences"]).toBe("Графік відсутностей");
+    expect(adminPathToGroup["/admin/network/absences"]).toBe("Мережа");
     expect(adminPathToGroup["/admin/production/workshops"]).toBe("Виробництво");
     expect(adminPathToGroup["/admin/production/supplies"]).toBe("Виробництво");
   });
