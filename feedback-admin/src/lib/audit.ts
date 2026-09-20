@@ -28,6 +28,8 @@ export type AuditAction =
   | "admin.schedule.create"
   | "admin.schedule.update"
   | "admin.schedule.cancel"
+  | "admin.absence.create"
+  | "admin.absence.cancel"
   | "admin.direction.create"
   | "admin.direction.update"
   | "admin.direction.deactivate"
