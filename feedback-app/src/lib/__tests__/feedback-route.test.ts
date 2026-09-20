@@ -36,8 +36,17 @@ vi.mock("@/lib/session", () => ({
         store_id: 11,
       };
     }
+    if (token === "valid-admin-token") {
+      return {
+        uid: "admin-uid-789",
+        full_name: "Admin",
+        role: "admin",
+        store_id: null,
+      };
+    }
     return null;
   }),
+  isAdminTier: (role: string) => role === "admin" || role === "super_admin",
 }));
 
 // Mock supabase module
@@ -128,6 +137,18 @@ vi.mock("@/lib/supabase", () => ({
           update: () => ({
             eq: () => ({
               is: async () => ({ error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "feedback_feed") {
+        return {
+          select: () => ({
+            order: () => ({
+              limit: async () => ({
+                data: [{ id: "row-1", summary: "s", created_at: "2026-06-30T00:00:00Z" }],
+                error: null,
+              }),
             }),
           }),
         };
@@ -748,5 +769,48 @@ describe("POST /api/feedback — auto-assignment", () => {
     expect(res.status).toBe(200);
     const record = mockSupabaseInsert.mock.calls[0][0];
     expect(record.assigned_to).toBeNull();
+  });
+});
+
+describe("GET /api/feedback — admin export authorization (I3)", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockSessionCookieValue = "valid-admin-token";
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function loadRoute() {
+    return await import("@/app/api/feedback/route");
+  }
+
+  function getRequest(token: string, format?: string) {
+    mockSessionCookieValue = token;
+    const url = format
+      ? `http://localhost/api/feedback?format=${format}`
+      : "http://localhost/api/feedback";
+    return new Request(url, { method: "GET" });
+  }
+
+  it("returns 403 without a session", async () => {
+    const { GET } = await loadRoute();
+    const res = await GET(getRequest("no-such-token"));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for a seller session (not admin-tier)", async () => {
+    const { GET } = await loadRoute();
+    const res = await GET(getRequest("valid-seller-token"));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 200 with rows for an admin session", async () => {
+    const { GET } = await loadRoute();
+    const res = await GET(getRequest("valid-admin-token"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body.rows)).toBe(true);
   });
 });

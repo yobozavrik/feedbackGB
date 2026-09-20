@@ -5,7 +5,7 @@ import { PHOTO_REPORT_MIN_PHOTOS, validateFeedbackPayload } from "@/lib/feedback
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { buildSummary } from "@/lib/summary";
 import { validateInitData } from "@/lib/telegram";
-import { SESSION_COOKIE, verifySession } from "@/lib/session";
+import { SESSION_COOKIE, isAdminTier, verifySession } from "@/lib/session";
 import { resolveAssignedAdmin } from "@/lib/assignment";
 import { createNotification } from "@/lib/notifications";
 import type { FeedbackPayload } from "@/lib/types";
@@ -427,6 +427,15 @@ export async function POST(req: Request) {
  * Admin-only (middleware enforces role === "admin").
  */
 export async function GET(req: Request) {
+  // Defense in depth: this full-feedback export is admin-tier only. The
+  // middleware already gates `GET /api/feedback` to admins, but this is the
+  // one data endpoint with a single enforcement point — re-check here so a
+  // future middleware/matcher change can't silently expose every store's data.
+  const sess = await verifySession(cookies().get(SESSION_COOKIE)?.value);
+  if (!sess || !isAdminTier(sess.role)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   const url = new URL(req.url);
   const format = url.searchParams.get("format") ?? "json";
 
