@@ -2,6 +2,8 @@
 
 Цей репозиторій містить кодову базу проєкту **FeedbackGB** розділену на два незалежні автономні застосунки: клієнтський Mini App для продавчинь та Адмін-панель керування.
 
+> Актуальний опис системи, вкладок і бізнес-правил: [`docs/PROJECT_GUIDE.md`](./docs/PROJECT_GUIDE.md), [`docs/MODULES_AND_ROUTES.md`](./docs/MODULES_AND_ROUTES.md), [`docs/BUSINESS_PROCESSES.md`](./docs/BUSINESS_PROCESSES.md). Історичні плани у папках застосунків не замінюють ці документи.
+
 ---
 
 ## 📂 Структура репозиторію

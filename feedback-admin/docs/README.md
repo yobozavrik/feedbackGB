@@ -3,6 +3,8 @@
 > Технічна довідка для розробників. Користувацькі гайди — в основному
 > [`README.md`](../README.md).
 
+> Загальний актуальний паспорт обох застосунків лежить у корені репозиторію: [`../../docs/PROJECT_GUIDE.md`](../../docs/PROJECT_GUIDE.md). Для актуальних вкладок і бізнес-правил див. також [`../../docs/MODULES_AND_ROUTES.md`](../../docs/MODULES_AND_ROUTES.md) та [`../../docs/BUSINESS_PROCESSES.md`](../../docs/BUSINESS_PROCESSES.md).
+
 ## Як орієнтуватися
 
 | Документ | Кому |

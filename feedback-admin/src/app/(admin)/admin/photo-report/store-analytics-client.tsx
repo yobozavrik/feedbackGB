@@ -19,6 +19,7 @@ import { useAdminChartTheme } from "@/lib/admin/useAdminChartTheme";
 
 const DEFAULT_PERIOD_DAYS = 7;
 const MAX_PERIOD_DAYS = 31;
+const PERIOD_PRESET_DAYS = [7, 14, 30] as const;
 
 interface GalleryReport { id: string; created_at: string; seller: string; photos: string[]; }
 interface GalleryTarget { storeId: number; storeName: string; date: string; }
@@ -99,7 +100,7 @@ export function StoreAnalyticsClient({ stores }: { stores: PhotoReportStore[] })
 
   return <div className="space-y-4">
     <Card><div className="flex flex-wrap items-end gap-4">
-      <div><div className="mb-1 text-sm text-ink-500">Період</div><Segmented value={presetDays} onChange={(value) => choosePreset(Number(value))} options={[{ label: "7 днів", value: 7 }, { label: "30 днів", value: 30 }]} /></div>
+      <div><div className="mb-1 text-sm text-ink-500">Період</div><Segmented value={presetDays} onChange={(value) => choosePreset(Number(value))} options={PERIOD_PRESET_DAYS.map((days) => ({ label: `${days} днів`, value: days }))} /></div>
       <div><div className="mb-1 text-sm text-ink-500">Свій період</div><DatePicker.RangePicker value={[dayjs(range[0]), dayjs(range[1])]} onChange={changeRange} allowClear={false} format="DD.MM.YYYY" /></div>
       <div><div className="mb-1 text-sm text-ink-500">Магазин</div><Select className="min-w-64" value={storeId} onChange={setStoreId} options={[{ value: "all", label: "Усі магазини" }, ...stores.map((store) => ({ value: store.id, label: store.name }))]} disabled={!stores.length} /></div>
     </div></Card>

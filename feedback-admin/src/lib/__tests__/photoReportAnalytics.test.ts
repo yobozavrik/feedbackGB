@@ -9,6 +9,13 @@ describe("recentCalendarDates", () => {
       "2026-09-01",
     ]);
   });
+
+  it("builds the fourteen-day preset as fourteen consecutive Kyiv calendar dates", () => {
+    const dates = recentCalendarDates("2026-09-16", 14);
+    expect(dates).toHaveLength(14);
+    expect(dates[0]).toBe("2026-09-03");
+    expect(dates.at(-1)).toBe("2026-09-16");
+  });
 });
 
 describe("calendarDatesBetween", () => {
