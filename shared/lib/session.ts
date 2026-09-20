@@ -111,12 +111,17 @@ export async function verifySession(
     // Missing SESSION_SECRET in prod: fail closed.
     return null;
   }
-  const expected = new Uint8Array(
-    await crypto.subtle.sign("HMAC", key, enc.encode(body)),
-  );
-  const actual = b64urlDecode(sig);
-  if (!timingSafeEq(expected, actual)) return null;
   try {
+    // Compute the HMAC first (constant work regardless of the token), then
+    // decode the client-supplied signature. b64urlDecode -> atob throws on a
+    // non-base64 signature; keeping the decode inside this try makes a
+    // malformed cookie fail closed (null -> 401 / redirect to /login) instead
+    // of throwing, which would surface as a 500 in middleware/route handlers.
+    const expected = new Uint8Array(
+      await crypto.subtle.sign("HMAC", key, enc.encode(body)),
+    );
+    const actual = b64urlDecode(sig);
+    if (!timingSafeEq(expected, actual)) return null;
     const dec = new TextDecoder();
     const parsed = JSON.parse(dec.decode(b64urlDecode(body))) as SessionPayload;
     const now = Date.now();
