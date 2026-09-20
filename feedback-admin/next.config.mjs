@@ -31,8 +31,11 @@ const csp = [
   `script-src ${scriptSrc}`,
   "style-src 'self' 'unsafe-inline'",
   `connect-src 'self' ${supabaseConnect} https://telegram.org https://*.i.posthog.com https://*.posthog.com https://api.open-meteo.com`,
-  // Telegram Mini App runs inside an iframe from web.telegram.org / *.telegram.org.
-  "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org",
+  // The admin panel is a browser dashboard (PIN login), NOT a Telegram Mini
+  // App — no TelegramProvider is mounted here (the telegram-web-app.js script
+  // in layout.tsx is a vestigial no-op). So it must never be framed by a
+  // third-party origin; only same-origin framing is allowed (clickjacking).
+  "frame-ancestors 'self'",
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
