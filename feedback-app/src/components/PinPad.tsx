@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { identifyUser, track } from "@/lib/analytics";
+import { safeNextPath } from "@/lib/validation";
 import { CheckIcon, DeleteIcon } from "@/components/icons";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "OK"];
@@ -29,7 +30,9 @@ const KEY_GAP = "clamp(10px, 3vw, 16px)";
 export function PinPad() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/";
+  // Sanitize the post-login redirect target — only same-origin paths, never
+  // an attacker-supplied absolute/protocol-relative URL (open-redirect / phishing).
+  const next = safeNextPath(params.get("next"));
 
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
