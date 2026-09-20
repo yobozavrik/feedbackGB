@@ -246,7 +246,7 @@ export function ScheduleWorkspace({ stores, sellers, bootstrapError, canManagePe
       {
         key: "grid", label: "Сітка місяця", children: <Card title="Сітка магазинів" extra={<span className="text-xs text-ink-500">Компактна сітка: весь місяць і всі магазини на одному екрані</span>}>
           <ScheduleMonthGrid stores={visibleStores} month={month} shifts={shifts} readonly={readonly} onRequestMove={requestGridMove} onEdit={openEdit} onError={setError} />
-          <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink-600"><span><Tag color="blue">Звичайна зміна</Tag></span><span><Tag color="gold">Заміна</Tag></span><span>Нічні зміни переміщуються через форму редагування.</span></div>
+          <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink-600"><span><Tag color="blue">Звичайна зміна</Tag></span><span><Tag color="gold">Заміна</Tag></span></div>
         </Card>,
       },
       {
