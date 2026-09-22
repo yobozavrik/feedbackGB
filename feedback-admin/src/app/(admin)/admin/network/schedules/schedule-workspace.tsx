@@ -6,6 +6,7 @@ import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { currentKyivMonth, kyivDateTimeParts, kyivWallTimeToIso } from "@/lib/scheduleTime";
 import { ScheduleMonthGrid } from "./schedule-month-grid";
+import { SchedulePhotoControl } from "./schedule-photo-control";
 import type { GridMoveRequest } from "./schedule-month-grid";
 
 export interface ScheduleStore { id: number; name: string; }
@@ -259,6 +260,7 @@ export function ScheduleWorkspace({ stores, sellers, bootstrapError, canManagePe
       {
         key: "replacements", label: "Заміни", children: <Card title="Журнал замін" extra={<span className="text-xs text-ink-500">Зміни не в основному магазині продавця</span>}><Table rowKey="shift_id" columns={replacementColumns} dataSource={replacementShifts} pagination={{ pageSize: 30, hideOnSinglePage: true }} locale={{ emptyText: "У вибраному періоді замін немає" }} scroll={{ x: 950 }} /></Card>,
       },
+      { key: "photo-control", label: "Контроль фотозвітів", children: <SchedulePhotoControl month={month} /> },
     ]} /> : null}
     <Modal destroyOnHidden open={modalOpen} title={editing ? "Редагувати зміну" : "Додати зміну"} okText={editing ? "Зберегти" : "Додати"} cancelText="Скасувати" confirmLoading={saving} onCancel={() => setModalOpen(false)} onOk={() => form.submit()}>
       <Form form={form} layout="vertical" onFinish={(values) => void submit(values)}>
