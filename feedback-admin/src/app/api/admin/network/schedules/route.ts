@@ -62,8 +62,11 @@ function parseReason(value: unknown, required: boolean): string | null {
   return reason.length >= 3 && reason.length <= 500 ? reason : null;
 }
 
-function mapDatabaseError(code?: string) {
+function mapDatabaseError(code?: string, message?: string) {
   if (code === "23P01") return jsonError("Перетин змін одного працівника", 422, "schedule_overlap");
+  if (code === "P0001" && message?.includes("schedule_employee_absent")) {
+    return jsonError("Продавець має активну відсутність у цей період", 422, "schedule_employee_absent");
+  }
   if (code === "23514" || code === "P0001") return jsonError("Недійсні дані зміни", 422, "schedule_validation");
   if (code === "42P01") return jsonError("Міграція графіків ще не застосована", 503, "schedule_schema_missing");
   return jsonError("Помилка збереження графіка", 500, "schedule_db_error");
@@ -140,7 +143,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   if (employeeId != null) query = query.eq("employee_id", employeeId);
 
   const { data, error } = await query;
-  if (error) return mapDatabaseError(error.code);
+  if (error) return mapDatabaseError(error.code, error.message);
   return NextResponse.json({ shifts: (data ?? []) as ScheduleRow[] });
 }
 
@@ -205,7 +208,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     .select("id, row_version")
     .single();
 
-  if (error) return mapDatabaseError(error.code);
+  if (error) return mapDatabaseError(error.code, error.message);
 
   await logAudit("admin.schedule.create", {
     actorUserId: session.uid,
@@ -331,7 +334,7 @@ export async function PATCH(req: Request): Promise<NextResponse> {
     .eq("row_version", expectedVersion)
     .select("id, row_version, status")
     .maybeSingle();
-  if (error) return mapDatabaseError(error.code);
+  if (error) return mapDatabaseError(error.code, error.message);
   if (!shift) return jsonError("Зміну вже змінив інший адміністратор", 409, "schedule_conflict");
 
   await logAudit(cancellation ? "admin.schedule.cancel" : "admin.schedule.update", {

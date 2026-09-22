@@ -9,7 +9,7 @@ export default async function NetworkAbsencesPage() {
   return (
     <AdminPageContainer
       title="Графік відсутностей"
-      subTitle="Відпустки, лікарняні та відгули продавчинь магазинів"
+      subTitle="HR-заявки, відпустки, лікарняні, відгули та переведення продавчинь"
     >
       <AbsencesWorkspace stores={stores?.data ?? []} sellers={sellers?.data ?? []} bootstrapError={error} />
     </AdminPageContainer>

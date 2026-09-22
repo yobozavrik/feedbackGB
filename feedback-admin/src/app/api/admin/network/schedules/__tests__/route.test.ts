@@ -142,6 +142,37 @@ describe("store schedules API", () => {
     expect(mockLogAudit).not.toHaveBeenCalled();
   });
 
+  it("returns the dedicated absence error when the DB shift trigger blocks a seller", async () => {
+    const { POST } = await import("../route");
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "work_schedule_periods") {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: periodId, status: "draft" }, error: null }) }) }) };
+      }
+      if (table === "users") {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: sellerId, role: "seller", is_active: true, store_id: 7 }, error: null }) }) }) };
+      }
+      if (table === "store_work_shifts") {
+        return {
+          insert: () => ({
+            select: () => ({
+              single: async () => ({ data: null, error: { code: "P0001", message: "schedule_employee_absent" } }),
+            }),
+          }),
+        };
+      }
+      throw new Error("unexpected table " + table);
+    });
+
+    const response = await POST(request("POST", "/api/admin/network/schedules", {
+      period_id: periodId, employee_id: sellerId, store_id: 7,
+      starts_at: "2026-09-01T09:00:00+03:00", ends_at: "2026-09-01T18:00:00+03:00", break_minutes: 30,
+    }));
+
+    expect(response.status).toBe(422);
+    expect((await response.json()).code).toBe("schedule_employee_absent");
+    expect(mockLogAudit).not.toHaveBeenCalled();
+  });
+
   it("rejects an update with a stale row version before writing", async () => {
     const { PATCH } = await import("../route");
 

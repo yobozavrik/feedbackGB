@@ -8,7 +8,8 @@ type LooseClient = NonNullable<ReturnType<typeof getServerSupabase>>;
 export type NotificationType =
   | "feedback.assigned_to_admin"
   | "feedback.status_in_progress_for_seller"
-  | "feedback.status_resolved_for_seller";
+  | "feedback.status_resolved_for_seller"
+  | "feedback.status_rejected_for_seller";
 
 export interface NotificationRow {
   id: string;
