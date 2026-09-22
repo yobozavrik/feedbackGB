@@ -251,6 +251,9 @@ export function ScheduleWorkspace({ stores, sellers, bootstrapError, canManagePe
         </Card>,
       },
       {
+        key: "list", label: "Список змін", children: <Card title="Усі зміни періоду" extra={<span className="text-xs text-ink-500">Редагування, історія та скасування доступні для кожної зміни</span>}><Table rowKey="shift_id" columns={columns} dataSource={shifts} pagination={{ pageSize: 30, hideOnSinglePage: true }} locale={{ emptyText: "У вибраному періоді змін немає" }} scroll={{ x: 980 }} /></Card>,
+      },
+      {
         key: "statistics", label: "Статистика", children: <div className="space-y-4">
           {storeSummaryError ? <Alert type="warning" showIcon message="Статистика магазинів тимчасово недоступна" description={storeSummaryError} /> : null}
           <Card title="Магазини за місяць"><Table rowKey="store_id" columns={storeColumns} dataSource={visibleStoreSummary} pagination={{ pageSize: 30, hideOnSinglePage: true }} locale={{ emptyText: "За цей місяць немає даних" }} /></Card>
