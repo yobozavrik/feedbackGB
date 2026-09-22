@@ -13,6 +13,10 @@ import {
   ToolOutlined,
   BuildOutlined,
   TruckOutlined,
+  ExperimentOutlined,
+  CoffeeOutlined,
+  ApiOutlined,
+  DeploymentUnitOutlined,
 } from "@ant-design/icons";
 import type { ProLayoutProps } from "@ant-design/pro-components";
 import { createElement } from "react";
@@ -34,6 +38,7 @@ import { createElement } from "react";
  *   /admin/network/schedules — Графіки роботи магазинів
  *   /admin/network/absences — Графік відсутностей продавчинь
  *   /admin/production/* — Виробництво (тільки super_admin на MVP)
+ *   /admin/technologist/* — Технолог (тільки super_admin на MVP)
  *   /admin/users      — Співробітники
  *   /admin/analytics  — Кліки (теплові карти взаємодій Mini App)
  *   /admin/funnel     — Воронка (PostHog: де відвалюються користувачі)
@@ -82,6 +87,18 @@ const adminGroups: AdminGroupDef[] = [
       { path: "/admin/production/schedules", name: "Графіки роботи", icon: createElement(ScheduleOutlined), superAdminOnly: true },
       { path: "/admin/production/workshops", name: "Цехи", icon: createElement(BuildOutlined), superAdminOnly: true },
       { path: "/admin/production/supplies", name: "Постачання", icon: createElement(TruckOutlined), superAdminOnly: true },
+      { path: "/admin/production/equipment", name: "Обладнання", icon: createElement(ToolOutlined), superAdminOnly: true },
+      { path: "/admin/production/planning", name: "Планування виробництва", icon: createElement(DeploymentUnitOutlined), superAdminOnly: true },
+    ],
+  },
+  {
+    key: "technologist",
+    name: "Технолог",
+    superAdminOnly: true,
+    items: [
+      { path: "/admin/technologist/products", name: "Продукти", icon: createElement(CoffeeOutlined), superAdminOnly: true },
+      { path: "/admin/technologist/food-cost", name: "Фудкост", icon: createElement(ExperimentOutlined), superAdminOnly: true },
+      { path: "/admin/technologist/production-technology", name: "Технологія виробництва", icon: createElement(ApiOutlined), superAdminOnly: true },
     ],
   },
   {
@@ -141,6 +158,11 @@ export const adminBreadcrumbNames: Record<string, string> = {
   "/admin/production/schedules": "Графіки роботи",
   "/admin/production/workshops": "Цехи",
   "/admin/production/supplies": "Постачання",
+  "/admin/production/equipment": "Обладнання",
+  "/admin/production/planning": "Планування виробництва",
+  "/admin/technologist/products": "Продукти",
+  "/admin/technologist/food-cost": "Фудкост",
+  "/admin/technologist/production-technology": "Технологія виробництва",
   "/admin/photo-report": "Фотозвіт",
   "/admin/settings": "Налаштування",
 };

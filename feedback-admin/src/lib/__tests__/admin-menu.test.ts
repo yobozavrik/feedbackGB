@@ -28,10 +28,18 @@ describe("admin sidebar navigation", () => {
     expect(adminPaths).not.toContain("/admin/production/schedules");
     expect(adminPaths).not.toContain("/admin/production/workshops");
     expect(adminPaths).not.toContain("/admin/production/supplies");
+    expect(adminPaths).not.toContain("/admin/production/equipment");
+    expect(adminPaths).not.toContain("/admin/production/planning");
+    expect(adminPaths).not.toContain("/admin/technologist/products");
     expect(superAdminPaths).toEqual(expect.arrayContaining([
       "/admin/production/schedules",
       "/admin/production/workshops",
       "/admin/production/supplies",
+      "/admin/production/equipment",
+      "/admin/production/planning",
+      "/admin/technologist/products",
+      "/admin/technologist/food-cost",
+      "/admin/technologist/production-technology",
     ]));
   });
 
@@ -42,5 +50,8 @@ describe("admin sidebar navigation", () => {
     expect(adminPathToGroup["/admin/network/absences"]).toBe("Мережа");
     expect(adminPathToGroup["/admin/production/workshops"]).toBe("Виробництво");
     expect(adminPathToGroup["/admin/production/supplies"]).toBe("Виробництво");
+    expect(adminPathToGroup["/admin/production/equipment"]).toBe("Виробництво");
+    expect(adminPathToGroup["/admin/production/planning"]).toBe("Виробництво");
+    expect(adminPathToGroup["/admin/technologist/food-cost"]).toBe("Технолог");
   });
 });
