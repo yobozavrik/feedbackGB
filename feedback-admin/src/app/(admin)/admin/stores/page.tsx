@@ -1,6 +1,6 @@
 import { getServerSupabase } from "@/lib/supabase";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
-import { StoresClient } from "./stores-client";
+import { StoresTabs } from "./stores-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +116,7 @@ export default async function AdminStoresPage() {
       title="Магазини"
       subTitle={`Каталог магазинів, активність продавчинь і фідбеку. Вікно — ${WINDOW_DAYS} днів.`}
     >
-      <StoresClient
+      <StoresTabs
         stores={stores}
         feed={feed}
         sellers={sellers}
