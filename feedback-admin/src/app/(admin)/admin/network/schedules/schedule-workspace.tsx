@@ -10,7 +10,7 @@ import { SchedulePhotoControl } from "./schedule-photo-control";
 import type { GridMoveRequest } from "./schedule-month-grid";
 
 export interface ScheduleStore { id: number; name: string; }
-export interface ScheduleSeller { id: string; full_name: string; display_label: string | null; store_id: number | null; }
+export interface ScheduleSeller { id: string; full_name: string; display_label: string | null; store_id: number | null; replacement_store_ids: number[]; }
 
 interface SchedulePeriod { id: string; period_start: string; period_end: string; status: "draft" | "published" | "locked" | "archived"; timezone: string; row_version: number; }
 export interface Shift {
@@ -246,7 +246,7 @@ export function ScheduleWorkspace({ stores, sellers, bootstrapError, canManagePe
     {!loading && period ? <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
       {
         key: "grid", label: "Сітка місяця", children: <Card title="Сітка магазинів" extra={<span className="text-xs text-ink-500">Компактна сітка: весь місяць і всі магазини на одному екрані</span>}>
-          <ScheduleMonthGrid stores={visibleStores} month={month} shifts={shifts} readonly={readonly} onRequestMove={requestGridMove} onEdit={openEdit} onError={setError} />
+          <ScheduleMonthGrid stores={visibleStores} month={month} shifts={shifts} sellers={sellers} readonly={readonly} onRequestMove={requestGridMove} onEdit={openEdit} onError={setError} />
           <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink-600"><span><Tag color="blue">Звичайна зміна</Tag></span><span><Tag color="gold">Заміна</Tag></span></div>
         </Card>,
       },

@@ -15,7 +15,17 @@ async function fetchScheduleDirectory(): Promise<{ stores: ScheduleStore[]; sell
   ]);
   if (storesResult.error) return { stores: [], sellers: [], error: storesResult.error.message };
   if (sellersResult.error) return { stores: [], sellers: [], error: sellersResult.error.message };
-  return { stores: (storesResult.data ?? []) as ScheduleStore[], sellers: (sellersResult.data ?? []) as ScheduleSeller[], error: null };
+  const sellerIds = (sellersResult.data ?? []).map((seller) => seller.id);
+  const permissionsResult = sellerIds.length
+    ? await supabase.from("seller_store_permissions").select("seller_id, store_id").in("seller_id", sellerIds).is("revoked_at", null)
+    : { data: [], error: null };
+  if (permissionsResult.error) return { stores: [], sellers: [], error: permissionsResult.error.message };
+  const replacementStoresBySeller = new Map<string, number[]>();
+  for (const permission of permissionsResult.data ?? []) {
+    replacementStoresBySeller.set(permission.seller_id, [...(replacementStoresBySeller.get(permission.seller_id) ?? []), permission.store_id]);
+  }
+  const sellers = (sellersResult.data ?? []).map((seller) => ({ ...seller, replacement_store_ids: replacementStoresBySeller.get(seller.id) ?? [] })) as ScheduleSeller[];
+  return { stores: (storesResult.data ?? []) as ScheduleStore[], sellers, error: null };
 }
 
 export default async function NetworkSchedulesPage() {
