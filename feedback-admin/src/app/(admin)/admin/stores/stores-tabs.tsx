@@ -1,6 +1,6 @@
 "use client";
 
-import { Tabs } from "antd";
+import { Badge, Card, Empty, Tabs, Typography } from "antd";
 import { PlannedDataPlaceholder } from "@/components/admin/PlannedDataPlaceholder";
 import { StoresClient } from "./stores-client";
 import type { StoreFeedRow, StoreRow, StoreSeller } from "./page";
@@ -21,12 +21,12 @@ export function StoresTabs(props: Props) {
         {
           key: "stores",
           label: "Магазини",
-          children: <StoresClient {...props} />,
+          children: <StoreCards stores={props.stores} />,
         },
         {
           key: "reports",
           label: "Звіти",
-          children: <PlannedDataPlaceholder title="Звіти магазинів" description="Формати звітів, періоди, відповідальні та джерела ще не погоджені. Наявні фідбеки не змішуємо зі звітами магазинів без затвердженого правила." scope="network" />,
+          children: <StoresClient {...props} />,
         },
         {
           key: "analytics",
@@ -35,5 +35,25 @@ export function StoresTabs(props: Props) {
         },
       ]}
     />
+  );
+}
+
+function StoreCards({ stores }: { stores: StoreRow[] }) {
+  if (!stores.length) return <Empty className="py-12" description="Магазинів не знайдено" />;
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {stores.map((store) => (
+        <Card key={store.id} className="h-full" size="small">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Typography.Text strong className="block truncate text-base">{store.name}</Typography.Text>
+              <Typography.Text type="secondary" className="mt-1 block min-h-10 text-sm">{store.address ?? "Адресу не вказано"}</Typography.Text>
+            </div>
+            <Badge status={store.is_active ? "success" : "default"} text={store.is_active ? "Активний" : "Неактивний"} />
+          </div>
+          <Typography.Text type="secondary" className="mt-4 block text-xs">Магазин #{store.id}</Typography.Text>
+        </Card>
+      ))}
+    </div>
   );
 }
