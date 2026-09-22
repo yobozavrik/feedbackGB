@@ -1,22 +1,82 @@
 "use client";
 
-import { Badge, Card, Empty, Tabs, Typography } from "antd";
+import { useEffect, useState } from "react";
+import { Alert, Badge, Card, Empty, Spin, Tabs, Typography } from "antd";
 import { PlannedDataPlaceholder } from "@/components/admin/PlannedDataPlaceholder";
 import { StoresClient } from "./stores-client";
 import type { StoreFeedRow, StoreRow, StoreSeller } from "./page";
 
 interface Props {
   stores: StoreRow[];
-  feed: StoreFeedRow[];
-  sellers: StoreSeller[];
   windowDays: number;
   error: string | null;
 }
 
+interface ReportPage {
+  feed: StoreFeedRow[];
+  sellers: StoreSeller[];
+  hasMore: boolean;
+  page: number;
+  windowDays: number;
+  asOf: string;
+}
+
 export function StoresTabs(props: Props) {
+  const [activeKey, setActiveKey] = useState("stores");
+  const [reportData, setReportData] = useState<{ feed: StoreFeedRow[]; sellers: StoreSeller[] } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeKey !== "reports" || reportData || props.error) return;
+    const controller = new AbortController();
+    setLoading(true);
+    setReportError(null);
+
+    async function loadReports() {
+      try {
+        const feed: StoreFeedRow[] = [];
+        let sellers: StoreSeller[] = [];
+        let asOf: string | null = null;
+        for (let page = 1; page <= 10; page += 1) {
+          const asOfParam = asOf ? `&as_of=${encodeURIComponent(asOf)}` : "";
+          const response = await fetch(`/api/admin/stores/reports?page=${page}&period=${props.windowDays}&limit=1000${asOfParam}`, {
+            signal: controller.signal,
+            cache: "no-store",
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = (await response.json()) as ReportPage;
+          if (!Array.isArray(data.feed) || !Array.isArray(data.sellers) || data.page !== page || data.windowDays !== props.windowDays || typeof data.asOf !== "string" || (asOf !== null && data.asOf !== asOf)) {
+            throw new Error("invalid_response");
+          }
+          asOf = data.asOf;
+          feed.push(...data.feed);
+          if (page === 1) sellers = data.sellers;
+          if (!data.hasMore) {
+            if (!controller.signal.aborted) setReportData({ feed, sellers });
+            return;
+          }
+        }
+        throw new Error("report_limit_exceeded");
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setReportError(error instanceof Error && error.message === "report_limit_exceeded"
+            ? "Забагато записів для поточного звіту. Дані не показано, щоб не занижувати показники."
+            : "Не вдалося завантажити звіти магазинів.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+
+    void loadReports();
+    return () => controller.abort();
+  }, [activeKey, reportData, props.error, props.windowDays]);
+
   return (
     <Tabs
-      defaultActiveKey="stores"
+      activeKey={activeKey}
+      onChange={setActiveKey}
       items={[
         {
           key: "stores",
@@ -26,7 +86,13 @@ export function StoresTabs(props: Props) {
         {
           key: "reports",
           label: "Звіти",
-          children: <StoresClient {...props} />,
+          children: props.error
+            ? <Alert type="error" showIcon message="Не вдалося завантажити магазини" description={props.error} />
+            : reportError
+              ? <Alert type="error" showIcon message={reportError} />
+              : reportData
+                ? <StoresClient stores={props.stores} feed={reportData.feed} sellers={reportData.sellers} windowDays={props.windowDays} error={null} />
+                : <div className="flex min-h-40 items-center justify-center"><Spin spinning={loading} tip="Завантаження звітів" /></div>,
         },
         {
           key: "analytics",
