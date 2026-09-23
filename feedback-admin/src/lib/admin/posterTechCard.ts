@@ -1,4 +1,4 @@
-const POSTER_API = "https://joinposter.com/api/";
+import { posterRequest, PosterApiError } from "./posterApi";
 const MAX_PREPACK_DEPTH = 5;
 const MAX_PREPACK_REQUESTS = 25;
 
@@ -39,31 +39,16 @@ export type TechRecipe = {
   ingredients: TechIngredient[];
 };
 
-export type ProductTechCard = { recipe: TechRecipe; checkedAt: string };
+export type ProductTechCard = { recipe: TechRecipe; status: "recipe_available" | "recipe_not_configured"; checkedAt: string };
 
-export class PosterTechCardError extends Error {
-  constructor(public code: string) { super(code); }
-}
+export class PosterTechCardError extends PosterApiError {}
 
 async function posterGet(method: string, productId: number, token: string): Promise<PosterRecipe> {
-  const url = new URL(method, POSTER_API);
-  url.searchParams.set("token", token);
-  url.searchParams.set("product_id", String(productId));
-  let response: Response;
-  try {
-    response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20000) });
-  } catch {
-    // The request URL contains the token; never return or log it.
-    throw new PosterTechCardError("poster_unavailable");
-  }
-  if (!response.ok) throw new PosterTechCardError("poster_unavailable");
-  let body: { response?: unknown; error?: unknown };
-  try { body = await response.json(); } catch { throw new PosterTechCardError("poster_invalid_response"); }
-  if (body.error) throw new PosterTechCardError("poster_invalid_response");
-  if (!body.response || typeof body.response !== "object" || Array.isArray(body.response)) {
+  const response = await posterRequest<unknown>(method, { product_id: String(productId) }, token);
+  if (!response || typeof response !== "object" || Array.isArray(response)) {
     throw new PosterTechCardError("recipe_not_found");
   }
-  const recipe = body.response as PosterRecipe;
+  const recipe = response as PosterRecipe;
   if (Number(recipe.product_id) !== productId) throw new PosterTechCardError("recipe_not_found");
   return recipe;
 }
@@ -80,7 +65,14 @@ export async function getLiveProductTechCard(productId: number, token: string): 
     root = await posterGet("menu.getProduct", productId, token);
   } catch (error) {
     if (!(error instanceof PosterTechCardError) || error.code !== "recipe_not_found") throw error;
-    root = await posterGet("menu.getPrepack", productId, token);
+    try {
+      root = await posterGet("menu.getPrepack", productId, token);
+    } catch (prepackError) {
+      if (prepackError instanceof PosterTechCardError && prepackError.code === "recipe_not_found") {
+        throw new PosterTechCardError("product_missing_in_poster");
+      }
+      throw prepackError;
+    }
   }
 
   let prepackRequests = 0;
@@ -124,5 +116,6 @@ export async function getLiveProductTechCard(productId: number, token: string): 
     };
   };
 
-  return { recipe: await build(root, new Set([productId]), 0), checkedAt: new Date().toISOString() };
+  const recipe = await build(root, new Set([productId]), 0);
+  return { recipe, status: recipe.ingredients.length ? "recipe_available" : "recipe_not_configured", checkedAt: new Date().toISOString() };
 }

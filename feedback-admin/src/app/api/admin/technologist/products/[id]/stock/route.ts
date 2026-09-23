@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/adminAuth";
 import { getLiveProductStock, PosterStockError } from "@/lib/admin/posterStock";
+import { PosterApiError } from "@/lib/admin/posterApi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,8 +20,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     const stock = await getLiveProductStock(id, token);
     return NextResponse.json(stock, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
-    const code = error instanceof PosterStockError ? error.code : "poster_unavailable";
-    const status = code === "product_not_found" ? 404 : 503;
+    const code = error instanceof PosterApiError || error instanceof PosterStockError ? error.code : "poster_unavailable";
+    const status = code === "product_missing_in_poster" ? 404 : 503;
     return NextResponse.json({ error: code }, { status, headers: { "Cache-Control": "private, no-store, max-age=0" } });
   }
 }

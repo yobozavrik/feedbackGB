@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/adminAuth";
 import { getLiveProductTechCard, PosterTechCardError } from "@/lib/admin/posterTechCard";
+import { PosterApiError } from "@/lib/admin/posterApi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,9 +20,9 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     const card = await getLiveProductTechCard(id, token);
     return NextResponse.json(card, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
-    const code = error instanceof PosterTechCardError ? error.code : "poster_unavailable";
+    const code = error instanceof PosterApiError || error instanceof PosterTechCardError ? error.code : "poster_unavailable";
     return NextResponse.json({ error: code }, {
-      status: code === "recipe_not_found" ? 404 : 503,
+      status: code === "product_missing_in_poster" ? 404 : 503,
       headers: { "Cache-Control": "private, no-store, max-age=0" },
     });
   }

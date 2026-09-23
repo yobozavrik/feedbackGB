@@ -30,7 +30,7 @@ describe("live Poster product stock", () => {
     });
     const result = await getLiveProductStock(121, "secret");
     expect(result.stores.map((row) => row.quantity)).toEqual([0, 22.073, null]);
-    expect(result.stores.map((row) => row.status)).toEqual(["ok", "ok", "missing_storage"]);
+    expect(result.stores.map((row) => row.status)).toEqual(["available", "available", "storage_mapping_missing_or_ambiguous"]);
     expect(result.unit).toBe("kg");
     expect(vi.mocked(global.fetch).mock.calls.every(([url]) => new URL(String(url)).searchParams.get("zero_leftovers") === "true" || !String(url).includes("storage.getStorageLeftovers"))).toBe(true);
   });
@@ -41,14 +41,27 @@ describe("live Poster product stock", () => {
       "8": [{ ingredient_id: "323", storage_ingredient_left: "-1.25", ingredient_unit: "kg" }],
     });
     const result = await getLiveProductStock(121, "secret");
-    expect(result.stores[0]).toMatchObject({ quantity: null, status: "missing_product" });
-    expect(result.stores[1]).toMatchObject({ quantity: -1.25, status: "ok" });
+    expect(result.stores[0]).toMatchObject({ quantity: null, status: "stock_row_missing" });
+    expect(result.stores[1]).toMatchObject({ quantity: -1.25, status: "available" });
   });
 
   it("isolates one failed warehouse", async () => {
     mockPoster({ "3": "error", "8": [{ ingredient_id: "323", storage_ingredient_left: "2", ingredient_unit: "kg" }] });
     const result = await getLiveProductStock(121, "secret");
-    expect(result.stores[0].status).toBe("error");
+    expect(result.stores[0].status).toBe("poster_unavailable");
     expect(result.stores[1].quantity).toBe(2);
+  });
+
+  it("does not request stores for a product without a stock ingredient ID", async () => {
+    global.fetch = vi.fn(async () => new Response(JSON.stringify({ response: { product_id: "1200", product_name: "Подарунок", ingredient_id: null } }))) as typeof fetch;
+    const result = await getLiveProductStock(1200, "secret");
+    expect(result).toMatchObject({ status: "product_without_stock_id", stores: [] });
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(1);
+  });
+
+  it("distinguishes a product absent from current Poster", async () => {
+    global.fetch = vi.fn(async () => new Response(JSON.stringify({ response: [] }))) as typeof fetch;
+    await expect(getLiveProductStock(1156, "secret")).rejects.toMatchObject({ code: "product_missing_in_poster" });
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(1);
   });
 });

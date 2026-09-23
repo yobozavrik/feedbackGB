@@ -22,7 +22,7 @@ function Recipe({ recipe, nested = false }: { recipe: TechRecipe; nested?: boole
       { key: "output", label: "Вихід за даними Poster", children: <>{quantity(recipe.output)} <Typography.Text type="secondary">(одиниця не вказана в API)</Typography.Text></> },
       ...(recipe.productionDescription ? [{ key: "process", label: "Технологія приготування", children: <span className="whitespace-pre-wrap">{recipe.productionDescription}</span> }] : []),
     ]} />
-    {recipe.ingredients.length === 0 ? <Empty description="У Poster немає складу технологічної карти для цього товару" /> :
+    {recipe.ingredients.length === 0 ? <Empty description="Техкарту не задано в Poster" /> :
       <Table<TechIngredient>
         rowKey="key"
         size="small"
@@ -47,21 +47,24 @@ function Recipe({ recipe, nested = false }: { recipe: TechRecipe; nested?: boole
 export function ProductTechCardPanel({ productId }: { productId: number }) {
   const [data, setData] = useState<ProductTechCard | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const refresh = useCallback(() => setReload((current) => current + 1), []);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
-    setError(false);
+    setErrorCode(null);
     fetch(`/api/admin/technologist/products/${productId}/tech-card`, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
-        if (!response.ok) throw new Error("tech_card_unavailable");
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          throw new Error(typeof body?.error === "string" ? body.error : "tech_card_unavailable");
+        }
         return response.json() as Promise<ProductTechCard>;
       })
       .then(setData)
-      .catch(() => { if (!controller.signal.aborted) setError(true); })
+      .catch((error) => { if (!controller.signal.aborted) setErrorCode(error instanceof Error ? error.message : "tech_card_unavailable"); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [productId, reload]);
@@ -74,8 +77,8 @@ export function ProductTechCardPanel({ productId }: { productId: number }) {
       </div>
       <Button onClick={refresh} loading={loading}>Оновити зараз</Button>
     </div>
-    {error && <Alert type="error" showIcon message="Не вдалося отримати технологічну карту з Poster" description={data ? "Нижче показано попередній замір." : undefined} />}
+    {errorCode && <Alert type={errorCode === "product_missing_in_poster" ? "warning" : "error"} showIcon message={errorCode === "product_missing_in_poster" ? "Продукт відсутній у поточному Poster" : "Не вдалося отримати технологічну карту з Poster"} description={data ? "Нижче показано попередній замір." : undefined} />}
     {data && hasUnavailablePrepack(data.recipe) && <Alert type="warning" showIcon message="Частина вкладених карт недоступна" description="Склад напівфабрикатів, який не вдалося завантажити, не домислюється." />}
-    {data ? <Recipe recipe={data.recipe} /> : loading ? <div className="py-10 text-center"><Typography.Text type="secondary">Завантаження технологічної карти…</Typography.Text></div> : !error ? null : <Empty description="Дані недоступні" />}
+    {data ? <Recipe recipe={data.recipe} /> : loading ? <div className="py-10 text-center"><Typography.Text type="secondary">Завантаження технологічної карти…</Typography.Text></div> : !errorCode ? null : <Empty description="Дані недоступні" />}
   </Space>;
 }

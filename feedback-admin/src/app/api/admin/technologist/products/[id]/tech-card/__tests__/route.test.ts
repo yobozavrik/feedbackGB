@@ -33,4 +33,13 @@ describe("product technical card API", () => {
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(getLiveProductTechCard).toHaveBeenCalledWith(121, "test-token");
   });
+
+  it("returns 404 for a catalog card absent from current Poster", async () => {
+    requireAdminSession.mockResolvedValue({ uid: "admin" });
+    const { GET } = await import("../route");
+    const { PosterApiError } = await import("@/lib/admin/posterApi");
+    getLiveProductTechCard.mockRejectedValue(new PosterApiError("product_missing_in_poster"));
+    const response = await GET(new Request("http://localhost/tech-card"), { params: { id: "1156" } });
+    expect(response.status).toBe(404);
+  });
 });

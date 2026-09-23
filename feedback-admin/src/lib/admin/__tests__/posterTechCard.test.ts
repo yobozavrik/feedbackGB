@@ -26,6 +26,7 @@ describe("live Poster technical card", () => {
       ] },
     });
     const card = await getLiveProductTechCard(121, "secret");
+    expect(card.status).toBe("recipe_available");
     expect(card.recipe.output).toBe(1000);
     expect(card.recipe.ingredients[0]).toMatchObject({ brutto: 5, netto: 0, unit: "g" });
     expect(card.recipe.ingredients[1]).toMatchObject({ kind: "prepack", brutto: 520, netto: 500, prepackStatus: "ok" });
@@ -60,7 +61,7 @@ describe("live Poster technical card", () => {
 
   it("distinguishes a missing recipe from a product with an empty composition", async () => {
     mockPoster({ "menu.getProduct:121": { product_id: "121", ingredients: [] } });
-    expect((await getLiveProductTechCard(121, "secret")).recipe.ingredients).toEqual([]);
-    await expect(getLiveProductTechCard(999, "secret")).rejects.toMatchObject({ code: "recipe_not_found" });
+    expect(await getLiveProductTechCard(121, "secret")).toMatchObject({ status: "recipe_not_configured", recipe: { ingredients: [] } });
+    await expect(getLiveProductTechCard(999, "secret")).rejects.toMatchObject({ code: "product_missing_in_poster" });
   });
 });

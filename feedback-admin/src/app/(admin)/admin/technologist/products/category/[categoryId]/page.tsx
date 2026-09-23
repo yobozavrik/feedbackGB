@@ -6,6 +6,7 @@ import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 import { SESSION_COOKIE, isSuperAdmin, verifySession } from "@/lib/session";
 import { getServerSupabase } from "@/lib/supabase";
 import { PRODUCT_PAGE_SIZE, UNCATEGORIZED_ID, normalizeProductSearch, parseProductPage, productSearchPattern, type CatalogProduct } from "@/lib/admin/productCatalog";
+import { getPosterCatalogPhotos } from "@/lib/admin/posterProductPhotos";
 import { CategoryProducts } from "./category-products-client";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,8 @@ export default async function ProductCategoryPage({ params, searchParams }: { pa
   let total = 0;
   let categoryName = categoryId === UNCATEGORIZED_ID ? "Без категорії" : `Категорія ${categoryId}`;
   let error: string | null = null;
+  let photoError = false;
+  let posterMissingIds: number[] = [];
   if (!supabase) error = "Supabase ще не налаштовано";
   else {
     const categoryMetaQuery = supabase.from("v_products").select("category_name").limit(1);
@@ -39,9 +42,24 @@ export default async function ProductCategoryPage({ params, searchParams }: { pa
     else {
       products = (result.data ?? []) as CatalogProduct[];
       total = result.count ?? 0;
+      if (products.length) {
+        const token = process.env.POSTER_TOKEN;
+        if (!token) photoError = true;
+        else {
+          try {
+            const posterPhotos = await getPosterCatalogPhotos(token);
+            products = products.map((product) => ({ ...product, photo: posterPhotos.get(product.id) ?? null }));
+            posterMissingIds = products.filter((product) => !posterPhotos.has(product.id)).map((product) => product.id);
+          } catch { photoError = true; }
+        }
+        if (photoError) products = products.map((product) => ({ ...product, photo: null }));
+      }
     }
   }
   return <AdminPageContainer title={categoryName} subTitle="Продукти категорії товарного каталогу POS" extra={<Link href="/admin/technologist/products"><Button>Усі категорії</Button></Link>}>
-    {error ? <Alert type="error" showIcon message={error} /> : <CategoryProducts categoryId={categoryId} products={products} total={total} page={page} search={search} />}
+    {error ? <Alert type="error" showIcon message={error} /> : <>
+      {photoError && <Alert type="warning" showIcon className="mb-4" message="Фото з Poster тимчасово недоступні" />}
+      <CategoryProducts categoryId={categoryId} products={products} total={total} page={page} search={search} posterMissingIds={posterMissingIds} />
+    </>}
   </AdminPageContainer>;
 }

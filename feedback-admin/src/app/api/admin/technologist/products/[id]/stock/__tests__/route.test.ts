@@ -33,4 +33,13 @@ describe("product stock API", () => {
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(getLiveProductStock).toHaveBeenCalledWith(121, "test-token");
   });
+
+  it("returns 404 for a catalog card absent from current Poster", async () => {
+    requireAdminSession.mockResolvedValue({ uid: "admin" });
+    const { GET } = await import("../route");
+    const { PosterApiError } = await import("@/lib/admin/posterApi");
+    getLiveProductStock.mockRejectedValue(new PosterApiError("product_missing_in_poster"));
+    const response = await GET(new Request("http://localhost/stock"), { params: { id: "1156" } });
+    expect(response.status).toBe(404);
+  });
 });

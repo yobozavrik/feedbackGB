@@ -6,6 +6,7 @@ import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 import { SESSION_COOKIE, isSuperAdmin, verifySession } from "@/lib/session";
 import { getServerSupabase } from "@/lib/supabase";
 import { UNCATEGORIZED_ID, productCategoryHref, type CatalogProduct } from "@/lib/admin/productCatalog";
+import { getPosterProductPhoto } from "@/lib/admin/posterProductPhotos";
 import { ProductDetail } from "./product-detail-client";
 
 export const dynamic = "force-dynamic";
@@ -22,8 +23,16 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
   if (error) return <AdminPageContainer title="Картка продукту"><Alert type="error" showIcon message="Не вдалося завантажити продукт каталогу" /></AdminPageContainer>;
   if (!data) notFound();
   const product = data as CatalogProduct;
+  let posterPhoto: string | null = null;
+  let photoError = false;
+  const token = process.env.POSTER_TOKEN;
+  if (!token) photoError = true;
+  else {
+    try { posterPhoto = await getPosterProductPhoto(product.id, token); }
+    catch { photoError = true; }
+  }
   const categoryHref = productCategoryHref(product.category_id ?? UNCATEGORIZED_ID);
   return <AdminPageContainer title={product.name} subTitle="Картка продукту з товарного каталогу POS" extra={<Link href={categoryHref}><Button>До категорії</Button></Link>}>
-    <ProductDetail product={product} />
+    <ProductDetail product={product} posterPhoto={posterPhoto} photoError={photoError} />
   </AdminPageContainer>;
 }
