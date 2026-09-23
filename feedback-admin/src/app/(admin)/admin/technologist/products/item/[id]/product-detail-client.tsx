@@ -4,6 +4,8 @@ import { Card, Descriptions, Empty, Tabs, Typography } from "antd";
 import Link from "next/link";
 import { UNCATEGORIZED_ID, productCategoryHref, type CatalogProduct } from "@/lib/admin/productCatalog";
 import { ProductPhoto } from "../../product-photo";
+import { ProductStockPanel } from "./product-stock";
+import { useState } from "react";
 
 function UnconnectedSection({ name }: { name: string }) {
   return <Empty className="py-12" description={`${name}: дані Poster ще не підключено до цієї картки`} />;
@@ -11,6 +13,7 @@ function UnconnectedSection({ name }: { name: string }) {
 
 export function ProductDetail({ product }: { product: CatalogProduct }) {
   const categoryHref = productCategoryHref(product.category_id ?? UNCATEGORIZED_ID);
+  const [activeTab, setActiveTab] = useState("stock");
   return <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
     <Card size="small" className="h-fit">
       <ProductPhoto photo={product.photo} name={product.name} className="mb-4 h-44 w-full" />
@@ -24,8 +27,8 @@ export function ProductDetail({ product }: { product: CatalogProduct }) {
       ]} />
     </Card>
     <Card size="small" className="min-w-0">
-      <Tabs defaultActiveKey="characteristics" items={[
-        { key: "stock", label: "Залишки", children: <UnconnectedSection name="Залишки" /> },
+      <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
+        { key: "stock", label: "Залишки", children: activeTab === "stock" ? <ProductStockPanel productId={product.id} /> : null },
         { key: "characteristics", label: "Характеристики", children: <Descriptions bordered size="small" column={{ xs: 1, md: 2 }} items={[
           { key: "name", label: "Назва", children: product.name },
           { key: "category", label: "Категорія", children: product.category_name ?? "Без категорії" },
