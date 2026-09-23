@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { formatProductUnitUk } from "@/lib/productUnits";
 
 interface Props {
   value: number;
@@ -62,7 +63,7 @@ export function QuantityStepper({
     <div>
       <label className="field-label">
         {label}
-        {unit ? <span className="ml-1 text-ink-500">({unit})</span> : null}
+        {unit ? <span className="ml-1 text-ink-500">({formatProductUnitUk(unit)})</span> : null}
       </label>
       <div className="flex items-center gap-2">
         <button

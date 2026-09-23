@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Descriptions, Empty, Space, Table, Tag, Typography } from "antd";
 import type { ProductTechCard, TechIngredient, TechRecipe } from "@/lib/admin/posterTechCard";
+import { formatProductUnitUk } from "@/lib/productUnits";
 
 const quantityFormat = new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 4 });
 
 function quantity(value: number | null, unit?: string | null) {
-  return value === null ? "—" : `${quantityFormat.format(value)}${unit ? ` ${unit}` : ""}`;
+  return value === null ? "—" : `${quantityFormat.format(value)}${unit ? ` ${formatProductUnitUk(unit)}` : ""}`;
 }
 
 function hasUnavailablePrepack(recipe: TechRecipe): boolean {

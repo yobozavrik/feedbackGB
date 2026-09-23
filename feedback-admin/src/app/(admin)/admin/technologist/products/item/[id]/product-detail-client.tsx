@@ -7,6 +7,7 @@ import { ProductPhoto } from "../../product-photo";
 import { ProductStockPanel } from "./product-stock";
 import { ProductTechCardPanel } from "./product-tech-card";
 import { useState } from "react";
+import { formatProductUnitUk } from "@/lib/productUnits";
 
 function UnconnectedSection({ name }: { name: string }) {
   return <Empty className="py-12" description={`${name}: дані Poster ще не підключено до цієї картки`} />;
@@ -23,7 +24,7 @@ export function ProductDetail({ product, posterPhoto, photoError }: { product: C
       <Descriptions column={1} size="small" colon={false} items={[
         { key: "id", label: "ID каталогу", children: product.id },
         { key: "category", label: "Категорія", children: <Link href={categoryHref}>{product.category_name ?? "Без категорії"}</Link> },
-        { key: "unit", label: "Одиниця", children: product.unit ?? "—" },
+        { key: "unit", label: "Одиниця", children: formatProductUnitUk(product.unit) ?? "—" },
         { key: "barcode", label: "Штрихкод", children: product.barcode ?? "—" },
         { key: "cost", label: "Собівартість у POS", children: product.cost ?? "—" },
       ]} />
@@ -34,7 +35,7 @@ export function ProductDetail({ product, posterPhoto, photoError }: { product: C
         { key: "characteristics", label: "Характеристики", children: <Descriptions bordered size="small" column={{ xs: 1, md: 2 }} items={[
           { key: "name", label: "Назва", children: product.name },
           { key: "category", label: "Категорія", children: product.category_name ?? "Без категорії" },
-          { key: "unit", label: "Одиниця виміру", children: product.unit ?? "—" },
+          { key: "unit", label: "Одиниця виміру", children: formatProductUnitUk(product.unit) ?? "—" },
           { key: "barcode", label: "Штрихкод", children: product.barcode ?? "—" },
         ]} /> },
         { key: "tech", label: "Технологічна карта", children: activeTab === "tech" ? <ProductTechCardPanel key={product.id} productId={product.id} /> : null },

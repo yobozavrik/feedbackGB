@@ -1,5 +1,6 @@
 import { getCategory } from "./categories";
 import type { FeedbackPayload } from "./types";
+import { formatProductUnitUk } from "./productUnits";
 
 /**
  * Build a single readable string per feedback record.
@@ -30,7 +31,7 @@ export function buildSummary(
   const productName =
     typeof fields.product_name === "string" ? fields.product_name.trim() : "";
   const productUnit =
-    typeof fields.product_unit === "string" ? fields.product_unit.trim() : "";
+    typeof fields.product_unit === "string" ? formatProductUnitUk(fields.product_unit) ?? "" : "";
   const qtyRaw = fields.quantity ?? payload.quantity ?? null;
   const quantity =
     typeof qtyRaw === "number" && Number.isFinite(qtyRaw)

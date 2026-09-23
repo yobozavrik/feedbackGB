@@ -23,6 +23,7 @@ import {
 } from "antd";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { formatProductUnitUk } from "@/lib/productUnits";
 import {
   addFeedbackComment,
   fetchFeedbackComments,
@@ -265,7 +266,7 @@ export function FeedDrawer({
               </Text>
               {row.product_unit ? (
                 <Text type="secondary" style={{ marginLeft: 6, fontSize: 13 }}>
-                  ({row.product_unit})
+                  ({formatProductUnitUk(row.product_unit)})
                 </Text>
               ) : null}
             </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { StatusPill } from "@/components/StatusPill";
 import { AlertTriangleIcon } from "@/components/icons";
 import type { FeedbackStatus } from "@/lib/feedbackStatusMeta";
+import { formatProductUnitUk } from "@/lib/productUnits";
 
 interface FeedbackDetail {
   id: string;
@@ -121,7 +122,7 @@ export function RequestDetail({ id }: Props) {
               {fieldEntries.map(([key, value]) => (
                 <tr key={key} className="border-b border-ink-300/50 last:border-0">
                   <td className="py-2 pr-2 text-[13px] text-ink-500">{fieldLabel(key)}</td>
-                  <td className="py-2 text-right text-[14px] font-medium text-ink-900">{String(value)}</td>
+                  <td className="py-2 text-right text-[14px] font-medium text-ink-900">{key === "product_unit" && typeof value === "string" ? formatProductUnitUk(value) ?? "—" : String(value)}</td>
                 </tr>
               ))}
             </tbody>

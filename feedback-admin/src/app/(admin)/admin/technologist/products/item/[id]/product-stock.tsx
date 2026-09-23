@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Space, Table, Tag, Typography } from "antd";
 import type { ProductStock, StoreStock } from "@/lib/admin/posterStock";
+import { formatProductUnitUk } from "@/lib/productUnits";
 
 const quantityFormat = new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 4 });
 
@@ -56,7 +57,7 @@ export function ProductStockPanel({ productId }: { productId: number }) {
       columns={[
         { title: "Магазин", dataIndex: "storeName", key: "storeName", sorter: (a, b) => a.storeName.localeCompare(b.storeName, "uk") },
         { title: "Залишок", key: "quantity", align: "right", render: (_, row) => row.status === "available" && row.quantity !== null
-          ? <Typography.Text strong={row.quantity > 0} type={row.quantity < 0 ? "danger" : undefined}>{quantityFormat.format(row.quantity)} {data?.unit ?? ""}</Typography.Text>
+          ? <Typography.Text strong={row.quantity > 0} type={row.quantity < 0 ? "danger" : undefined}>{quantityFormat.format(row.quantity)}{data?.unit ? ` ${formatProductUnitUk(data.unit)}` : ""}</Typography.Text>
           : <Tag color="default">{row.status === "storage_mapping_missing_or_ambiguous" ? "Склад не визначено" : row.status === "poster_unavailable" ? "Poster недоступний" : "Немає складського запису"}</Tag> },
       ]}
     />}

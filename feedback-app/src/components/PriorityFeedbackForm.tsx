@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { Category } from "@/lib/categories";
 import { track } from "@/lib/analytics";
+import { formatProductUnitUk } from "@/lib/productUnits";
 import type { ProductRow } from "@/app/api/products/route";
 import type { FeedbackPayload } from "@/lib/types";
 import { useTelegram } from "./TelegramProvider";
@@ -392,7 +393,7 @@ export function PriorityFeedbackForm({ category }: Props) {
                 {product.name}
               </span>
               <span className="block text-meta text-ink-500">
-                {product.unit ?? "шт"}
+                {formatProductUnitUk(product.unit) ?? "Одиницю не вказано"}
                 {product.category_name ? ` · ${product.category_name}` : ""}
               </span>
             </span>

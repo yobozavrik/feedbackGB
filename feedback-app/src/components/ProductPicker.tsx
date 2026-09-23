@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProductRow } from "@/app/api/products/route";
 import { EmptyState } from "@/components/EmptyState";
 import { AlertTriangleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon, XIcon } from "@/components/icons";
+import { formatProductUnitUk } from "@/lib/productUnits";
 
 interface Props {
   open: boolean;
@@ -294,7 +295,7 @@ export function ProductPicker({ open, storeId, onSelect, onClose }: Props) {
                                   {p.name}
                                 </span>
                                 <span className="block text-meta text-ink-500">
-                                  {p.unit ? p.unit : "шт"}
+                                  {formatProductUnitUk(p.unit) ?? "Одиницю не вказано"}
                                   {p.uses_7d > 0
                                     ? ` · ×${p.uses_7d} за 7 днів`
                                     : ""}

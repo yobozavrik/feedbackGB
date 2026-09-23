@@ -1,4 +1,5 @@
 import { getServerSupabase } from "@/lib/supabase";
+import { formatProductUnitUk } from "./productUnits";
 
 type Supabase = NonNullable<ReturnType<typeof getServerSupabase>>;
 
@@ -364,7 +365,7 @@ function formatPhotoCaption(r: FeedRow): string {
   if (r.product_name) {
     const qty =
       r.quantity != null
-        ? ` · ${r.quantity}${r.product_unit ? ` ${r.product_unit}` : ""}`
+        ? ` · ${r.quantity}${r.product_unit ? ` ${formatProductUnitUk(r.product_unit)}` : ""}`
         : "";
     item = `${r.product_name}${qty}`;
   } else if (typeof r.fields?.["item_name"] === "string") {
@@ -848,7 +849,7 @@ function formatRowLine(r: FeedRow, photoLinks: PhotoLinkMap): string {
   if (r.product_name) {
     const qty =
       r.quantity != null
-        ? ` · ${escapeHtml(String(r.quantity))}${r.product_unit ? ` ${escapeHtml(r.product_unit)}` : ""}`
+        ? ` · ${escapeHtml(String(r.quantity))}${r.product_unit ? ` ${escapeHtml(formatProductUnitUk(r.product_unit) ?? "")}` : ""}`
         : "";
     return `${store} — ${escapeHtml(r.product_name)}${qty}${photo} <i>(${author})</i>`;
   }
@@ -872,7 +873,7 @@ function formatRowSubject(r: FeedRow): string {
   if (r.product_name) {
     const qty =
       r.quantity != null
-        ? ` · ${r.quantity}${r.product_unit ? ` ${r.product_unit}` : ""}`
+        ? ` · ${r.quantity}${r.product_unit ? ` ${formatProductUnitUk(r.product_unit)}` : ""}`
         : "";
     return `${r.product_name}${qty} (${store})`;
   }
