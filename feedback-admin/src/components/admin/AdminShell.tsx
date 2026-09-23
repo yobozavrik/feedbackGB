@@ -105,9 +105,18 @@ export function AdminShell({ children, user }: AdminShellProps) {
     let current = "";
     for (const part of parts) {
       current += `/${part}`;
+      if (
+        current === "/admin/technologist" ||
+        current === "/admin/technologist/products/category" ||
+        current === "/admin/technologist/products/item"
+      ) continue;
       const name =
         adminBreadcrumbNames[current] ??
-        part.charAt(0).toUpperCase() + part.slice(1);
+        (current.startsWith("/admin/technologist/products/category/")
+          ? `Категорія ${part}`
+          : current.startsWith("/admin/technologist/products/item/")
+            ? `Продукт ${part}`
+            : part.charAt(0).toUpperCase() + part.slice(1));
       items.push({ path: current, breadcrumbName: name });
     }
     return items;
@@ -116,7 +125,9 @@ export function AdminShell({ children, user }: AdminShellProps) {
   const currentCrumb =
     breadcrumbItems[breadcrumbItems.length - 1]?.breadcrumbName ?? "Огляд";
   // H1 — group name replaces the literal English "Admin" ahead of the page name.
-  const currentGroup = adminPathToGroup[pathname ?? "/admin"] ?? "Робота";
+  const currentGroup =
+    adminPathToGroup[pathname ?? "/admin"] ??
+    (pathname?.startsWith("/admin/technologist/products/") ? "Технолог" : "Робота");
 
   const onLogout = async () => {
     try {

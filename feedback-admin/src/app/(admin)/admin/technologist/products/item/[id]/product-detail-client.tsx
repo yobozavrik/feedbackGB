@@ -1,0 +1,40 @@
+"use client";
+
+import { Card, Descriptions, Empty, Tabs, Typography } from "antd";
+import Link from "next/link";
+import { UNCATEGORIZED_ID, productCategoryHref, type CatalogProduct } from "@/lib/admin/productCatalog";
+import { ProductPhoto } from "../../product-photo";
+
+function UnconnectedSection({ name }: { name: string }) {
+  return <Empty className="py-12" description={`${name}: дані Poster ще не підключено до цієї картки`} />;
+}
+
+export function ProductDetail({ product }: { product: CatalogProduct }) {
+  const categoryHref = productCategoryHref(product.category_id ?? UNCATEGORIZED_ID);
+  return <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+    <Card size="small" className="h-fit">
+      <ProductPhoto photo={product.photo} name={product.name} className="mb-4 h-44 w-full" />
+      <Typography.Title level={5} className="!mb-4">{product.name}</Typography.Title>
+      <Descriptions column={1} size="small" colon={false} items={[
+        { key: "id", label: "ID каталогу", children: product.id },
+        { key: "category", label: "Категорія", children: <Link href={categoryHref}>{product.category_name ?? "Без категорії"}</Link> },
+        { key: "unit", label: "Одиниця", children: product.unit ?? "—" },
+        { key: "barcode", label: "Штрихкод", children: product.barcode ?? "—" },
+        { key: "cost", label: "Собівартість у POS", children: product.cost ?? "—" },
+      ]} />
+    </Card>
+    <Card size="small" className="min-w-0">
+      <Tabs defaultActiveKey="characteristics" items={[
+        { key: "stock", label: "Залишки", children: <UnconnectedSection name="Залишки" /> },
+        { key: "characteristics", label: "Характеристики", children: <Descriptions bordered size="small" column={{ xs: 1, md: 2 }} items={[
+          { key: "name", label: "Назва", children: product.name },
+          { key: "category", label: "Категорія", children: product.category_name ?? "Без категорії" },
+          { key: "unit", label: "Одиниця виміру", children: product.unit ?? "—" },
+          { key: "barcode", label: "Штрихкод", children: product.barcode ?? "—" },
+        ]} /> },
+        { key: "tech", label: "Технологічна карта", children: <UnconnectedSection name="Технологічна карта" /> },
+        { key: "stages", label: "Етапи та задачі", children: <UnconnectedSection name="Етапи та задачі" /> },
+      ]} />
+    </Card>
+  </div>;
+}
