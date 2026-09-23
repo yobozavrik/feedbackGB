@@ -5,6 +5,7 @@ import Link from "next/link";
 import { UNCATEGORIZED_ID, productCategoryHref, type CatalogProduct } from "@/lib/admin/productCatalog";
 import { ProductPhoto } from "../../product-photo";
 import { ProductStockPanel } from "./product-stock";
+import { ProductTechCardPanel } from "./product-tech-card";
 import { useState } from "react";
 
 function UnconnectedSection({ name }: { name: string }) {
@@ -35,7 +36,7 @@ export function ProductDetail({ product }: { product: CatalogProduct }) {
           { key: "unit", label: "Одиниця виміру", children: product.unit ?? "—" },
           { key: "barcode", label: "Штрихкод", children: product.barcode ?? "—" },
         ]} /> },
-        { key: "tech", label: "Технологічна карта", children: <UnconnectedSection name="Технологічна карта" /> },
+        { key: "tech", label: "Технологічна карта", children: activeTab === "tech" ? <ProductTechCardPanel productId={product.id} /> : null },
         { key: "stages", label: "Етапи та задачі", children: <UnconnectedSection name="Етапи та задачі" /> },
       ]} />
     </Card>
