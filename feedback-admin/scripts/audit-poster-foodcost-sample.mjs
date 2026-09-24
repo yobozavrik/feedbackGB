@@ -53,7 +53,7 @@ for (const summary of matches) {
   for (const prepackId of prepackIds) {
     const prepack = await posterGet("menu.getPrepack", { product_id: prepackId });
     prepacks.push({
-      ...picked(prepack, ["product_id", "product_name", "out", "cost", "cost_netto", "prime_cost"]),
+      ...picked(prepack, ["product_id", "product_name", "type", "unit", "out", "cost", "cost_netto", "prime_cost"]),
       ingredients: Array.isArray(prepack?.ingredients) ? prepack.ingredients.map((row) =>
         picked(row, ["ingredient_id", "ingredient_name", "structure_type", "structure_brutto", "structure_unit", "structure_selfprice"])) : [],
     });

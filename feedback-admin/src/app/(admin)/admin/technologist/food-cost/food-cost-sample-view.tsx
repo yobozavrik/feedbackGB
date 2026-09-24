@@ -5,6 +5,7 @@ import { Alert, Button, Card, Input, Progress, Space, Statistic, Table, Tag, Typ
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FoodCostIngredient, FoodCostSample, FoodCostStore } from "@/lib/admin/posterFoodCost";
+import type { SupplyComparison } from "@/lib/admin/posterSupplyComparison";
 import { formatProductUnitUk } from "@/lib/productUnits";
 
 const numberFormat = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -18,7 +19,7 @@ function percent(value: number | null): string {
   return value === null ? "—" : `${numberFormat.format(value)} %`;
 }
 
-export function FoodCostSampleView({ data }: { data: FoodCostSample }) {
+export function FoodCostSampleView({ data, supply }: { data: FoodCostSample; supply: SupplyComparison }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const currency = data.currencySymbol || data.currencyCode;
@@ -81,13 +82,27 @@ export function FoodCostSampleView({ data }: { data: FoodCostSample }) {
       <Typography.Text type="secondary" className="text-xs">Показано поточну прайсову ціну Poster. Продажі, знижки, повернення й ціна фактичних чеків у цей макет не входять.</Typography.Text>
     </Card>
 
-    <Card size="small" title="Склад собівартості за техкартою">
+    <Card size="small" title="Вартість компонентів техкарти">
+      {supply.status === "ready" ? <Alert className="mb-3" type={supply.missingRows ? "warning" : "info"} showIcon
+        message={`Постачання: ${supply.windowFrom} — ${supply.windowTo} · уся мережа`}
+        description={`${supply.supplyDocuments} накладних у повному знімку станом на ${supply.completedAt ? new Date(supply.completedAt).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv" }) : "—"}. У колонці — середньозважена ціна накладних за кількістю, не поточна вартість залишків Poster.${supply.missingRows ? ` Без ціни: ${supply.missingRows} рядків.` : ""}`} />
+        : <Alert className="mb-3" type="warning" showIcon message="Дані з постачання поки недоступні"
+          description={supply.status === "schema_missing" ? "Міграцію 036 ще не застосовано."
+            : supply.status === "stale" ? `Останній повний знімок: ${supply.windowFrom} — ${supply.windowTo}. Потрібна синхронізація за поточні 30 днів.`
+              : "Повний 30-денний знімок ще не зібрано. Неповні дані не показуємо як підсумок."} />}
       <Table<FoodCostIngredient> rowKey="key" size="small" pagination={false} scroll={{ x: 600 }} dataSource={data.ingredients} columns={[
         { title: "Компонент", key: "name", render: (_, row) => <Space wrap>{row.name}{row.kind === "prepack" && <Tag color="blue">Напівфабрикат</Tag>}</Space> },
         { title: "Брутто", key: "brutto", align: "right", render: (_, row) => row.brutto === null ? "—" : `${quantityFormat.format(row.brutto)} ${formatProductUnitUk(row.unit) ?? ""}` },
-        { title: "Вартість рядка", key: "cost", align: "right", render: (_, row) => money(row.costMinor, currency) },
+        { title: "За техкартою Poster", key: "cost", align: "right", render: (_, row) => money(row.costMinor, currency) },
+        { title: "Дані з постачання · 30 днів", key: "supplyCost", align: "right", render: (_, row) => {
+          const result = supply.rows[row.key];
+          return <span title={result?.note ?? (result?.supplyCount ? `${result.supplyCount} накладних` : undefined)}>
+            {money(result?.costMinor ?? null, currency)}
+          </span>;
+        } },
       ]} />
-      <Typography.Text strong>Сума рядків: {money(data.ingredientTotalMinor, currency)}</Typography.Text>
+      <Space wrap><Typography.Text strong>За техкартою: {money(data.ingredientTotalMinor, currency)}</Typography.Text>
+        <Typography.Text strong>За постачаннями: {money(supply.totalMinor, currency)}</Typography.Text></Space>
       <Typography.Text type="secondary" className="ml-2">· вихід рецепта {data.recipeOutput === null ? "не вказано" : `${quantityFormat.format(data.recipeOutput)} (одиниця в API не вказана)`}</Typography.Text>
       <Alert className="mt-3" type="info" showIcon message="Рядки техкарти не є основою показника вище" description="Poster повертає окреме поле cost продукту. Суму інгредієнтів показано для контролю рецепта; її не прирівнюємо до собівартості 1 кг без підтвердженої одиниці виходу й правил перерахунку." />
     </Card>

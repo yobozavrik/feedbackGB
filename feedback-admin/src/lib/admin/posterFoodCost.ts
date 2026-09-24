@@ -12,6 +12,7 @@ type PosterFoodCostProduct = {
   spots?: Array<{ spot_id?: string | number; price?: MoneyValue; profit?: MoneyValue; visible?: string | number }>;
   ingredients?: Array<{
     structure_id?: string | number;
+    ingredient_id?: string | number;
     ingredient_name?: string;
     structure_type?: string | number;
     structure_brutto?: string | number | null;
@@ -35,6 +36,7 @@ export type FoodCostStore = {
 
 export type FoodCostIngredient = {
   key: string;
+  ingredientId: number | null;
   name: string;
   kind: "ingredient" | "prepack";
   brutto: number | null;
@@ -54,6 +56,7 @@ export type FoodCostSample = {
   recipeOutput: number | null;
   costMinor: number | null;
   ingredients: FoodCostIngredient[];
+  prepacks: Array<{ productId: number; outputWeight: number | null; posterCostMinor: number | null; ingredients: FoodCostIngredient[] }>;
   ingredientTotalMinor: number | null;
   stores: FoodCostStore[];
 };
@@ -76,12 +79,25 @@ function finiteNumber(value: string | number | null | undefined): number | null 
   return Number.isFinite(number) ? number : null;
 }
 
+function parseIngredients(rows: PosterFoodCostProduct["ingredients"]): FoodCostIngredient[] {
+  return (Array.isArray(rows) ? rows : []).map((row, index): FoodCostIngredient => ({
+    key: String(row.structure_id ?? index),
+    ingredientId: Number.isSafeInteger(Number(row.ingredient_id)) && Number(row.ingredient_id) > 0 ? Number(row.ingredient_id) : null,
+    name: row.ingredient_name?.trim() || `Компонент #${index + 1}`,
+    kind: String(row.structure_type) === "2" ? "prepack" : "ingredient",
+    brutto: finiteNumber(row.structure_brutto),
+    unit: row.structure_unit?.trim() || null,
+    costMinor: nonnegativeMinor(row.structure_selfprice),
+  }));
+}
+
 /** Price/cost are Poster minor currency units; weight_flag=1 is priced per 100 g. */
 export function buildFoodCostSample(
   product: PosterFoodCostProduct,
   spots: PosterSpot[],
   settings: PosterSettings,
   checkedAt: string,
+  prepacks: Array<{ productId: number; outputWeight: number | null; posterCostMinor: number | null; ingredients: FoodCostIngredient[] }> = [],
 ): FoodCostSample {
   const productId = Number(product.product_id);
   if (!Number.isSafeInteger(productId) || productId <= 0) throw new PosterApiError("poster_invalid_response");
@@ -107,15 +123,7 @@ export function buildFoodCostSample(
     };
   }).filter((spot) => Number.isSafeInteger(spot.storeId) && spot.storeId > 0);
 
-  const ingredients = (Array.isArray(product.ingredients) ? product.ingredients : [])
-    .map((row, index): FoodCostIngredient => ({
-      key: String(row.structure_id ?? index),
-      name: row.ingredient_name?.trim() || `Компонент #${index + 1}`,
-      kind: String(row.structure_type) === "2" ? "prepack" : "ingredient",
-      brutto: finiteNumber(row.structure_brutto),
-      unit: row.structure_unit?.trim() || null,
-      costMinor: nonnegativeMinor(row.structure_selfprice),
-    }));
+  const ingredients = parseIngredients(product.ingredients);
   const ingredientTotalMinor = ingredients.length > 0 && ingredients.every((row) => row.costMinor !== null)
     ? ingredients.reduce((sum, row) => sum + (row.costMinor ?? 0), 0) : null;
 
@@ -131,6 +139,7 @@ export function buildFoodCostSample(
     recipeOutput: finiteNumber(product.out),
     costMinor,
     ingredients,
+    prepacks,
     ingredientTotalMinor,
     stores,
   };
@@ -145,5 +154,17 @@ export async function getLiveFoodCostSample(productId: number, token: string): P
   if (!product || Number(product.product_id) !== productId || !Array.isArray(spots) || !settings) {
     throw new PosterApiError("poster_invalid_response");
   }
-  return buildFoodCostSample(product, spots, settings, new Date().toISOString());
+  const prepackIds = [...new Set((product.ingredients ?? [])
+    .filter((row) => String(row.structure_type) === "2")
+    .map((row) => Number(row.ingredient_id)))].filter((id) => Number.isSafeInteger(id) && id > 0);
+  const prepackResults = await Promise.allSettled(prepackIds.slice(0, 5).map(async (id) => {
+    const detail = await posterRequest<PosterFoodCostProduct>("menu.getPrepack", { product_id: String(id) }, token);
+    if (!detail || Number(detail.product_id) !== id) throw new PosterApiError("poster_invalid_prepack");
+    return { productId: id, outputWeight: finiteNumber(detail.out),
+      posterCostMinor: nonnegativeMinor(detail.cost), ingredients: parseIngredients(detail.ingredients) };
+  }));
+  // A failed prepack lookup must not hide the live Poster product/price.
+  // The independent supply comparison will show that row as unavailable.
+  const prepackDetails = prepackResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+  return buildFoodCostSample(product, spots, settings, new Date().toISOString(), prepackDetails);
 }

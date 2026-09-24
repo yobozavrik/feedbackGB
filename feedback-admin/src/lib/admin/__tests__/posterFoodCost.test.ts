@@ -74,4 +74,20 @@ describe("Poster live food-cost pilot", () => {
     expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(3);
     expect(vi.mocked(global.fetch).mock.calls.every(([, options]) => options?.cache === "no-store")).toBe(true);
   });
+
+  it("keeps the live product page available when a prepack detail fails", async () => {
+    const withPrepack = { ...product, ingredients: [
+      product.ingredients[0], { ...product.ingredients[1], ingredient_id: "37" },
+    ] };
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const method = new URL(String(input)).pathname.split("/").pop();
+      if (method === "menu.getPrepack") return new Response("unavailable", { status: 503 });
+      const response = method === "menu.getProduct" ? withPrepack : method === "access.getSpots" ? spots : settings;
+      return new Response(JSON.stringify({ response }), { status: 200 });
+    }) as typeof fetch;
+    const result = await getLiveFoodCostSample(121, "secret");
+    expect(result.productId).toBe(121);
+    expect(result.prepacks).toEqual([]);
+    expect(result.ingredients[1]).toMatchObject({ kind: "prepack", ingredientId: 37 });
+  });
 });

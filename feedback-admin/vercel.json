@@ -8,6 +8,14 @@
     {
       "path": "/api/cron/daily-report",
       "schedule": "30 19 * * *"
+    },
+    {
+      "path": "/api/cron/poster-supply-cost",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/poster-supply-cost",
+      "schedule": "0 5 * * *"
     }
   ]
 }
