@@ -32,7 +32,7 @@ export function lastThreeClosedKyivDates(now: Date): string[] {
     .toISOString().slice(0, 10));
 }
 
-function posterSpotIds(value: unknown): number[] {
+export function posterSpotIds(value: unknown): number[] {
   if (!Array.isArray(value) || !value.length || value.length > 100) throw new Error("invalid_poster_spots");
   const ids = value.map((spot) => Number(spot && typeof spot === "object"
     ? (spot as { spot_id?: unknown }).spot_id : null));
@@ -197,7 +197,7 @@ export async function syncPosterSalesSpotDay(
 
 /**
  * Approved rolling window. Fail-stop: a later invocation safely rechecks
- * unchanged cells; no cron/route invokes this until 038 and staging QA pass.
+ * unchanged cells. The Production-only cron invokes this once daily.
  * The roster is fetched once for the entire run to avoid 78 extra API calls.
  */
 export async function syncPosterSalesRecentDays(now = new Date()) {
@@ -232,6 +232,11 @@ export async function syncPosterSalesRecentDays(now = new Date()) {
       else summary.changedCells++;
       if (summary.processedCells < summary.expectedCells) {
         await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      if (spotId === ids[ids.length - 1]) {
+        console.info(JSON.stringify({ event: "poster_foodcost_sales_sync_day", businessDate: date,
+          processedCells: summary.processedCells, expectedCells: summary.expectedCells,
+          changedCells: summary.changedCells, unchangedCells: summary.unchangedCells }));
       }
     }
     return summary;

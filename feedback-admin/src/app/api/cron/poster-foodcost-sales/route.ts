@@ -6,8 +6,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-/** Prepared endpoint; deliberately absent from vercel.json until Gate 2 passes. */
+/** Daily 07:00 UTC; writes only on Production after a bearer-secret check. */
 export async function GET(request: Request) {
+  // Without CRON_SECRET, the shared legacy auth helper can accept a spoofable
+  // x-vercel-cron header. This write route must fail closed in Production.
+  if (process.env.VERCEL_ENV === "production" && !process.env.CRON_SECRET) {
+    return NextResponse.json({ error: "cron_secret_not_configured" }, { status: 503 });
+  }
   const auth = checkCronAuth(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   // Preview and Production use the same database. Never mutate it via Preview.
