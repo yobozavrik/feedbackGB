@@ -8,6 +8,7 @@ vi.mock("../posterApi", () => ({ posterRequest: mocked.posterRequest }));
 vi.mock("@/lib/supabase", () => ({ getServerSupabase: mocked.getServerSupabase }));
 
 import { syncPosterSalesSpotDay } from "../posterSalesSync";
+import { buildFoodcostSalesSnapshot } from "../foodcostSalesSnapshot";
 
 function posterRow() {
   return {
@@ -43,7 +44,8 @@ describe("single-spot Poster sales sync", () => {
   });
 
   it("does not create a run when any source row is malformed", async () => {
-    mocked.posterRequest.mockResolvedValue([posterRow(), { ...posterRow(), count: "NaN" }]);
+    mocked.posterRequest.mockResolvedValueOnce([{ spot_id: "1" }])
+      .mockResolvedValueOnce([posterRow(), { ...posterRow(), count: "NaN" }]);
     const from = vi.fn();
     mocked.getServerSupabase.mockReturnValue({ from });
     await expect(syncPosterSalesSpotDay("2026-09-23", 1)).rejects.toThrow("invalid_count");
@@ -52,11 +54,19 @@ describe("single-spot Poster sales sync", () => {
   });
 
   it("marks a run completed only after fact count and sums are read back", async () => {
-    mocked.posterRequest.mockResolvedValue([posterRow()]);
+    mocked.posterRequest.mockResolvedValueOnce([{ spot_id: "1" }]).mockResolvedValueOnce([posterRow()]);
     const stages: string[] = [];
     const db = {
       from(table: string) {
         if (table === "foodcost_sales_runs") return {
+          select() {
+            stages.push("latest_run");
+            return { eq: () => ({ eq: () => ({ eq: () => ({
+              order: () => ({ order: () => ({ limit: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
+              }) }) }),
+            }) }) }) };
+          },
           insert() {
             stages.push("run_insert");
             return { select: () => ({ single: async () => ({ data: { id: "run-1" }, error: null }) }) };
@@ -89,8 +99,55 @@ describe("single-spot Poster sales sync", () => {
     mocked.getServerSupabase.mockReturnValue(db);
     const result = await syncPosterSalesSpotDay("2026-09-23", 1);
     expect(result).toMatchObject({ runId: "run-1", sourceRowCount: 1, payedSumMinor: 19000 });
-    expect(stages).toEqual(["run_insert", "facts_insert_1", "facts_count", "facts_readback", "run_completed"]);
+    expect(stages).toEqual(["latest_run", "run_insert", "facts_insert_1", "facts_count", "facts_readback", "run_completed"]);
+    expect(mocked.posterRequest).toHaveBeenCalledWith("access.getSpots", {}, "test-poster-token");
     expect(mocked.posterRequest).toHaveBeenCalledWith("dash.getProductsSales",
       { date_from: "20260923", date_to: "20260923", spot_id: "1" }, "test-poster-token");
+  });
+
+  it("does not persist a zero-row run for an unknown Poster spot", async () => {
+    mocked.posterRequest.mockResolvedValueOnce([{ spot_id: "2" }]);
+    const from = vi.fn();
+    mocked.getServerSupabase.mockReturnValue({ from });
+    await expect(syncPosterSalesSpotDay("2026-09-23", 1)).rejects.toThrow("unknown_poster_spot");
+    expect(from).not.toHaveBeenCalled();
+    expect(mocked.posterRequest).toHaveBeenCalledOnce();
+  });
+
+  it("reuses the completed run when every Poster fact is unchanged", async () => {
+    mocked.posterRequest.mockResolvedValueOnce([{ spot_id: "1" }]).mockResolvedValueOnce([posterRow()]);
+    const snapshot = buildFoodcostSalesSnapshot([posterRow()]);
+    const insert = vi.fn();
+    const db = {
+      from(table: string) {
+        if (table === "foodcost_sales_runs") return {
+          select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({
+            order: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({
+              data: { id: "existing-run", source_row_count: snapshot.sourceRowCount,
+                payed_sum_minor: snapshot.payedSumMinor, product_profit_minor: snapshot.productProfitMinor,
+                product_profit_netto_minor: snapshot.productProfitNettoMinor,
+                source_fetched_at: "2026-09-24T00:00:00Z" }, error: null,
+            }) }) }) }),
+          }) }) }) }),
+          insert,
+        };
+        if (table === "foodcost_sales_facts") return {
+          select: () => ({ eq: () => ({ order: () => ({ range: async () => ({
+            data: snapshot.facts, error: null,
+          }) }) }) }),
+        };
+        throw new Error(`unexpected_table_${table}`);
+      },
+    };
+    mocked.getServerSupabase.mockReturnValue(db);
+    const result = await syncPosterSalesSpotDay("2026-09-23", 1);
+    expect(result).toMatchObject({ runId: "existing-run", unchanged: true,
+      sourceFetchedAt: "2026-09-24T00:00:00Z" });
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects a current or future Kyiv day before any external call", async () => {
+    await expect(syncPosterSalesSpotDay("9999-12-31", 1)).rejects.toThrow("sales_day_not_closed");
+    expect(mocked.posterRequest).not.toHaveBeenCalled();
   });
 });

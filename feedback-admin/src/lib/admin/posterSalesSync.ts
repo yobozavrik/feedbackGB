@@ -1,6 +1,7 @@
 import { getServerSupabase } from "@/lib/supabase";
 import { posterRequest } from "./posterApi";
 import { buildFoodcostSalesSnapshot } from "./foodcostSalesSnapshot";
+import { sameFoodcostSalesFacts } from "./foodcostSalesFactsEqual";
 
 const FACT_BATCH = 200;
 
@@ -14,6 +15,14 @@ function validDate(value: string): boolean {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+function kyivToday(now: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Kyiv", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const value = (kind: string) => parts.find((part) => part.type === kind)?.value;
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
 /**
  * Versioned single-day, single-spot sync. No route or scheduler calls it yet.
  * Call only after staging is available and the operator explicitly starts a
@@ -23,11 +32,21 @@ export async function syncPosterSalesSpotDay(businessDate: string, spotId: numbe
   if (!validDate(businessDate) || !Number.isSafeInteger(spotId) || spotId <= 0) {
     throw new Error("invalid_sales_sync_scope");
   }
+  // Today's POS totals are still moving; a completed snapshot must cover a
+  // closed Kyiv business day. Historical re-sync creates a new version.
+  if (businessDate >= kyivToday(new Date())) throw new Error("sales_day_not_closed");
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("service_role_missing");
   const token = process.env.POSTER_TOKEN;
   if (!token) throw new Error("poster_token_missing");
   const db = getServerSupabase();
   if (!db) throw new Error("supabase_missing");
+
+  const spots = await posterRequest<unknown>("access.getSpots", {}, token);
+  if (!Array.isArray(spots)) throw new Error("invalid_poster_spots");
+  if (!spots.some((spot) => spot && typeof spot === "object" &&
+    Number((spot as { spot_id?: unknown }).spot_id) === spotId)) {
+    throw new Error("unknown_poster_spot");
+  }
 
   const compact = businessDate.replaceAll("-", "");
   const raw = await posterRequest<unknown>("dash.getProductsSales", {
@@ -36,6 +55,34 @@ export async function syncPosterSalesSpotDay(businessDate: string, spotId: numbe
   const sourceFetchedAt = new Date().toISOString();
   // Validate the *entire* response before creating any database row.
   const snapshot = buildFoodcostSalesSnapshot(raw);
+
+  // An unchanged historical response does not need another version. Compare
+  // all source fields, not just the totals: corrections can cancel each other.
+  const prior = await db.from("foodcost_sales_runs")
+    .select("id,source_row_count,payed_sum_minor,product_profit_minor,product_profit_netto_minor,source_fetched_at")
+    .eq("business_date", businessDate).eq("spot_id", spotId).eq("status", "completed")
+    .order("completed_at", { ascending: false }).order("id", { ascending: false })
+    .limit(1).maybeSingle();
+  assertDb(prior.error, "latest_run");
+  const previous = prior.data;
+  if (previous && previous.source_row_count === snapshot.sourceRowCount &&
+    Number(previous.payed_sum_minor) === snapshot.payedSumMinor &&
+    Number(previous.product_profit_minor) === snapshot.productProfitMinor &&
+    (previous.product_profit_netto_minor === null ? null : Number(previous.product_profit_netto_minor)) ===
+      snapshot.productProfitNettoMinor && snapshot.sourceRowCount <= 10000) {
+    const stored: Record<string, unknown>[] = [];
+    for (let offset = 0; offset < snapshot.sourceRowCount; offset += 500) {
+      const page = await db.from("foodcost_sales_facts")
+        .select("product_id,modification_id,category_id_snapshot,product_name_snapshot,category_name_snapshot,quantity,unit,weight_based,payed_sum_minor,product_profit_minor,product_profit_netto_minor,product_sum_minor,bonus_sum_minor,cert_sum_minor,discount_minor")
+        .eq("run_id", previous.id).order("source_row_no").range(offset, offset + 499);
+      assertDb(page.error, "latest_facts");
+      stored.push(...(page.data ?? []));
+    }
+    if (sameFoodcostSalesFacts(snapshot.facts, stored)) {
+      return { runId: previous.id, businessDate, spotId, ...snapshot,
+        sourceFetchedAt: previous.source_fetched_at, unchanged: true };
+    }
+  }
 
   const inserted = await db.from("foodcost_sales_runs")
     .insert({ business_date: businessDate, spot_id: spotId, status: "running" })
@@ -95,7 +142,7 @@ export async function syncPosterSalesSpotDay(businessDate: string, spotId: numbe
     }).eq("id", runId).eq("status", "running").select("id").single();
     assertDb(completed.error, "complete_run");
     if (completed.data?.id !== runId) throw new Error("foodcost_db_completion_mismatch");
-    return { runId, businessDate, spotId, ...snapshot, sourceFetchedAt };
+    return { runId, businessDate, spotId, ...snapshot, sourceFetchedAt, unchanged: false };
   } catch (error) {
     // The failed run and its facts remain for diagnosis but are never visible
     // to readers, which must filter status=completed.
