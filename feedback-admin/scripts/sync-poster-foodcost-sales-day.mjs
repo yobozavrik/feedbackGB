@@ -2,6 +2,7 @@
  * Explicit, bounded operator CLI for one closed Kyiv day and one Poster spot.
  * Dry-run is the default. --write is required for Supabase mutation.
  * --verify compares the latest completed snapshot with a fresh Poster read.
+ * --verify-detail also prints bounded product-level numeric differences.
  * Never print a Poster URL, token, Supabase key, or raw response body.
  */
 import { createRequire } from "node:module";
@@ -31,12 +32,12 @@ const date = process.argv[2];
 const spotId = Number(process.argv[3]);
 const mode = process.argv[4] ?? "--dry-run";
 if (!/^\d{4}-\d{2}-\d{2}$/.test(date ?? "") || !Number.isSafeInteger(spotId) || spotId <= 0 ||
-  !["--dry-run", "--write", "--verify"].includes(mode) || process.argv.length > 5) {
-  throw new Error("usage: node scripts/sync-poster-foodcost-sales-day.mjs YYYY-MM-DD SPOT_ID [--dry-run|--write|--verify]");
+  !["--dry-run", "--write", "--verify", "--verify-detail"].includes(mode) || process.argv.length > 5) {
+  throw new Error("usage: node scripts/sync-poster-foodcost-sales-day.mjs YYYY-MM-DD SPOT_ID [--dry-run|--write|--verify|--verify-detail]");
 }
 
 try {
-if (mode === "--dry-run" || mode === "--verify") {
+if (mode === "--dry-run" || mode === "--verify" || mode === "--verify-detail") {
   const { posterRequest } = require("../src/lib/admin/posterApi.ts");
   const { buildFoodcostSalesSnapshot } = require("../src/lib/admin/foodcostSalesSnapshot.ts");
   const token = process.env.POSTER_TOKEN;
@@ -112,6 +113,42 @@ if (mode === "--dry-run" || mode === "--verify") {
     result.verified = result.posterRows === result.storedRows && result.unmatchedPosterRows === 0 &&
       result.unmatchedStoredRows === 0 && result.paidDeltaMinor === 0 &&
       result.profitDeltaMinor === 0 && result.profitNettoDeltaMinor === 0;
+    if (mode === "--verify-detail" && !result.verified) {
+      const byProduct = (rows) => {
+        const groups = new Map();
+        for (const row of rows) {
+          const key = `${row.product_id}:${row.modification_id}`;
+          const group = groups.get(key) ?? { productId: Number(row.product_id),
+            modificationId: Number(row.modification_id), rows: 0, paidMinor: 0,
+            profitMinor: 0, nettoMinor: 0, nettoComplete: true };
+          group.rows++;
+          group.paidMinor += Number(row.payed_sum_minor);
+          group.profitMinor += Number(row.product_profit_minor);
+          if (row.product_profit_netto_minor == null) group.nettoComplete = false;
+          else group.nettoMinor += Number(row.product_profit_netto_minor);
+          groups.set(key, group);
+        }
+        return groups;
+      };
+      const liveByProduct = byProduct(snapshot.facts);
+      const storedByProduct = byProduct(stored);
+      const changed = [];
+      for (const key of new Set([...liveByProduct.keys(), ...storedByProduct.keys()])) {
+        const live = liveByProduct.get(key);
+        const old = storedByProduct.get(key);
+        if (JSON.stringify(live) === JSON.stringify(old)) continue;
+        changed.push({ productId: (live ?? old).productId,
+          modificationId: (live ?? old).modificationId,
+          liveRows: live?.rows ?? 0, storedRows: old?.rows ?? 0,
+          paidDeltaMinor: (live?.paidMinor ?? 0) - (old?.paidMinor ?? 0),
+          profitDeltaMinor: (live?.profitMinor ?? 0) - (old?.profitMinor ?? 0),
+          nettoDeltaMinor: live?.nettoComplete && old?.nettoComplete
+            ? live.nettoMinor - old.nettoMinor : null });
+      }
+      result.changedProductGroups = changed.length;
+      result.productDeltas = changed.sort((a, b) => a.productId - b.productId).slice(0, 20);
+      result.productDeltasTruncated = changed.length > 20;
+    }
     process.stdout.write(`${JSON.stringify(result)}\n`);
     if (!result.verified) process.exitCode = 2;
   }
