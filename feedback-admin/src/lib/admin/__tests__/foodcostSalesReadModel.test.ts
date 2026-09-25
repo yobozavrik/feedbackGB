@@ -13,7 +13,8 @@ function run(overrides: Partial<SalesRunRead> = {}): SalesRunRead {
 function fact(overrides: Partial<SalesFactRead> = {}): SalesFactRead {
   return {
     run_id: "run-1", source_row_no: 0, product_id: 121, modification_id: 0,
-    category_id_snapshot: 7, product_name_snapshot: "Пельмені зі свинини",
+    category_id_snapshot: 7, category_name_snapshot: "Напівфабрикати",
+    product_name_snapshot: "Пельмені зі свинини",
     quantity: "1.5", unit: "kg", weight_based: true,
     payed_sum_minor: 10000, product_profit_minor: 6000, product_profit_netto_minor: 6500,
     product_sum_minor: 10000, bonus_sum_minor: 0, cert_sum_minor: 0, discount_minor: 0,
@@ -34,6 +35,8 @@ describe("foodcost snapshot read model", () => {
     expect(result.metrics?.foodCostPercent).toBe(25);
     expect(result.metrics?.nettoFoodCostPercent).toBe(21.25);
     expect(result.categories?.[0].payedSumMinor).toBe(40000);
+    expect(result.categories?.[0]).toMatchObject({ categoryName: "Напівфабрикати",
+      categoryNameConflict: false });
     expect(result.products?.[0].payedSumMinor).toBe(40000);
   });
 
@@ -69,6 +72,15 @@ describe("foodcost snapshot read model", () => {
     expect(result.metrics?.nettoFoodCostPercent).toBeNull();
     expect(result.categories?.[0].nettoFoodCostPercent).toBeNull();
     expect(result.products?.[0].nettoFoodCostPercent).toBeNull();
+  });
+
+  it("does not invent one category name when snapshots disagree", () => {
+    const result = buildFoodcostSalesReadModel([date], [1, 2], [run(),
+      run({ id: "run-2", spot_id: 2, payed_sum_minor: 10000, product_profit_minor: 6000,
+        product_profit_netto_minor: 6500 })], [fact(),
+      fact({ run_id: "run-2", category_name_snapshot: "Інша назва" })]);
+    expect(result.categories?.[0]).toMatchObject({ categoryId: 7,
+      categoryName: null, categoryNameConflict: true });
   });
 
   it("rejects duplicate requested dates or spots", () => {

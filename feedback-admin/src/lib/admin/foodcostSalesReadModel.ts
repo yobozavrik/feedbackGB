@@ -19,6 +19,7 @@ export type SalesFactRead = {
   product_id: number;
   modification_id: number;
   category_id_snapshot: number | null;
+  category_name_snapshot?: string | null;
   product_name_snapshot: string;
   quantity: string;
   unit: string | null;
@@ -40,7 +41,7 @@ export type SalesReadModel = {
   missing: MissingCell[];
   sourceFetchedAt: string | null;
   metrics: SalesMetrics | null;
-  categories: CategorySales[] | null;
+  categories: (CategorySales & { categoryName: string | null; categoryNameConflict: boolean })[] | null;
   products: ProductSales[] | null;
 };
 
@@ -100,6 +101,7 @@ export function buildFoodcostSalesReadModel(
   }
   const missing: MissingCell[] = [];
   const allFacts: PosterSalesFact[] = [];
+  const selectedFacts: SalesFactRead[] = [];
   const fetchedAt: string[] = [];
   let completedCells = 0;
   for (const businessDate of businessDates) for (const spotId of spotIds) {
@@ -125,6 +127,7 @@ export function buildFoodcostSalesReadModel(
         throw new Error("invalid_snapshot_totals");
       }
       allFacts.push(...parsed);
+      selectedFacts.push(...rows);
       fetchedAt.push(run.source_fetched_at);
       completedCells++;
     } catch {
@@ -135,9 +138,22 @@ export function buildFoodcostSalesReadModel(
     status: "incomplete", expectedCells: businessDates.length * spotIds.length,
     completedCells, missing, sourceFetchedAt: null, metrics: null, categories: null, products: null,
   };
+  const categoryNames = new Map<number | null, Set<string>>();
+  for (const row of selectedFacts) {
+    const name = row.category_name_snapshot?.trim();
+    if (!name) continue;
+    const names = categoryNames.get(row.category_id_snapshot) ?? new Set<string>();
+    names.add(name);
+    categoryNames.set(row.category_id_snapshot, names);
+  }
+  const categories = groupCategorySales(allFacts).map((category) => {
+    const names = categoryNames.get(category.categoryId);
+    return { ...category, categoryName: names?.size === 1 ? [...names][0] : null,
+      categoryNameConflict: (names?.size ?? 0) > 1 };
+  });
   return {
     status: "complete", expectedCells: businessDates.length * spotIds.length,
     completedCells, missing: [], sourceFetchedAt: fetchedAt.sort()[0] ?? null,
-    metrics: salesMetrics(allFacts), categories: groupCategorySales(allFacts), products: groupProductSales(allFacts),
+    metrics: salesMetrics(allFacts), categories, products: groupProductSales(allFacts),
   };
 }
