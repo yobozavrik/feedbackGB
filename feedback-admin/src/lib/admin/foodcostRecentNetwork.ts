@@ -3,10 +3,11 @@ import { loadFoodcostOverview } from "./foodcostOverview";
 import { loadFoodcostSalesPeriod } from "./foodcostSalesRead";
 import { posterRequest } from "./posterApi";
 import { lastThreeClosedKyivDates, posterSpotIds } from "./posterSalesSync";
+import { lastClosedKyivDates, type FoodcostPeriodDays } from "./foodcostPeriod";
 
 /**
  * Only the CURRENT Poster/v_stores roster is known. This deliberately does not
- * claim historical network completeness outside the three-day rolling window.
+ * claim historical network completeness for 7/14/30/60-day windows.
  */
 export async function loadVerifiedCurrentFoodcostSpotIds(): Promise<number[]> {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("service_role_missing");
@@ -29,12 +30,12 @@ export async function loadVerifiedCurrentFoodcostSpotIds(): Promise<number[]> {
   return spotIds;
 }
 
-export async function loadFoodcostRecentNetwork(now = new Date()) {
+export async function loadFoodcostRecentNetwork(now = new Date(), periodDays: 3 | FoodcostPeriodDays = 3) {
   const spotIds = await loadVerifiedCurrentFoodcostSpotIds();
-  const dates = lastThreeClosedKyivDates(now);
-  const overview = await loadFoodcostOverview(dates[2], dates[0], spotIds);
+  const dates = periodDays === 3 ? lastThreeClosedKyivDates(now) : lastClosedKyivDates(periodDays, now);
+  const overview = await loadFoodcostOverview(dates[dates.length - 1], dates[0], spotIds);
   return {
-    scope: "current_poster_roster_three_closed_days" as const,
+    scope: periodDays === 3 ? "current_poster_roster_three_closed_days" as const : "current_poster_roster_closed_days" as const,
     historicalRosterVerified: false,
     rosterCheckedAt: new Date().toISOString(),
     spotCount: spotIds.length,
@@ -60,14 +61,15 @@ function currentPosterCategoryNames(value: unknown): Map<number, string> {
 }
 
 /** Fact-backed breakdown; never return partial category or product metrics. */
-export async function loadFoodcostRecentBreakdown(now = new Date(), selectedSpotId?: number) {
+export async function loadFoodcostRecentBreakdown(now = new Date(), selectedSpotId?: number,
+  periodDays: 3 | FoodcostPeriodDays = 3) {
   const verifiedSpotIds = await loadVerifiedCurrentFoodcostSpotIds();
   if (selectedSpotId !== undefined &&
     (!Number.isSafeInteger(selectedSpotId) || !verifiedSpotIds.includes(selectedSpotId))) {
     throw new Error("invalid_foodcost_spot");
   }
   const spotIds = selectedSpotId === undefined ? verifiedSpotIds : [selectedSpotId];
-  const dates = lastThreeClosedKyivDates(now);
+  const dates = periodDays === 3 ? lastThreeClosedKyivDates(now) : lastClosedKyivDates(periodDays, now);
   const snapshot = await loadFoodcostSalesPeriod(dates, spotIds);
   // The sales API omits category names in this account. Current Poster menu is
   // only a display fallback; it never rewrites historical category IDs or sums.
@@ -85,10 +87,10 @@ export async function loadFoodcostRecentBreakdown(now = new Date(), selectedSpot
   }) ?? null;
   const categoriesWithoutDisplayName = categories?.filter((row) => row.categoryId !== null && !row.displayName).length ?? 0;
   return {
-    scope: "current_poster_roster_three_closed_days" as const,
+    scope: periodDays === 3 ? "current_poster_roster_three_closed_days" as const : "current_poster_roster_closed_days" as const,
     historicalRosterVerified: false,
     methodologyVersion: "poster-sales-dual-v1" as const,
-    dateFrom: dates[2], dateTo: dates[0], spotCount: spotIds.length, spotIds,
+    dateFrom: dates[dates.length - 1], dateTo: dates[0], spotCount: spotIds.length, spotIds,
     allSpotIds: verifiedSpotIds,
     ...snapshot,
     currentCategoryNamesAvailable: currentNames !== null,

@@ -4,6 +4,7 @@ const mocked = vi.hoisted(() => ({ getServerSupabase: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({ getServerSupabase: mocked.getServerSupabase }));
 
 import { loadFoodcostSalesDay, loadFoodcostSalesPeriod } from "../foodcostSalesRead";
+import { lastClosedKyivDates } from "../foodcostPeriod";
 
 function query(rows: unknown[]) {
   const chain = {
@@ -31,7 +32,8 @@ describe("bounded read-only foodcost loader", () => {
       .rejects.toThrow("invalid_sales_read_scope");
     await expect(loadFoodcostSalesPeriod(["2026-09-22", "2026-09-22"], [1]))
       .rejects.toThrow("invalid_sales_read_scope");
-    await expect(loadFoodcostSalesPeriod(["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24"], [1]))
+    await expect(loadFoodcostSalesPeriod(Array.from({ length: 61 }, (_, index) =>
+      new Date(Date.UTC(2026, 8, 24 - index)).toISOString().slice(0, 10)), [1]))
       .rejects.toThrow("invalid_sales_read_scope");
     expect(mocked.getServerSupabase).not.toHaveBeenCalled();
   });
@@ -51,10 +53,23 @@ describe("bounded read-only foodcost loader", () => {
     expect(from).toHaveBeenCalledOnce();
   });
 
+  it("does not read facts for a 30-day window with missing snapshots", async () => {
+    const from = vi.fn((table: string) => {
+      if (table !== "foodcost_sales_runs") throw new Error("unexpected_fact_read");
+      return query([]);
+    });
+    mocked.getServerSupabase.mockReturnValue({ from });
+    const result = await loadFoodcostSalesPeriod(lastClosedKyivDates(30, new Date("2026-09-25T12:00:00Z")), [1, 2]);
+    expect(result).toMatchObject({ status: "incomplete", expectedCells: 60,
+      completedCells: 0, metrics: null, products: null, categories: null });
+    expect(from).toHaveBeenCalledOnce();
+  });
+
   it("reads only latest completed facts and recomputes the two methods", async () => {
     const from = vi.fn((table: string) => {
       if (table === "foodcost_sales_runs") return query([{
         id: "run-1", business_date: "2026-09-23", spot_id: 1, status: "completed",
+        methodology_version: "poster-sales-dual-v1",
         completed_at: "2026-09-24T01:00:00Z", source_fetched_at: "2026-09-24T00:59:00Z",
         source_row_count: 1, payed_sum_minor: "10000", product_profit_minor: "6000",
         product_profit_netto_minor: "6500",
@@ -79,6 +94,7 @@ describe("bounded read-only foodcost loader", () => {
   it("keeps one latest run per date and spot across the rolling window", async () => {
     const run = (id: string, date: string, paid: string, profit: string, completed: string) => ({
       id, business_date: date, spot_id: 1, status: "completed", completed_at: completed,
+      methodology_version: "poster-sales-dual-v1",
       source_fetched_at: completed, source_row_count: 1, payed_sum_minor: paid,
       product_profit_minor: profit, product_profit_netto_minor: profit,
     });

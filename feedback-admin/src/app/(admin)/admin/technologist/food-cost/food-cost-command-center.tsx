@@ -35,13 +35,13 @@ function categoryLabel(category: Category): string {
   return category.displayName?.trim() || `Категорія #${category.categoryId}`;
 }
 
-function categoryHref(spotId: number | null, categoryId?: number | null): string {
-  const base = `/admin/technologist/food-cost?tab=categories&spot_id=${spotId ?? "all"}`;
+function categoryHref(spotId: number | null, days: number, categoryId?: number | null): string {
+  const base = `/admin/technologist/food-cost?tab=categories&spot_id=${spotId ?? "all"}&days=${days}`;
   return categoryId === undefined ? base : `${base}&category_id=${categoryId ?? "__unknown"}`;
 }
 
-function productFoodCostHref(productId: number, spotId: number | null): string {
-  return `${productHref(productId)}?tab=foodcost&spot_id=${spotId ?? "all"}`;
+function productFoodCostHref(productId: number, spotId: number | null, days: number): string {
+  return `${productHref(productId)}?tab=foodcost&spot_id=${spotId ?? "all"}&days=${days}`;
 }
 
 function comparePaid(a: Category, b: Category): number;
@@ -72,10 +72,26 @@ export function FoodCostCommandCenter({ data }: { data: CommandCenterView }) {
   const router = useRouter();
   const { token } = antdTheme.useToken();
   const chartTheme = useAdminChartTheme();
+  const periodDays = data.spotCount ? data.expectedCells / data.spotCount : 7;
+  const hasStoreFilter = data.stores.length > 0;
+  const changeStore = (value: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("spot_id", value);
+    router.push(`${url.pathname}?${url.searchParams.toString()}`);
+  };
+  const storeFilter = hasStoreFilter && <div className="flex flex-wrap items-center justify-between gap-3">
+    <Typography.Text type="secondary">Магазин</Typography.Text>
+    <Select aria-label="Фільтр за магазином" className="min-w-56"
+      value={data.selectedSpotId === null ? "all" : String(data.selectedSpotId)}
+      onChange={changeStore}
+      options={[{ value: "all", label: "Уся мережа" }, ...data.stores.map((store) => ({ value: String(store.id), label: store.name }))]} />
+  </div>;
 
   if (data.status !== "complete") {
-    return <Alert type="warning" showIcon message="Знімок продажів неповний"
-      description={`${integerFormat.format(data.completedCells)} із ${integerFormat.format(data.expectedCells)} пар дата × магазин. Часткові KPI, графіки та рейтинги не показуємо.`} />;
+    return <Space direction="vertical" size="middle" className="w-full">{storeFilter}
+      <Alert type="warning" showIcon message="Знімок продажів неповний"
+        description={`${data.dateFrom} — ${data.dateTo}: ${integerFormat.format(data.completedCells)} із ${integerFormat.format(data.expectedCells)} пар дата × магазин. Часткові KPI, графіки та рейтинги не показуємо. Для довшого періоду потрібна дозагрузка історії Poster.`} />
+    </Space>;
   }
 
   if (!data.metrics || !data.days || !data.categories || !data.products) {
@@ -102,24 +118,11 @@ export function FoodCostCommandCenter({ data }: { data: CommandCenterView }) {
       { date, businessDate: day.businessDate, method: "Без ПДВ Poster", value: dayMetrics.nettoFoodCostPercent, payedSumMinor: dayMetrics.payedSumMinor },
     ].filter((row): row is typeof row & { value: number } => row.value !== null && Number.isFinite(row.value));
   });
-  const hasStoreFilter = data.stores.length > 0;
-  const changeStore = (value: string) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("spot_id", value);
-    router.push(`${url.pathname}?${url.searchParams.toString()}`);
-  };
-
   return <Space direction="vertical" size="middle" className="w-full">
     <Alert type="info" showIcon message={`${selectedStoreName ? `Магазин · ${selectedStoreName}` : "Поточна мережа"} · ${data.dateFrom} — ${data.dateTo}`}
       description={`${foodcostStoreCountLabel(data.spotCount)} · ${integerFormat.format(data.completedCells)}/${integerFormat.format(data.expectedCells)} пар дата × магазин · джерела від ${timeLabel(data.sourceFetchedAt)} до ${timeLabel(data.newestSourceFetchedAt)}. Історичний склад мережі не підтверджено.`} />
 
-    {hasStoreFilter && <div className="flex flex-wrap items-center justify-between gap-3">
-      <Typography.Text type="secondary">Магазин</Typography.Text>
-      <Select aria-label="Фільтр за магазином" className="min-w-56"
-        value={data.selectedSpotId === null ? "all" : String(data.selectedSpotId)}
-        onChange={changeStore}
-        options={[{ value: "all", label: "Уся мережа" }, ...data.stores.map((store) => ({ value: String(store.id), label: store.name }))]} />
-    </div>}
+    {storeFilter}
 
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Card size="small"><Statistic title="Оплачено" value={money(metrics.payedSumMinor)} /></Card>
@@ -167,7 +170,7 @@ export function FoodCostCommandCenter({ data }: { data: CommandCenterView }) {
             <Space direction="vertical" size="small" className="w-full">
               {topCategories.map((row) => <div key={`category:${row.categoryId ?? "none"}`}>
                 <div className="mb-1 flex items-start justify-between gap-3">
-                  <Link href={categoryHref(data.selectedSpotId, row.categoryId)}>{categoryLabel(row)}<ArrowRightOutlined className="ml-1" /></Link>
+                  <Link href={categoryHref(data.selectedSpotId, periodDays, row.categoryId)}>{categoryLabel(row)}<ArrowRightOutlined className="ml-1" /></Link>
                   <Typography.Text strong className="whitespace-nowrap">{money(row.payedSumMinor)}</Typography.Text>
                 </div>
                 <div aria-hidden="true" className="h-1.5 overflow-hidden rounded-full" style={{ background: token.colorFillSecondary }}>
@@ -183,7 +186,7 @@ export function FoodCostCommandCenter({ data }: { data: CommandCenterView }) {
               {topProducts.map((row) => <div key={`product:${row.productId}`}>
                 <div className="mb-1 flex items-start justify-between gap-3">
                   {row.currentCatalogPresent
-                    ? <Link href={productFoodCostHref(row.productId, data.selectedSpotId)}>{row.productName}<ArrowRightOutlined className="ml-1" /></Link>
+                    ? <Link href={productFoodCostHref(row.productId, data.selectedSpotId, periodDays)}>{row.productName}<ArrowRightOutlined className="ml-1" /></Link>
                     : <Typography.Text>{row.productName}<Tag className="ml-2">Немає в поточному каталозі</Tag></Typography.Text>}
                   <Typography.Text strong className="whitespace-nowrap">{money(row.payedSumMinor)}</Typography.Text>
                 </div>
@@ -201,21 +204,21 @@ export function FoodCostCommandCenter({ data }: { data: CommandCenterView }) {
       </Card>
     </div>
 
-    <Card size="small" title="Категорії за сумою продажів" extra={<Link href={categoryHref(data.selectedSpotId)}>Усі категорії <ArrowRightOutlined /></Link>}>
+    <Card size="small" title="Категорії за сумою продажів" extra={<Link href={categoryHref(data.selectedSpotId, periodDays)}>Усі категорії <ArrowRightOutlined /></Link>}>
       <Table<Category> rowKey={(row) => String(row.categoryId ?? "uncategorized")} size="small" scroll={{ x: 760 }}
         pagination={{ pageSize: 8, showSizeChanger: false }} dataSource={categories} columns={[
-          { title: "Категорія", dataIndex: "displayName", render: (_value, row) => <Link href={categoryHref(data.selectedSpotId, row.categoryId)}>{categoryLabel(row)}</Link> },
+          { title: "Категорія", dataIndex: "displayName", render: (_value, row) => <Link href={categoryHref(data.selectedSpotId, periodDays, row.categoryId)}>{categoryLabel(row)}</Link> },
           { title: "Оплачено", dataIndex: "payedSumMinor", align: "right", sorter: (a, b) => a.payedSumMinor - b.payedSumMinor, defaultSortOrder: "descend", render: money },
           { title: "За прибутком товарів", dataIndex: "foodCostPercent", align: "right", render: (value: number | null) => <FoodcostRate value={value} /> },
           { title: "Без ПДВ Poster", dataIndex: "nettoFoodCostPercent", align: "right", render: (value: number | null) => <FoodcostRate value={value} /> },
         ]} />
     </Card>
 
-    <Card size="small" title="12 позицій з найбільшим оборотом" extra={<Link href={`/admin/technologist/food-cost?tab=products&spot_id=${currentSpotParam}`}>Усі позиції <ArrowRightOutlined /></Link>}>
+    <Card size="small" title="12 позицій з найбільшим оборотом" extra={<Link href={`/admin/technologist/food-cost?tab=products&spot_id=${currentSpotParam}&days=${periodDays}`}>Усі позиції <ArrowRightOutlined /></Link>}>
       <Table<Product> rowKey="productId" size="small" scroll={{ x: 800 }}
         pagination={{ pageSize: 10, showSizeChanger: false }} dataSource={products} columns={[
           { title: "Позиція", dataIndex: "productName", render: (_value, row) => <Space wrap>
-            {row.currentCatalogPresent ? <Link href={productFoodCostHref(row.productId, data.selectedSpotId)}>{row.productName}</Link>
+            {row.currentCatalogPresent ? <Link href={productFoodCostHref(row.productId, data.selectedSpotId, periodDays)}>{row.productName}</Link>
               : <Typography.Text>{row.productName}</Typography.Text>}
             <Typography.Text type="secondary" className="text-xs">#{row.productId}</Typography.Text>
             {!row.currentCatalogPresent && <Tag>Немає в поточному каталозі</Tag>}

@@ -8,6 +8,7 @@ import { productHref } from "@/lib/admin/productCatalog";
 import type { ProductSales, SalesMetrics } from "@/lib/admin/posterSalesMath";
 import { foodcostStoreCountLabel } from "@/lib/admin/foodcostLabels";
 import { FoodcostRate } from "@/components/admin/foodcost/FoodcostStatus";
+import type { FoodcostPeriodDays } from "@/lib/admin/foodcostPeriod";
 
 type ProductRow = ProductSales & { currentCatalogPresent: boolean };
 type ProductResponse = {
@@ -28,7 +29,9 @@ type ProductResponse = {
 const amount = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function money(minor: number): string { return `${amount.format(minor / 100)} ₴`; }
 
-export function FoodCostProducts({ spotId, initialCategoryId }: { spotId?: number; initialCategoryId?: string }) {
+export function FoodCostProducts({ spotId, initialCategoryId, days }: {
+  spotId?: number; initialCategoryId?: string; days: FoodcostPeriodDays;
+}) {
   const [data, setData] = useState<ProductResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -41,7 +44,8 @@ export function FoodCostProducts({ spotId, initialCategoryId }: { spotId?: numbe
 
   useEffect(() => {
     const controller = new AbortController();
-    const params = new URLSearchParams({ page: String(page), pageSize: "25", sort, categoryId });
+    const params = new URLSearchParams({ page: String(page), pageSize: "25", sort, categoryId,
+      days: String(days) });
     if (spotId !== undefined) params.set("spot_id", String(spotId));
     if (query) params.set("q", query);
     setLoading(true);
@@ -61,15 +65,15 @@ export function FoodCostProducts({ spotId, initialCategoryId }: { spotId?: numbe
     }).catch(() => { if (!controller.signal.aborted) setError(true); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [revision, page, sort, categoryId, query, spotId]);
+  }, [revision, page, sort, categoryId, query, spotId, days]);
 
   if (error) return <Alert type="error" showIcon message="Позиції тимчасово недоступні"
     action={<Button size="small" onClick={() => setRevision((value) => value + 1)}>Повторити</Button>} />;
-  if (loading && !data) return <Card loading className="min-h-48" />;
+  if (loading) return <Card loading className="min-h-48" />;
   if (!data) return null;
   if (data.status !== "complete" || !data.products || !data.categories) return <Alert type="warning" showIcon
     message="Знімок продажів неповний"
-    description={`${data.completedCells}/${data.expectedCells} пар дата × магазин. Часткові підсумки продуктів не показуємо.`} />;
+    description={`${data.dateFrom} — ${data.dateTo}: ${data.completedCells}/${data.expectedCells} пар дата × магазин. Часткові підсумки продуктів не показуємо. Для довшого періоду потрібна дозагрузка історії Poster.`} />;
 
   const categoryOptions = [
     { value: "all", label: "Усі категорії" },
@@ -79,7 +83,7 @@ export function FoodCostProducts({ spotId, initialCategoryId }: { spotId?: numbe
   ];
 
   return <Space direction="vertical" size="middle" className="w-full">
-    <Alert type="info" showIcon message="Позиції · поточна мережа, 3 завершені дні"
+    <Alert type="info" showIcon message={`Позиції · поточна мережа, ${days} завершених днів`}
       description={`${data.dateFrom} — ${data.dateTo} · ${foodcostStoreCountLabel(data.spotCount)} · ${data.completedCells}/${data.expectedCells} знімків. Продажі та назви позицій — зі знімків Poster. Історичний склад мережі не підтверджено.`} />
     <Card size="small" title="Фудкост за продуктами" extra={<Button icon={<ReloadOutlined />}
       onClick={() => setRevision((value) => value + 1)}>Оновити</Button>}>
@@ -109,7 +113,7 @@ export function FoodCostProducts({ spotId, initialCategoryId }: { spotId?: numbe
         pagination={{ current: page, pageSize: 25, total: data.totalProducts ?? 0,
           showSizeChanger: false, onChange: (value) => setPage(value) }} columns={[
           { title: "Продукт", dataIndex: "productName", render: (_value, row) => <>
-            {row.currentCatalogPresent ? <Link href={`${productHref(row.productId)}?tab=foodcost&spot_id=${spotId ?? "all"}`}>{row.productName}</Link>
+            {row.currentCatalogPresent ? <Link href={`${productHref(row.productId)}?tab=foodcost&spot_id=${spotId ?? "all"}&days=${days}`}>{row.productName}</Link>
               : <Typography.Text>{row.productName}</Typography.Text>}
             <Typography.Text type="secondary" className="ml-2 text-xs">#{row.productId}</Typography.Text>
             {row.productNameConflict && <Tag color="gold" className="ml-2">Назва змінювалась</Tag>}

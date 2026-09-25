@@ -70,6 +70,20 @@ describe("current-roster recent network overview", () => {
       nameSource: "current_poster_catalog" });
   });
 
+  it("passes 7, 14, 30 and 60 closed dates through the same verified roster", async () => {
+    for (const days of [7, 14, 30, 60] as const) {
+      vi.clearAllMocks();
+      const result = await loadFoodcostRecentBreakdown(new Date("2026-09-25T12:00:00Z"), 2, days);
+      const [dates, spots] = mocked.loadFoodcostSalesPeriod.mock.calls[0];
+      expect(dates).toHaveLength(days);
+      expect(dates[0]).toBe("2026-09-24");
+      expect(dates[days - 1]).toBe(new Date(Date.UTC(2026, 8, 25 - days)).toISOString().slice(0, 10));
+      expect(spots).toEqual([2]);
+      expect(result.dateFrom).toBe(dates[days - 1]);
+      expect(result.dateTo).toBe(dates[0]);
+    }
+  });
+
   it("scopes one store only after checking the current Poster/v_stores roster", async () => {
     const result = await loadFoodcostRecentBreakdown(new Date("2026-09-24T12:00:00Z"), 2);
     expect(mocked.loadFoodcostSalesPeriod).toHaveBeenCalledWith(

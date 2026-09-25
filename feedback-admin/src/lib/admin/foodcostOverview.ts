@@ -48,7 +48,7 @@ function datesBetween(dateFrom: string, dateTo: string): string[] {
   let cursor = new Date(`${dateFrom}T00:00:00Z`);
   const end = new Date(`${dateTo}T00:00:00Z`).getTime();
   while (cursor.getTime() <= end) {
-    if (dates.length >= 31) throw new Error("foodcost_period_too_long");
+    if (dates.length >= 60) throw new Error("foodcost_period_too_long");
     dates.push(cursor.toISOString().slice(0, 10));
     cursor = new Date(cursor.getTime() + 86_400_000);
   }

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Alert, Button, Card, Space, Table, Typography } from "antd";
+import { Alert, Button, Card, Select, Space, Table, Typography } from "antd";
 import type { ProductFact } from "@/lib/admin/foodcostProductDetail";
 import { foodcostStoreCountLabel } from "@/lib/admin/foodcostLabels";
 import { FoodcostRate, FoodcostStatusTag, formatFoodcostPercent } from "@/components/admin/foodcost/FoodcostStatus";
+import { FOODCOST_PERIOD_OPTIONS, type FoodcostPeriodDays } from "@/lib/admin/foodcostPeriod";
 
 type Response = {
   status: "complete" | "incomplete";
@@ -23,8 +24,9 @@ const amount = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximu
 function money(minor: number | null): string { return minor === null ? "Н/Д" : `${amount.format(minor / 100)} ₴`; }
 function paid(value: ProductFact | null): string { return value ? money(value.payedSumMinor) : "Не продавався"; }
 
-export function ProductFoodCostPanel({ productId, spotId, onOpenTech }: {
-  productId: number; spotId?: number; onOpenTech: () => void;
+export function ProductFoodCostPanel({ productId, spotId, days, onPeriodChange, onOpenTech }: {
+  productId: number; spotId?: number; days: FoodcostPeriodDays;
+  onPeriodChange: (days: FoodcostPeriodDays) => void; onOpenTech: () => void;
 }) {
   const [data, setData] = useState<Response | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,8 +36,9 @@ export function ProductFoodCostPanel({ productId, spotId, onOpenTech }: {
     const controller = new AbortController();
     setLoading(true);
     setError(false);
-    const scope = spotId === undefined ? "" : `?spot_id=${spotId}`;
-    fetch(`/api/admin/technologist/products/${productId}/food-cost${scope}`, {
+    const params = new URLSearchParams({ days: String(days) });
+    if (spotId !== undefined) params.set("spot_id", String(spotId));
+    fetch(`/api/admin/technologist/products/${productId}/food-cost?${params}`, {
       cache: "no-store", signal: controller.signal,
     }).then(async (response) => {
       if (!response.ok) throw new Error("foodcost_product_unavailable");
@@ -49,19 +52,27 @@ export function ProductFoodCostPanel({ productId, spotId, onOpenTech }: {
     }).catch(() => { if (!controller.signal.aborted) setError(true); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [productId, spotId, revision]);
+  }, [productId, spotId, days, revision]);
 
-  if (error) return <Alert type="error" showIcon message="Фудкост продукту тимчасово недоступний"
-    action={<Button size="small" onClick={() => setRevision((value) => value + 1)}>Повторити</Button>} />;
-  if (loading && !data) return <Card loading className="min-h-48" />;
+  const periodControl = <div className="flex flex-wrap items-center gap-3">
+    <Typography.Text>Період</Typography.Text>
+    <Select aria-label="Період фудкосту продукту" value={days} className="min-w-44"
+      options={FOODCOST_PERIOD_OPTIONS.map((value) => ({ value, label: `${value} завершених днів` }))}
+      onChange={onPeriodChange} />
+  </div>;
+
+  if (error) return <Space direction="vertical" className="w-full">{periodControl}<Alert type="error" showIcon message="Фудкост продукту тимчасово недоступний"
+    action={<Button size="small" onClick={() => setRevision((value) => value + 1)}>Повторити</Button>} /></Space>;
+  if (loading) return <Space direction="vertical" className="w-full">{periodControl}<Card loading className="min-h-48" /></Space>;
   if (!data) return null;
-  if (data.status !== "complete" || !data.stores || !data.days) return <Alert type="warning" showIcon
+  if (data.status !== "complete" || !data.stores || !data.days) return <Space direction="vertical" className="w-full">{periodControl}<Alert type="warning" showIcon
     message="Знімок продажів неповний"
-    description={`${data.completedCells}/${data.expectedCells} пар дата × магазин. Частковий фудкост продукту не показуємо.`} />;
+    description={`${data.dateFrom} — ${data.dateTo}: ${data.completedCells}/${data.expectedCells} пар дата × магазин. Частковий фудкост продукту не показуємо. Для довшого періоду потрібна дозагрузка історії Poster.`} /></Space>;
 
   const fact = data.product?.fact ?? null;
   return <Space direction="vertical" size="middle" className="w-full">
-    <Alert type="info" showIcon message={`Фактичні продажі Poster · ${spotId === undefined ? "поточна мережа" : data.stores[0]?.storeName ?? `магазин #${spotId}`}, 3 завершені дні`}
+    {periodControl}
+    <Alert type="info" showIcon message={`Фактичні продажі Poster · ${spotId === undefined ? "поточна мережа" : data.stores[0]?.storeName ?? `магазин #${spotId}`}, ${days} завершених днів`}
       description={`${data.dateFrom} — ${data.dateTo} · ${foodcostStoreCountLabel(data.spotCount)} · ${data.completedCells}/${data.expectedCells} знімків. Історичний склад мережі не підтверджено.`} />
     {data.product?.productNameConflict && <Alert type="warning" showIcon
       message="Назва продукту змінювалась у знімках продажів" description="Показано одну історичну назву; суми об’єднано за ID продукту." />}

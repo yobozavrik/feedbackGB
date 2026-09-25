@@ -8,12 +8,14 @@ import { getServerSupabase } from "@/lib/supabase";
 import { UNCATEGORIZED_ID, productCategoryHref, type CatalogProduct } from "@/lib/admin/productCatalog";
 import { getPosterProductPhoto } from "@/lib/admin/posterProductPhotos";
 import { parseFoodcostSpotId } from "@/lib/admin/foodcostScope";
+import { parseFoodcostPeriodDays } from "@/lib/admin/foodcostPeriod";
 import { ProductDetail } from "./product-detail-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProductDetailPage({ params, searchParams }: {
-  params: { id: string }; searchParams?: { tab?: string | string[]; spot_id?: string | string[] };
+  params: { id: string }; searchParams?: { tab?: string | string[]; spot_id?: string | string[];
+    days?: string | string[] };
 }) {
   const session = await verifySession(cookies().get(SESSION_COOKIE)?.value);
   if (!session || !isSuperAdmin(session.role)) redirect("/admin");
@@ -40,8 +42,12 @@ export default async function ProductDetailPage({ params, searchParams }: {
   let spotId: number | undefined;
   try { spotId = parseFoodcostSpotId(rawSpotId ?? null); }
   catch { return <AdminPageContainer title="Картка продукту"><Alert type="warning" showIcon message="Некоректний магазин" /></AdminPageContainer>; }
+  const rawDays = Array.isArray(searchParams?.days) ? searchParams.days[0] : searchParams?.days;
+  let days;
+  try { days = parseFoodcostPeriodDays(rawDays); }
+  catch { return <AdminPageContainer title="Картка продукту"><Alert type="warning" showIcon message="Некоректний період" /></AdminPageContainer>; }
   const initialTab = ["stock", "characteristics", "tech", "foodcost", "stages"].includes(tab ?? "") ? tab : "stock";
   return <AdminPageContainer title={product.name} subTitle="Картка продукту з товарного каталогу POS" extra={<Link href={categoryHref}><Button>До категорії</Button></Link>}>
-    <ProductDetail product={product} posterPhoto={posterPhoto} photoError={photoError} initialTab={initialTab} spotId={spotId} />
+    <ProductDetail product={product} posterPhoto={posterPhoto} photoError={photoError} initialTab={initialTab} spotId={spotId} initialDays={days} />
   </AdminPageContainer>;
 }

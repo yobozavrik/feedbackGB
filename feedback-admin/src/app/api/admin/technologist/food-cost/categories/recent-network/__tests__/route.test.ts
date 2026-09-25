@@ -44,7 +44,17 @@ describe("recent network foodcost categories API", () => {
   it("passes a selected store through to the verified snapshot", async () => {
     const response = await GET(new Request("http://localhost/api/admin/technologist/food-cost/categories/recent-network?spot_id=2"));
     expect(response.status).toBe(200);
-    expect(mocked.loadFoodcostRecentBreakdown).toHaveBeenCalledWith(expect.any(Date), 2);
+    expect(mocked.loadFoodcostRecentBreakdown).toHaveBeenCalledWith(expect.any(Date), 2, 7);
+  });
+
+  it("passes the selected period and rejects unsupported periods before source reads", async () => {
+    const selected = await GET(new Request("http://localhost/api/admin/technologist/food-cost/categories/recent-network?days=60"));
+    expect(selected.status).toBe(200);
+    expect(mocked.loadFoodcostRecentBreakdown).toHaveBeenCalledWith(expect.any(Date), undefined, 60);
+    mocked.loadFoodcostRecentBreakdown.mockClear();
+    const invalid = await GET(new Request("http://localhost/api/admin/technologist/food-cost/categories/recent-network?days=3"));
+    expect(invalid.status).toBe(400);
+    expect(mocked.loadFoodcostRecentBreakdown).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid store before reading the source", async () => {

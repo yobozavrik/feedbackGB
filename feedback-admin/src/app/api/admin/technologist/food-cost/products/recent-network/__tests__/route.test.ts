@@ -55,7 +55,7 @@ describe("recent network foodcost products API", () => {
   it("scopes product aggregates to the selected store", async () => {
     const response = await GET(request("?spot_id=2"));
     expect(response.status).toBe(200);
-    expect(mocked.loadFoodcostRecentBreakdown).toHaveBeenCalledWith(expect.any(Date), 2);
+    expect(mocked.loadFoodcostRecentBreakdown).toHaveBeenCalledWith(expect.any(Date), 2, 7);
   });
 
   it("rejects an invalid store without source access", async () => {

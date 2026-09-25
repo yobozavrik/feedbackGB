@@ -8,6 +8,7 @@ import { UNCATEGORIZED_ID } from "@/lib/admin/productCatalog";
 import type { loadFoodcostRecentBreakdown } from "@/lib/admin/foodcostRecentNetwork";
 import { foodcostStoreCountLabel } from "@/lib/admin/foodcostLabels";
 import { FoodcostRate } from "@/components/admin/foodcost/FoodcostStatus";
+import type { FoodcostPeriodDays } from "@/lib/admin/foodcostPeriod";
 
 type Breakdown = Awaited<ReturnType<typeof loadFoodcostRecentBreakdown>>;
 type Category = NonNullable<Breakdown["categories"]>[number];
@@ -16,8 +17,8 @@ const amount = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximu
 
 function money(minor: number): string { return `${amount.format(minor / 100)} ₴`; }
 
-export function FoodCostCategories({ spotId, focusedCategoryId }: {
-  spotId?: number; focusedCategoryId?: string;
+export function FoodCostCategories({ spotId, focusedCategoryId, days }: {
+  spotId?: number; focusedCategoryId?: string; days: FoodcostPeriodDays;
 }) {
   const [data, setData] = useState<Response | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,8 +28,9 @@ export function FoodCostCategories({ spotId, focusedCategoryId }: {
     const controller = new AbortController();
     setLoading(true);
     setError(false);
-    const params = spotId === undefined ? "" : `?spot_id=${spotId}`;
-    fetch(`/api/admin/technologist/food-cost/categories/recent-network${params}`, {
+    const params = new URLSearchParams({ days: String(days) });
+    if (spotId !== undefined) params.set("spot_id", String(spotId));
+    fetch(`/api/admin/technologist/food-cost/categories/recent-network?${params}`, {
       cache: "no-store", signal: controller.signal,
     }).then(async (response) => {
       if (!response.ok) throw new Error("foodcost_categories_unavailable");
@@ -41,7 +43,7 @@ export function FoodCostCategories({ spotId, focusedCategoryId }: {
     }).catch(() => { if (!controller.signal.aborted) setError(true); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [revision, spotId]);
+  }, [revision, spotId, days]);
 
   if (error) return <Alert type="error" showIcon message="Категорії тимчасово недоступні"
     action={<Button size="small" onClick={() => setRevision((value) => value + 1)}>Повторити</Button>} />;
@@ -49,15 +51,15 @@ export function FoodCostCategories({ spotId, focusedCategoryId }: {
   if (!data) return null;
   if (data.status !== "complete" || !data.categories) return <Alert type="warning" showIcon
     message="Знімок продажів неповний"
-    description={`${data.completedCells}/${data.expectedCells} пар дата × магазин. Часткові підсумки категорій не показуємо.`} />;
+    description={`${data.dateFrom} — ${data.dateTo}: ${data.completedCells}/${data.expectedCells} пар дата × магазин. Часткові підсумки категорій не показуємо. Для довшого періоду потрібна дозагрузка історії Poster.`} />;
 
   const rows = [...data.categories]
     .filter((row) => focusedCategoryId === undefined ||
       String(row.categoryId ?? UNCATEGORIZED_ID) === focusedCategoryId)
     .sort((a, b) => b.payedSumMinor - a.payedSumMinor);
-  const allHref = `/admin/technologist/food-cost?tab=categories&spot_id=${spotId ?? "all"}`;
+  const allHref = `/admin/technologist/food-cost?tab=categories&spot_id=${spotId ?? "all"}&days=${days}`;
   return <Space direction="vertical" size="middle" className="w-full">
-    <Alert type="info" showIcon message="Категорії · поточна мережа, 3 завершені дні"
+    <Alert type="info" showIcon message={`Категорії · поточна мережа, ${days} завершених днів`}
       description={`${data.dateFrom} — ${data.dateTo} · ${foodcostStoreCountLabel(data.spotCount)} · ${data.completedCells}/${data.expectedCells} знімків. Суми — з історичних продажів, а назви без історичного знімка — з поточного каталогу Poster. Історичний склад мережі не підтверджено.`} />
     {!data.currentCategoryNamesAvailable && <Alert type="warning" showIcon
       message="Поточні назви категорій Poster недоступні" description="Числові ID залишено без вигаданих назв." />}
@@ -73,7 +75,7 @@ export function FoodCostCategories({ spotId, focusedCategoryId }: {
         size="small" scroll={{ x: 760 }} dataSource={rows} pagination={{ pageSize: 15, showSizeChanger: false }}
         columns={[
           { title: "Категорія", dataIndex: "categoryName", render: (_value, row) => <>
-            <Link href={`/admin/technologist/food-cost?tab=products&spot_id=${spotId ?? "all"}&category_id=${row.categoryId ?? UNCATEGORIZED_ID}`}>
+            <Link href={`/admin/technologist/food-cost?tab=products&spot_id=${spotId ?? "all"}&category_id=${row.categoryId ?? UNCATEGORIZED_ID}&days=${days}`}>
               {row.categoryId === null ? "Без категорії" : row.displayName ?? `Категорія #${row.categoryId}`}
             </Link>
             {row.categoryNameConflict && <Typography.Text type="warning" className="ml-2 text-xs">Назви відрізнялись</Typography.Text>}

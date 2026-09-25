@@ -38,7 +38,7 @@ describe("product foodcost detail API", () => {
   it("uses the selected store for product detail", async () => {
     const response = await GET(new Request(`${request.url}?spot_id=2`), { params: { id: "121" } });
     expect(response.status).toBe(200);
-    expect(mocked.loadFoodcostRecentBreakdown).toHaveBeenCalledWith(expect.any(Date), 2);
+    expect(mocked.loadFoodcostRecentBreakdown).toHaveBeenCalledWith(expect.any(Date), 2, 7);
   });
 
   it("rejects an invalid store before reading data", async () => {

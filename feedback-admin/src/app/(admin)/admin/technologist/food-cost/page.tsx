@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Alert } from "antd";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 import { loadFoodcostCommandCenter } from "@/lib/admin/foodcostCommandCenter";
+import { parseFoodcostPeriodDays } from "@/lib/admin/foodcostPeriod";
 import { SESSION_COOKIE, isSuperAdmin, verifySession } from "@/lib/session";
 import { FoodCostCommandCenter } from "./food-cost-command-center";
 import { FoodCostWorkspace } from "./food-cost-workspace";
@@ -10,7 +11,8 @@ import { FoodCostWorkspace } from "./food-cost-workspace";
 export const dynamic = "force-dynamic";
 
 export default async function TechnologistFoodCostPage({ searchParams }: {
-  searchParams?: { tab?: string | string[]; spot_id?: string | string[]; category_id?: string | string[] };
+  searchParams?: { tab?: string | string[]; spot_id?: string | string[];
+    category_id?: string | string[]; days?: string | string[] };
 }) {
   const session = await verifySession(cookies().get(SESSION_COOKIE)?.value);
   if (!session || !isSuperAdmin(session.role)) redirect("/admin");
@@ -30,7 +32,12 @@ export default async function TechnologistFoodCostPage({ searchParams }: {
     ? rawCategoryId : undefined;
   const tab = Array.isArray(searchParams?.tab) ? searchParams.tab[0] : searchParams?.tab;
   const initialTab = tab === "categories" || tab === "products" ? tab : "overview";
-  const data = initialTab === "overview" ? await loadFoodcostCommandCenter(spotId).catch((error: unknown) => {
+  const rawDays = Array.isArray(searchParams?.days) ? searchParams.days[0] : searchParams?.days;
+  let days;
+  try { days = parseFoodcostPeriodDays(rawDays); }
+  catch { return <AdminPageContainer title="Фудкост"><Alert type="warning" showIcon
+    message="Некоректний період" description="Оберіть 7, 14, 30 або 60 завершених днів." /></AdminPageContainer>; }
+  const data = initialTab === "overview" ? await loadFoodcostCommandCenter(spotId, days).catch((error: unknown) => {
       const raw = error instanceof Error ? error.message : "unknown_error";
       const code = ["schema_missing", "service_role_missing", "poster_token_missing",
         "supabase_missing", "foodcost_roster_unavailable", "foodcost_roster_mismatch",
@@ -40,7 +47,7 @@ export default async function TechnologistFoodCostPage({ searchParams }: {
       return null;
     }) : null;
   return <AdminPageContainer title="Фудкост" subTitle="Огляд мережі та продуктів">
-    <FoodCostWorkspace initialTab={initialTab} spotId={spotId} categoryId={categoryId}
+    <FoodCostWorkspace initialTab={initialTab} spotId={spotId} categoryId={categoryId} days={days}
       overview={initialTab !== "overview" ? null : data ? <FoodCostCommandCenter data={data} />
         : <Alert type="error" showIcon message="Огляд фудкосту зараз недоступний"
           description="Дані Poster або знімок продажів недоступні. Неперевірені підсумки не показуємо." />} />

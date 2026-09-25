@@ -1,6 +1,7 @@
 import { getServerSupabase } from "@/lib/supabase";
 import { loadFoodcostRecentBreakdown } from "./foodcostRecentNetwork";
 import { salesMetrics } from "./posterSalesMath";
+import type { FoodcostPeriodDays } from "./foodcostPeriod";
 
 type RecentBreakdown = Awaited<ReturnType<typeof loadFoodcostRecentBreakdown>>;
 
@@ -43,7 +44,7 @@ export type CommandCenterView = {
 
 const TOP_PRODUCTS = 12;
 
-/** Derive every block from the same strict, three-day selected snapshot. */
+/** Derive every block from the same strict, selected-period snapshot. */
 export function buildCommandCenterView(
   recent: RecentBreakdown, currentCatalogIds: ReadonlySet<number>,
   stores: { id: number; name: string }[] = [], selectedSpotId: number | null = null,
@@ -96,8 +97,9 @@ export function buildCommandCenterView(
   };
 }
 
-export async function loadFoodcostCommandCenter(selectedSpotId?: number): Promise<CommandCenterView> {
-  const recent = await loadFoodcostRecentBreakdown(new Date(), selectedSpotId);
+export async function loadFoodcostCommandCenter(selectedSpotId?: number,
+  periodDays: FoodcostPeriodDays = 7): Promise<CommandCenterView> {
+  const recent = await loadFoodcostRecentBreakdown(new Date(), selectedSpotId, periodDays);
   const db = getServerSupabase();
   if (!db) throw new Error("supabase_missing");
   const storeResult = await db.from("v_stores").select("id,name").order("name");

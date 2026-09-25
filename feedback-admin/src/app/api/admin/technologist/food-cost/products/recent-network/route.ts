@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/adminAuth";
 import { loadFoodcostRecentBreakdown } from "@/lib/admin/foodcostRecentNetwork";
 import { parseFoodcostSpotId } from "@/lib/admin/foodcostScope";
+import { parseFoodcostPeriodDays } from "@/lib/admin/foodcostPeriod";
 import { buildFoodcostProductPage, parseProductQuery } from "@/lib/admin/foodcostProductPage";
 import { getServerSupabase } from "@/lib/supabase";
 
@@ -17,15 +18,17 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
   let query;
   let spotId: number | undefined;
+  let days;
   try {
     const url = new URL(request.url);
     query = parseProductQuery(url);
     spotId = parseFoodcostSpotId(url.searchParams.get("spot_id"));
+    days = parseFoodcostPeriodDays(url.searchParams.get("days"));
   } catch {
     return NextResponse.json({ error: "invalid_query" }, { status: 400, headers: NO_STORE });
   }
   try {
-    const data = await loadFoodcostRecentBreakdown(new Date(), spotId);
+    const data = await loadFoodcostRecentBreakdown(new Date(), spotId, days);
     const page = buildFoodcostProductPage(data, query);
     if (!page.products?.length) return NextResponse.json(page, { headers: NO_STORE });
     const db = getServerSupabase();

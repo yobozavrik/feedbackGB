@@ -9,16 +9,25 @@ import { ProductTechCardPanel } from "./product-tech-card";
 import { ProductFoodCostPanel } from "./product-food-cost";
 import { useState } from "react";
 import { formatProductUnitUk } from "@/lib/productUnits";
+import type { FoodcostPeriodDays } from "@/lib/admin/foodcostPeriod";
 
 function UnconnectedSection({ name }: { name: string }) {
   return <Empty className="py-12" description={`${name}: дані Poster ще не підключено до цієї картки`} />;
 }
 
-export function ProductDetail({ product, posterPhoto, photoError, initialTab = "stock", spotId }: {
-  product: CatalogProduct; posterPhoto: string | null; photoError: boolean; initialTab?: string; spotId?: number;
+export function ProductDetail({ product, posterPhoto, photoError, initialTab = "stock", spotId, initialDays }: {
+  product: CatalogProduct; posterPhoto: string | null; photoError: boolean; initialTab?: string;
+  spotId?: number; initialDays: FoodcostPeriodDays;
 }) {
   const categoryHref = productCategoryHref(product.category_id ?? UNCATEGORIZED_ID);
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [days, setDays] = useState(initialDays);
+  const changeDays = (value: FoodcostPeriodDays) => {
+    setDays(value);
+    const url = new URL(window.location.href);
+    url.searchParams.set("days", String(value));
+    window.history.replaceState(window.history.state, "", url);
+  };
   const selectTab = (next: string) => {
     setActiveTab(next);
     const url = new URL(window.location.href);
@@ -49,7 +58,7 @@ export function ProductDetail({ product, posterPhoto, photoError, initialTab = "
           { key: "barcode", label: "Штрихкод", children: product.barcode ?? "—" },
         ]} /> },
         { key: "tech", label: "Технологічна карта", children: activeTab === "tech" ? <ProductTechCardPanel key={product.id} productId={product.id} /> : null },
-        { key: "foodcost", label: "Фудкост", children: activeTab === "foodcost" ? <ProductFoodCostPanel key={`${product.id}:${spotId ?? "all"}`} productId={product.id} spotId={spotId} onOpenTech={() => selectTab("tech")} /> : null },
+        { key: "foodcost", label: "Фудкост", children: activeTab === "foodcost" ? <ProductFoodCostPanel key={`${product.id}:${spotId ?? "all"}`} productId={product.id} spotId={spotId} days={days} onPeriodChange={changeDays} onOpenTech={() => selectTab("tech")} /> : null },
         { key: "stages", label: "Етапи та задачі", children: <UnconnectedSection name="Етапи та задачі" /> },
       ]} />
     </Card>

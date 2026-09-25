@@ -75,7 +75,7 @@ describe("foodcost period overview", () => {
   it("rejects malformed or oversized scope before opening the database", async () => {
     expect(() => buildFoodcostOverview("2026-02-30", "2026-03-01", [1], [])).toThrow("invalid_foodcost_period");
     expect(() => buildFoodcostOverview("2026-09-23", "2026-09-22", [1], [])).toThrow("invalid_foodcost_period");
-    expect(() => buildFoodcostOverview("2026-08-01", "2026-09-01", [1], [])).toThrow("foodcost_period_too_long");
+    expect(() => buildFoodcostOverview("2026-07-01", "2026-09-01", [1], [])).toThrow("foodcost_period_too_long");
     await expect(loadFoodcostOverview("2026-09-22", "2026-09-23", [1, 1]))
       .rejects.toThrow("invalid_foodcost_spots");
     expect(mocked.getServerSupabase).not.toHaveBeenCalled();
