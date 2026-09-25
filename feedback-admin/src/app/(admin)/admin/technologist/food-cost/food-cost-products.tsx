@@ -6,6 +6,8 @@ import { Alert, Button, Card, Input, Select, Space, Table, Tag, Typography } fro
 import { ReloadOutlined } from "@ant-design/icons";
 import { productHref } from "@/lib/admin/productCatalog";
 import type { ProductSales, SalesMetrics } from "@/lib/admin/posterSalesMath";
+import { foodcostStoreCountLabel } from "@/lib/admin/foodcostLabels";
+import { FoodcostRate } from "@/components/admin/foodcost/FoodcostStatus";
 
 type ProductRow = ProductSales & { currentCatalogPresent: boolean };
 type ProductResponse = {
@@ -25,24 +27,22 @@ type ProductResponse = {
 
 const amount = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function money(minor: number): string { return `${amount.format(minor / 100)} ₴`; }
-function rate(value: number | null): string {
-  return value === null || !Number.isFinite(value) ? "Н/Д" : `${amount.format(value)} %`;
-}
 
-export function FoodCostProducts() {
+export function FoodCostProducts({ spotId, initialCategoryId }: { spotId?: number; initialCategoryId?: string }) {
   const [data, setData] = useState<ProductResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [revision, setRevision] = useState(0);
   const [searchDraft, setSearchDraft] = useState("");
   const [query, setQuery] = useState("");
-  const [categoryId, setCategoryId] = useState("all");
+  const [categoryId, setCategoryId] = useState(initialCategoryId ?? "all");
   const [sort, setSort] = useState("paid_desc");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
     const controller = new AbortController();
     const params = new URLSearchParams({ page: String(page), pageSize: "25", sort, categoryId });
+    if (spotId !== undefined) params.set("spot_id", String(spotId));
     if (query) params.set("q", query);
     setLoading(true);
     setError(false);
@@ -61,7 +61,7 @@ export function FoodCostProducts() {
     }).catch(() => { if (!controller.signal.aborted) setError(true); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [revision, page, sort, categoryId, query]);
+  }, [revision, page, sort, categoryId, query, spotId]);
 
   if (error) return <Alert type="error" showIcon message="Позиції тимчасово недоступні"
     action={<Button size="small" onClick={() => setRevision((value) => value + 1)}>Повторити</Button>} />;
@@ -80,7 +80,7 @@ export function FoodCostProducts() {
 
   return <Space direction="vertical" size="middle" className="w-full">
     <Alert type="info" showIcon message="Позиції · поточна мережа, 3 завершені дні"
-      description={`${data.dateFrom} — ${data.dateTo} · ${data.spotCount} магазинів · ${data.completedCells}/${data.expectedCells} знімків. Продажі та назви позицій — зі знімків Poster. Історичний склад мережі не підтверджено.`} />
+      description={`${data.dateFrom} — ${data.dateTo} · ${foodcostStoreCountLabel(data.spotCount)} · ${data.completedCells}/${data.expectedCells} знімків. Продажі та назви позицій — зі знімків Poster. Історичний склад мережі не підтверджено.`} />
     <Card size="small" title="Фудкост за продуктами" extra={<Button icon={<ReloadOutlined />}
       onClick={() => setRevision((value) => value + 1)}>Оновити</Button>}>
       <Space wrap className="mb-4">
@@ -102,14 +102,14 @@ export function FoodCostProducts() {
       </Space>
       <Typography.Paragraph type="secondary" className="mb-3 text-xs">
         Знайдено позицій: {data.totalProducts ?? 0} · Оплачено за фільтром: {data.filteredMetrics ? money(data.filteredMetrics.payedSumMinor) : "—"}
-        {data.filteredMetrics && ` · За прибутком товарів: ${rate(data.filteredMetrics.foodCostPercent)} · Без ПДВ Poster: ${rate(data.filteredMetrics.nettoFoodCostPercent)}`}
+        {data.filteredMetrics && <> · За прибутком товарів: <FoodcostRate value={data.filteredMetrics.foodCostPercent} /> · Без ПДВ Poster: <FoodcostRate value={data.filteredMetrics.nettoFoodCostPercent} /></>}
       </Typography.Paragraph>
       <Table<ProductRow> rowKey="productId" size="small" loading={loading} scroll={{ x: 850 }}
         dataSource={data.products} locale={{ emptyText: "За цим фільтром продажів немає" }}
         pagination={{ current: page, pageSize: 25, total: data.totalProducts ?? 0,
           showSizeChanger: false, onChange: (value) => setPage(value) }} columns={[
           { title: "Продукт", dataIndex: "productName", render: (_value, row) => <>
-            {row.currentCatalogPresent ? <Link href={`${productHref(row.productId)}?tab=foodcost`}>{row.productName}</Link>
+            {row.currentCatalogPresent ? <Link href={`${productHref(row.productId)}?tab=foodcost&spot_id=${spotId ?? "all"}`}>{row.productName}</Link>
               : <Typography.Text>{row.productName}</Typography.Text>}
             <Typography.Text type="secondary" className="ml-2 text-xs">#{row.productId}</Typography.Text>
             {row.productNameConflict && <Tag color="gold" className="ml-2">Назва змінювалась</Tag>}
@@ -117,8 +117,8 @@ export function FoodCostProducts() {
             {row.categoryConflict && <Tag color="gold" className="ml-2">Категорія змінювалась</Tag>}
           </> },
           { title: "Оплачено", dataIndex: "payedSumMinor", align: "right", render: (value: number) => money(value) },
-          { title: "За прибутком товарів", dataIndex: "foodCostPercent", align: "right", render: rate },
-          { title: "Без ПДВ Poster", dataIndex: "nettoFoodCostPercent", align: "right", render: rate },
+          { title: "За прибутком товарів", dataIndex: "foodCostPercent", align: "right", render: (value: number | null) => <FoodcostRate value={value} /> },
+          { title: "Без ПДВ Poster", dataIndex: "nettoFoodCostPercent", align: "right", render: (value: number | null) => <FoodcostRate value={value} /> },
         ]} />
       <Typography.Text type="secondary" className="text-xs">
         Виторг і період для обох методик однакові. Перший показник віднімає product_profit,

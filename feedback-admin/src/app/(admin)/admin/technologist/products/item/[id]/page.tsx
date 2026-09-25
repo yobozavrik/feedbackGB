@@ -7,11 +7,14 @@ import { SESSION_COOKIE, isSuperAdmin, verifySession } from "@/lib/session";
 import { getServerSupabase } from "@/lib/supabase";
 import { UNCATEGORIZED_ID, productCategoryHref, type CatalogProduct } from "@/lib/admin/productCatalog";
 import { getPosterProductPhoto } from "@/lib/admin/posterProductPhotos";
+import { parseFoodcostSpotId } from "@/lib/admin/foodcostScope";
 import { ProductDetail } from "./product-detail-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProductDetailPage({ params, searchParams }: { params: { id: string }; searchParams?: { tab?: string | string[] } }) {
+export default async function ProductDetailPage({ params, searchParams }: {
+  params: { id: string }; searchParams?: { tab?: string | string[]; spot_id?: string | string[] };
+}) {
   const session = await verifySession(cookies().get(SESSION_COOKIE)?.value);
   if (!session || !isSuperAdmin(session.role)) redirect("/admin");
   if (!/^\d+$/.test(params.id) || !Number.isSafeInteger(Number(params.id))) notFound();
@@ -33,8 +36,12 @@ export default async function ProductDetailPage({ params, searchParams }: { para
   }
   const categoryHref = productCategoryHref(product.category_id ?? UNCATEGORIZED_ID);
   const tab = Array.isArray(searchParams?.tab) ? searchParams.tab[0] : searchParams?.tab;
+  const rawSpotId = Array.isArray(searchParams?.spot_id) ? searchParams.spot_id[0] : searchParams?.spot_id;
+  let spotId: number | undefined;
+  try { spotId = parseFoodcostSpotId(rawSpotId ?? null); }
+  catch { return <AdminPageContainer title="Картка продукту"><Alert type="warning" showIcon message="Некоректний магазин" /></AdminPageContainer>; }
   const initialTab = ["stock", "characteristics", "tech", "foodcost", "stages"].includes(tab ?? "") ? tab : "stock";
   return <AdminPageContainer title={product.name} subTitle="Картка продукту з товарного каталогу POS" extra={<Link href={categoryHref}><Button>До категорії</Button></Link>}>
-    <ProductDetail product={product} posterPhoto={posterPhoto} photoError={photoError} initialTab={initialTab} />
+    <ProductDetail product={product} posterPhoto={posterPhoto} photoError={photoError} initialTab={initialTab} spotId={spotId} />
   </AdminPageContainer>;
 }

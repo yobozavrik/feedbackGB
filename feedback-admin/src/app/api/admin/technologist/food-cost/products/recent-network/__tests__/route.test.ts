@@ -52,6 +52,18 @@ describe("recent network foodcost products API", () => {
     expect(mocked.loadFoodcostRecentBreakdown).not.toHaveBeenCalled();
   });
 
+  it("scopes product aggregates to the selected store", async () => {
+    const response = await GET(request("?spot_id=2"));
+    expect(response.status).toBe(200);
+    expect(mocked.loadFoodcostRecentBreakdown).toHaveBeenCalledWith(expect.any(Date), 2);
+  });
+
+  it("rejects an invalid store without source access", async () => {
+    const response = await GET(request("?spot_id=bad"));
+    expect(response.status).toBe(400);
+    expect(mocked.loadFoodcostRecentBreakdown).not.toHaveBeenCalled();
+  });
+
   it("filters and paginates verified aggregates with no-store", async () => {
     const response = await GET(request("?q=%D0%BF%D0%B5%D0%BB%D1%8C&pageSize=1"));
     expect(response.status).toBe(200);

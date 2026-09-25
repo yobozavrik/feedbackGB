@@ -40,6 +40,7 @@ export type SalesReadModel = {
   completedCells: number;
   missing: MissingCell[];
   sourceFetchedAt: string | null;
+  newestSourceFetchedAt: string | null;
   metrics: SalesMetrics | null;
   categories: (CategorySales & { categoryName: string | null; categoryNameConflict: boolean })[] | null;
   products: ProductSales[] | null;
@@ -142,7 +143,8 @@ export function buildFoodcostSalesReadModel(
   }
   if (missing.length) return {
     status: "incomplete", expectedCells: businessDates.length * spotIds.length,
-    completedCells, missing, sourceFetchedAt: null, metrics: null, categories: null, products: null,
+    completedCells, missing, sourceFetchedAt: null, newestSourceFetchedAt: null,
+    metrics: null, categories: null, products: null,
     productsBySpot: null, productsByDate: null,
   };
   const categoryNames = new Map<number | null, Set<string>>();
@@ -161,6 +163,7 @@ export function buildFoodcostSalesReadModel(
   return {
     status: "complete", expectedCells: businessDates.length * spotIds.length,
     completedCells, missing: [], sourceFetchedAt: fetchedAt.sort()[0] ?? null,
+    newestSourceFetchedAt: fetchedAt[fetchedAt.length - 1] ?? null,
     metrics: salesMetrics(allFacts), categories, products: groupProductSales(allFacts),
     productsBySpot: spotIds.map((spotId) => ({ spotId,
       products: groupProductSales(factsBySpot.get(spotId) ?? []) })),

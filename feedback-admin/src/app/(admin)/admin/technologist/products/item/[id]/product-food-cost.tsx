@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Card, Space, Table, Typography } from "antd";
 import type { ProductFact } from "@/lib/admin/foodcostProductDetail";
+import { foodcostStoreCountLabel } from "@/lib/admin/foodcostLabels";
+import { FoodcostRate, FoodcostStatusTag, formatFoodcostPercent } from "@/components/admin/foodcost/FoodcostStatus";
 
 type Response = {
   status: "complete" | "incomplete";
@@ -19,10 +21,11 @@ type Response = {
 
 const amount = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function money(minor: number | null): string { return minor === null ? "Н/Д" : `${amount.format(minor / 100)} ₴`; }
-function rate(value: number | null): string { return value === null ? "Н/Д" : `${amount.format(value)} %`; }
 function paid(value: ProductFact | null): string { return value ? money(value.payedSumMinor) : "Не продавався"; }
 
-export function ProductFoodCostPanel({ productId, onOpenTech }: { productId: number; onOpenTech: () => void }) {
+export function ProductFoodCostPanel({ productId, spotId, onOpenTech }: {
+  productId: number; spotId?: number; onOpenTech: () => void;
+}) {
   const [data, setData] = useState<Response | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -31,7 +34,8 @@ export function ProductFoodCostPanel({ productId, onOpenTech }: { productId: num
     const controller = new AbortController();
     setLoading(true);
     setError(false);
-    fetch(`/api/admin/technologist/products/${productId}/food-cost`, {
+    const scope = spotId === undefined ? "" : `?spot_id=${spotId}`;
+    fetch(`/api/admin/technologist/products/${productId}/food-cost${scope}`, {
       cache: "no-store", signal: controller.signal,
     }).then(async (response) => {
       if (!response.ok) throw new Error("foodcost_product_unavailable");
@@ -45,7 +49,7 @@ export function ProductFoodCostPanel({ productId, onOpenTech }: { productId: num
     }).catch(() => { if (!controller.signal.aborted) setError(true); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [productId, revision]);
+  }, [productId, spotId, revision]);
 
   if (error) return <Alert type="error" showIcon message="Фудкост продукту тимчасово недоступний"
     action={<Button size="small" onClick={() => setRevision((value) => value + 1)}>Повторити</Button>} />;
@@ -57,26 +61,31 @@ export function ProductFoodCostPanel({ productId, onOpenTech }: { productId: num
 
   const fact = data.product?.fact ?? null;
   return <Space direction="vertical" size="middle" className="w-full">
-    <Alert type="info" showIcon message="Фактичні продажі Poster · поточна мережа, 3 завершені дні"
-      description={`${data.dateFrom} — ${data.dateTo} · ${data.spotCount} магазинів · ${data.completedCells}/${data.expectedCells} знімків. Історичний склад мережі не підтверджено.`} />
+    <Alert type="info" showIcon message={`Фактичні продажі Poster · ${spotId === undefined ? "поточна мережа" : data.stores[0]?.storeName ?? `магазин #${spotId}`}, 3 завершені дні`}
+      description={`${data.dateFrom} — ${data.dateTo} · ${foodcostStoreCountLabel(data.spotCount)} · ${data.completedCells}/${data.expectedCells} знімків. Історичний склад мережі не підтверджено.`} />
     {data.product?.productNameConflict && <Alert type="warning" showIcon
       message="Назва продукту змінювалась у знімках продажів" description="Показано одну історичну назву; суми об’єднано за ID продукту." />}
     {fact ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       <Card size="small"><Typography.Text type="secondary">Оплачено після знижок</Typography.Text>
         <Typography.Title level={4} className="!mb-0">{money(fact.payedSumMinor)}</Typography.Title></Card>
       <Card size="small"><Typography.Text type="secondary">За прибутком товарів</Typography.Text>
-        <Typography.Title level={4} className="!mb-0">{rate(fact.foodCostPercent)}</Typography.Title></Card>
+        <Typography.Title level={4} className="!mb-1">{formatFoodcostPercent(fact.foodCostPercent)}</Typography.Title>
+        <FoodcostStatusTag value={fact.foodCostPercent} /></Card>
       <Card size="small"><Typography.Text type="secondary">Без ПДВ Poster</Typography.Text>
-        <Typography.Title level={4} className="!mb-0">{rate(fact.nettoFoodCostPercent)}</Typography.Title></Card>
+        <Typography.Title level={4} className="!mb-1">{formatFoodcostPercent(fact.nettoFoodCostPercent)}</Typography.Title>
+        <FoodcostStatusTag value={fact.nettoFoodCostPercent} /></Card>
     </div> : <Alert type="info" showIcon message="Продукт не продавався у вибраному вікні"
       description="Фудкост не дорівнює 0 %: для нього немає знаменника — оплаченої суми." />}
+    <Typography.Text type="secondary" className="text-xs">
+      Межі для кожної методики окремо: менше 35 % — норма; 35–45 % включно — увага; понад 45 % — високий фудкост.
+    </Typography.Text>
     <Card size="small" title="За днями">
       <Table rowKey="businessDate" size="small" pagination={false} scroll={{ x: 560 }}
         dataSource={data.days} columns={[
           { title: "Дата", dataIndex: "businessDate" },
           { title: "Оплачено", align: "right", render: (_value, row) => paid(row.fact) },
-          { title: "За прибутком товарів", align: "right", render: (_value, row) => rate(row.fact?.foodCostPercent ?? null) },
-          { title: "Без ПДВ Poster", align: "right", render: (_value, row) => rate(row.fact?.nettoFoodCostPercent ?? null) },
+          { title: "За прибутком товарів", align: "right", render: (_value, row) => <FoodcostRate value={row.fact?.foodCostPercent ?? null} /> },
+          { title: "Без ПДВ Poster", align: "right", render: (_value, row) => <FoodcostRate value={row.fact?.nettoFoodCostPercent ?? null} /> },
         ]} />
     </Card>
     <Card size="small" title="За магазинами">
@@ -84,8 +93,8 @@ export function ProductFoodCostPanel({ productId, onOpenTech }: { productId: num
         dataSource={data.stores} pagination={{ pageSize: 13, showSizeChanger: false }} columns={[
           { title: "Магазин", dataIndex: "storeName" },
           { title: "Оплачено", align: "right", render: (_value, row) => paid(row.fact) },
-          { title: "За прибутком товарів", align: "right", render: (_value, row) => rate(row.fact?.foodCostPercent ?? null) },
-          { title: "Без ПДВ Poster", align: "right", render: (_value, row) => rate(row.fact?.nettoFoodCostPercent ?? null) },
+          { title: "За прибутком товарів", align: "right", render: (_value, row) => <FoodcostRate value={row.fact?.foodCostPercent ?? null} /> },
+          { title: "Без ПДВ Poster", align: "right", render: (_value, row) => <FoodcostRate value={row.fact?.nettoFoodCostPercent ?? null} /> },
         ]} />
     </Card>
     <Alert type="info" showIcon message="Чому два різні відсотки?"

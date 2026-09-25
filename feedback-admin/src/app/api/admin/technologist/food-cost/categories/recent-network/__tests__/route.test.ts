@@ -25,14 +25,14 @@ beforeEach(() => {
 describe("recent network foodcost categories API", () => {
   it("requires super-admin before reading source", async () => {
     mocked.requireAdminSession.mockResolvedValueOnce(null);
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/admin/technologist/food-cost/categories/recent-network"));
     expect(response.status).toBe(403);
     expect(mocked.requireAdminSession).toHaveBeenCalledWith("super_admin");
     expect(mocked.loadFoodcostRecentBreakdown).not.toHaveBeenCalled();
   });
 
   it("returns categories and provenance but not product rows", async () => {
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/admin/technologist/food-cost/categories/recent-network"));
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     const body = await response.json();
@@ -41,11 +41,23 @@ describe("recent network foodcost categories API", () => {
     expect(body.products).toBeUndefined();
   });
 
+  it("passes a selected store through to the verified snapshot", async () => {
+    const response = await GET(new Request("http://localhost/api/admin/technologist/food-cost/categories/recent-network?spot_id=2"));
+    expect(response.status).toBe(200);
+    expect(mocked.loadFoodcostRecentBreakdown).toHaveBeenCalledWith(expect.any(Date), 2);
+  });
+
+  it("rejects an invalid store before reading the source", async () => {
+    const response = await GET(new Request("http://localhost/api/admin/technologist/food-cost/categories/recent-network?spot_id=bad"));
+    expect(response.status).toBe(400);
+    expect(mocked.loadFoodcostRecentBreakdown).not.toHaveBeenCalled();
+  });
+
   it("passes through incomplete coverage with null metrics", async () => {
     mocked.loadFoodcostRecentBreakdown.mockResolvedValueOnce({ status: "incomplete",
       expectedCells: 78, completedCells: 77, missing: [{ businessDate: "2026-09-24", spotId: 26 }],
       metrics: null, categories: null, products: null });
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/admin/technologist/food-cost/categories/recent-network"));
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ status: "incomplete", metrics: null, categories: null });
   });
@@ -53,10 +65,10 @@ describe("recent network foodcost categories API", () => {
   it("does not leak provider errors", async () => {
     mocked.loadFoodcostRecentBreakdown.mockRejectedValueOnce(new Error("foodcost_roster_mismatch"))
       .mockRejectedValueOnce(new Error("secret-bearing error"));
-    const unavailable = await GET();
+    const unavailable = await GET(new Request("http://localhost/api/admin/technologist/food-cost/categories/recent-network"));
     expect(unavailable.status).toBe(503);
     expect(await unavailable.json()).toEqual({ error: "foodcost_source_unavailable" });
-    const failure = await GET();
+    const failure = await GET(new Request("http://localhost/api/admin/technologist/food-cost/categories/recent-network"));
     expect(failure.status).toBe(500);
     expect(await failure.json()).toEqual({ error: "foodcost_categories_unavailable" });
   });

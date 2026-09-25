@@ -14,7 +14,9 @@ function UnconnectedSection({ name }: { name: string }) {
   return <Empty className="py-12" description={`${name}: дані Poster ще не підключено до цієї картки`} />;
 }
 
-export function ProductDetail({ product, posterPhoto, photoError, initialTab = "stock" }: { product: CatalogProduct; posterPhoto: string | null; photoError: boolean; initialTab?: string }) {
+export function ProductDetail({ product, posterPhoto, photoError, initialTab = "stock", spotId }: {
+  product: CatalogProduct; posterPhoto: string | null; photoError: boolean; initialTab?: string; spotId?: number;
+}) {
   const categoryHref = productCategoryHref(product.category_id ?? UNCATEGORIZED_ID);
   const [activeTab, setActiveTab] = useState(initialTab);
   const selectTab = (next: string) => {
@@ -47,7 +49,7 @@ export function ProductDetail({ product, posterPhoto, photoError, initialTab = "
           { key: "barcode", label: "Штрихкод", children: product.barcode ?? "—" },
         ]} /> },
         { key: "tech", label: "Технологічна карта", children: activeTab === "tech" ? <ProductTechCardPanel key={product.id} productId={product.id} /> : null },
-        { key: "foodcost", label: "Фудкост", children: activeTab === "foodcost" ? <ProductFoodCostPanel key={product.id} productId={product.id} onOpenTech={() => selectTab("tech")} /> : null },
+        { key: "foodcost", label: "Фудкост", children: activeTab === "foodcost" ? <ProductFoodCostPanel key={`${product.id}:${spotId ?? "all"}`} productId={product.id} spotId={spotId} onOpenTech={() => selectTab("tech")} /> : null },
         { key: "stages", label: "Етапи та задачі", children: <UnconnectedSection name="Етапи та задачі" /> },
       ]} />
     </Card>

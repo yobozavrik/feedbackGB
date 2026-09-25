@@ -35,6 +35,18 @@ describe("product foodcost detail API", () => {
     expect(mocked.loadFoodcostRecentBreakdown).not.toHaveBeenCalled();
   });
 
+  it("uses the selected store for product detail", async () => {
+    const response = await GET(new Request(`${request.url}?spot_id=2`), { params: { id: "121" } });
+    expect(response.status).toBe(200);
+    expect(mocked.loadFoodcostRecentBreakdown).toHaveBeenCalledWith(expect.any(Date), 2);
+  });
+
+  it("rejects an invalid store before reading data", async () => {
+    const response = await GET(new Request(`${request.url}?spot_id=bad`), { params: { id: "121" } });
+    expect(response.status).toBe(400);
+    expect(mocked.loadFoodcostRecentBreakdown).not.toHaveBeenCalled();
+  });
+
   it("uses verified names, no-store, and no raw rows", async () => {
     const response = await call();
     expect(response.status).toBe(200);

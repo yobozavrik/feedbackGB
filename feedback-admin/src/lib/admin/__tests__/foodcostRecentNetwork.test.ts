@@ -70,6 +70,15 @@ describe("current-roster recent network overview", () => {
       nameSource: "current_poster_catalog" });
   });
 
+  it("scopes one store only after checking the current Poster/v_stores roster", async () => {
+    const result = await loadFoodcostRecentBreakdown(new Date("2026-09-24T12:00:00Z"), 2);
+    expect(mocked.loadFoodcostSalesPeriod).toHaveBeenCalledWith(
+      ["2026-09-23", "2026-09-22", "2026-09-21"], [2]);
+    expect(result).toMatchObject({ spotCount: 1, spotIds: [2] });
+    await expect(loadFoodcostRecentBreakdown(new Date("2026-09-24T12:00:00Z"), 999))
+      .rejects.toThrow("invalid_foodcost_spot");
+  });
+
   it("keeps categories and products unavailable when fact coverage is incomplete", async () => {
     mocked.loadFoodcostSalesPeriod.mockResolvedValueOnce({ status: "incomplete", expectedCells: 6,
       completedCells: 5, missing: [{ businessDate: "2026-09-23", spotId: 2, reason: "missing_run" }],

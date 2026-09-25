@@ -60,8 +60,13 @@ function currentPosterCategoryNames(value: unknown): Map<number, string> {
 }
 
 /** Fact-backed breakdown; never return partial category or product metrics. */
-export async function loadFoodcostRecentBreakdown(now = new Date()) {
-  const spotIds = await loadVerifiedCurrentFoodcostSpotIds();
+export async function loadFoodcostRecentBreakdown(now = new Date(), selectedSpotId?: number) {
+  const verifiedSpotIds = await loadVerifiedCurrentFoodcostSpotIds();
+  if (selectedSpotId !== undefined &&
+    (!Number.isSafeInteger(selectedSpotId) || !verifiedSpotIds.includes(selectedSpotId))) {
+    throw new Error("invalid_foodcost_spot");
+  }
+  const spotIds = selectedSpotId === undefined ? verifiedSpotIds : [selectedSpotId];
   const dates = lastThreeClosedKyivDates(now);
   const snapshot = await loadFoodcostSalesPeriod(dates, spotIds);
   // The sales API omits category names in this account. Current Poster menu is
@@ -84,6 +89,7 @@ export async function loadFoodcostRecentBreakdown(now = new Date()) {
     historicalRosterVerified: false,
     methodologyVersion: "poster-sales-dual-v1" as const,
     dateFrom: dates[2], dateTo: dates[0], spotCount: spotIds.length, spotIds,
+    allSpotIds: verifiedSpotIds,
     ...snapshot,
     currentCategoryNamesAvailable: currentNames !== null,
     categoriesWithoutDisplayName,

@@ -2,49 +2,47 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Alert } from "antd";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
-import { getLiveFoodCostSample } from "@/lib/admin/posterFoodCost";
-import { loadFoodcostRecentNetwork } from "@/lib/admin/foodcostRecentNetwork";
-import { loadSupplyComparison, unavailableSupplyComparison } from "@/lib/admin/posterSupplyComparison";
+import { loadFoodcostCommandCenter } from "@/lib/admin/foodcostCommandCenter";
 import { SESSION_COOKIE, isSuperAdmin, verifySession } from "@/lib/session";
-import { FoodCostSampleView } from "./food-cost-sample-view";
-import { FoodCostRecentSummary } from "./food-cost-recent-summary";
+import { FoodCostCommandCenter } from "./food-cost-command-center";
 import { FoodCostWorkspace } from "./food-cost-workspace";
 
 export const dynamic = "force-dynamic";
 
 export default async function TechnologistFoodCostPage({ searchParams }: {
-  searchParams?: { tab?: string | string[] };
+  searchParams?: { tab?: string | string[]; spot_id?: string | string[]; category_id?: string | string[] };
 }) {
   const session = await verifySession(cookies().get(SESSION_COOKIE)?.value);
   if (!session || !isSuperAdmin(session.role)) redirect("/admin");
 
-  const token = process.env.POSTER_TOKEN;
-  if (!token) {
-    return <AdminPageContainer title="Фудкост" subTitle="Пілот: Пельмені зі свинини">
-      <Alert type="error" showIcon message="Poster не налаштовано" description="Неможливо отримати поточні дані продукту." />
+  const rawSpotId = Array.isArray(searchParams?.spot_id) ? searchParams.spot_id[0] : searchParams?.spot_id;
+  if (rawSpotId && rawSpotId !== "all" && (!/^\d+$/.test(rawSpotId) ||
+    !Number.isSafeInteger(Number(rawSpotId)) || Number(rawSpotId) <= 0)) {
+    return <AdminPageContainer title="Фудкост">
+      <Alert type="warning" showIcon message="Некоректний магазин" description="Оберіть магазин зі списку." />
     </AdminPageContainer>;
   }
-
-  const [recent, sample] = await Promise.all([
-    loadFoodcostRecentNetwork().catch((error: unknown) => {
+  const spotId = rawSpotId && rawSpotId !== "all" ? Number(rawSpotId) : undefined;
+  const rawCategoryId = Array.isArray(searchParams?.category_id)
+    ? searchParams.category_id[0] : searchParams?.category_id;
+  const categoryId = rawCategoryId === "__unknown" ||
+    (rawCategoryId && /^[1-9]\d*$/.test(rawCategoryId) && Number.isSafeInteger(Number(rawCategoryId)))
+    ? rawCategoryId : undefined;
+  const tab = Array.isArray(searchParams?.tab) ? searchParams.tab[0] : searchParams?.tab;
+  const initialTab = tab === "categories" || tab === "products" ? tab : "overview";
+  const data = initialTab === "overview" ? await loadFoodcostCommandCenter(spotId).catch((error: unknown) => {
       const raw = error instanceof Error ? error.message : "unknown_error";
       const code = ["schema_missing", "service_role_missing", "poster_token_missing",
         "supabase_missing", "foodcost_roster_unavailable", "foodcost_roster_mismatch",
-        "poster_unavailable", "poster_invalid_response"].includes(raw) ? raw : "unexpected_error";
-      console.error(JSON.stringify({ event: "foodcost_recent_network_page", code }));
+        "poster_unavailable", "poster_invalid_response", "foodcost_catalog_unavailable",
+        "invalid_foodcost_spot"].includes(raw) ? raw : "unexpected_error";
+      console.error(JSON.stringify({ event: "foodcost_command_center_page", code }));
       return null;
-    }),
-    getLiveFoodCostSample(121, token).then(async (data) => ({
-      data, supply: await loadSupplyComparison(data).catch(() => unavailableSupplyComparison(data)),
-    })).catch(() => null),
-  ]);
-  const tab = Array.isArray(searchParams?.tab) ? searchParams.tab[0] : searchParams?.tab;
-  return <AdminPageContainer title="Фудкост" subTitle="Огляд мережі та пілот одного продукту">
-    <FoodCostWorkspace initialTab={tab === "categories" || tab === "products" ? tab : "overview"} overview={<>
-      <FoodCostRecentSummary data={recent} />
-      {sample ? <FoodCostSampleView data={sample.data} supply={sample.supply} />
-        : <Alert type="error" showIcon message="Не вдалося отримати дані продукту з Poster"
-          description="Пілот продукту не підмінюється кешем або припущеннями. Оновіть сторінку пізніше." />}
-    </>} />
+    }) : null;
+  return <AdminPageContainer title="Фудкост" subTitle="Огляд мережі та продуктів">
+    <FoodCostWorkspace initialTab={initialTab} spotId={spotId} categoryId={categoryId}
+      overview={initialTab !== "overview" ? null : data ? <FoodCostCommandCenter data={data} />
+        : <Alert type="error" showIcon message="Огляд фудкосту зараз недоступний"
+          description="Дані Poster або знімок продажів недоступні. Неперевірені підсумки не показуємо." />} />
   </AdminPageContainer>;
 }

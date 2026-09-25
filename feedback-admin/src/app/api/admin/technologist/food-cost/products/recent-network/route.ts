@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/adminAuth";
 import { loadFoodcostRecentBreakdown } from "@/lib/admin/foodcostRecentNetwork";
+import { parseFoodcostSpotId } from "@/lib/admin/foodcostScope";
 import { buildFoodcostProductPage, parseProductQuery } from "@/lib/admin/foodcostProductPage";
 import { getServerSupabase } from "@/lib/supabase";
 
@@ -15,13 +16,16 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "forbidden" }, { status: 403, headers: NO_STORE });
   }
   let query;
+  let spotId: number | undefined;
   try {
-    query = parseProductQuery(new URL(request.url));
+    const url = new URL(request.url);
+    query = parseProductQuery(url);
+    spotId = parseFoodcostSpotId(url.searchParams.get("spot_id"));
   } catch {
     return NextResponse.json({ error: "invalid_query" }, { status: 400, headers: NO_STORE });
   }
   try {
-    const data = await loadFoodcostRecentBreakdown();
+    const data = await loadFoodcostRecentBreakdown(new Date(), spotId);
     const page = buildFoodcostProductPage(data, query);
     if (!page.products?.length) return NextResponse.json(page, { headers: NO_STORE });
     const db = getServerSupabase();
@@ -35,6 +39,9 @@ export async function GET(request: Request): Promise<NextResponse> {
     })) }, { headers: NO_STORE });
   } catch (error) {
     const code = error instanceof Error ? error.message : "unknown_error";
+    if (code === "invalid_foodcost_spot") {
+      return NextResponse.json({ error: code }, { status: 400, headers: NO_STORE });
+    }
     const unavailable = ["schema_missing", "service_role_missing", "poster_token_missing",
       "supabase_missing", "foodcost_roster_unavailable", "foodcost_roster_mismatch",
       "poster_unavailable", "poster_invalid_response", "foodcost_catalog_unavailable"].includes(code);
