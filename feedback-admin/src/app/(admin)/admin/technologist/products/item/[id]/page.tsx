@@ -11,7 +11,7 @@ import { ProductDetail } from "./product-detail-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProductDetailPage({ params }: { params: { id: string } }) {
+export default async function ProductDetailPage({ params, searchParams }: { params: { id: string }; searchParams?: { tab?: string | string[] } }) {
   const session = await verifySession(cookies().get(SESSION_COOKIE)?.value);
   if (!session || !isSuperAdmin(session.role)) redirect("/admin");
   if (!/^\d+$/.test(params.id) || !Number.isSafeInteger(Number(params.id))) notFound();
@@ -32,7 +32,9 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
     catch { photoError = true; }
   }
   const categoryHref = productCategoryHref(product.category_id ?? UNCATEGORIZED_ID);
+  const tab = Array.isArray(searchParams?.tab) ? searchParams.tab[0] : searchParams?.tab;
+  const initialTab = ["stock", "characteristics", "tech", "foodcost", "stages"].includes(tab ?? "") ? tab : "stock";
   return <AdminPageContainer title={product.name} subTitle="Картка продукту з товарного каталогу POS" extra={<Link href={categoryHref}><Button>До категорії</Button></Link>}>
-    <ProductDetail product={product} posterPhoto={posterPhoto} photoError={photoError} />
+    <ProductDetail product={product} posterPhoto={posterPhoto} photoError={photoError} initialTab={initialTab} />
   </AdminPageContainer>;
 }

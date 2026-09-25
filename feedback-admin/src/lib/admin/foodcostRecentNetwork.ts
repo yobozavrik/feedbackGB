@@ -83,7 +83,7 @@ export async function loadFoodcostRecentBreakdown(now = new Date()) {
     scope: "current_poster_roster_three_closed_days" as const,
     historicalRosterVerified: false,
     methodologyVersion: "poster-sales-dual-v1" as const,
-    dateFrom: dates[2], dateTo: dates[0], spotCount: spotIds.length,
+    dateFrom: dates[2], dateTo: dates[0], spotCount: spotIds.length, spotIds,
     ...snapshot,
     currentCategoryNamesAvailable: currentNames !== null,
     categoriesWithoutDisplayName,

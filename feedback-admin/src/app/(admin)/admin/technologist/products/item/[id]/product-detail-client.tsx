@@ -6,6 +6,7 @@ import { UNCATEGORIZED_ID, productCategoryHref, type CatalogProduct } from "@/li
 import { ProductPhoto } from "../../product-photo";
 import { ProductStockPanel } from "./product-stock";
 import { ProductTechCardPanel } from "./product-tech-card";
+import { ProductFoodCostPanel } from "./product-food-cost";
 import { useState } from "react";
 import { formatProductUnitUk } from "@/lib/productUnits";
 
@@ -13,9 +14,16 @@ function UnconnectedSection({ name }: { name: string }) {
   return <Empty className="py-12" description={`${name}: дані Poster ще не підключено до цієї картки`} />;
 }
 
-export function ProductDetail({ product, posterPhoto, photoError }: { product: CatalogProduct; posterPhoto: string | null; photoError: boolean }) {
+export function ProductDetail({ product, posterPhoto, photoError, initialTab = "stock" }: { product: CatalogProduct; posterPhoto: string | null; photoError: boolean; initialTab?: string }) {
   const categoryHref = productCategoryHref(product.category_id ?? UNCATEGORIZED_ID);
-  const [activeTab, setActiveTab] = useState("stock");
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const selectTab = (next: string) => {
+    setActiveTab(next);
+    const url = new URL(window.location.href);
+    if (next === "stock") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", next);
+    window.history.replaceState(window.history.state, "", url);
+  };
   return <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
     <Card size="small" className="h-fit">
       <ProductPhoto photo={posterPhoto} name={product.name} className="mb-1 h-44 w-full" />
@@ -30,7 +38,7 @@ export function ProductDetail({ product, posterPhoto, photoError }: { product: C
       ]} />
     </Card>
     <Card size="small" className="min-w-0">
-      <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
+      <Tabs activeKey={activeTab} onChange={selectTab} items={[
         { key: "stock", label: "Залишки", children: activeTab === "stock" ? <ProductStockPanel key={product.id} productId={product.id} /> : null },
         { key: "characteristics", label: "Характеристики", children: <Descriptions bordered size="small" column={{ xs: 1, md: 2 }} items={[
           { key: "name", label: "Назва", children: product.name },
@@ -39,6 +47,7 @@ export function ProductDetail({ product, posterPhoto, photoError }: { product: C
           { key: "barcode", label: "Штрихкод", children: product.barcode ?? "—" },
         ]} /> },
         { key: "tech", label: "Технологічна карта", children: activeTab === "tech" ? <ProductTechCardPanel key={product.id} productId={product.id} /> : null },
+        { key: "foodcost", label: "Фудкост", children: activeTab === "foodcost" ? <ProductFoodCostPanel key={product.id} productId={product.id} onOpenTech={() => selectTab("tech")} /> : null },
         { key: "stages", label: "Етапи та задачі", children: <UnconnectedSection name="Етапи та задачі" /> },
       ]} />
     </Card>

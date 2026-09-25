@@ -43,6 +43,8 @@ export type SalesReadModel = {
   metrics: SalesMetrics | null;
   categories: (CategorySales & { categoryName: string | null; categoryNameConflict: boolean })[] | null;
   products: ProductSales[] | null;
+  productsBySpot: { spotId: number; products: ProductSales[] }[] | null;
+  productsByDate: { businessDate: string; products: ProductSales[] }[] | null;
 };
 
 function money(value: number | string | null, allowNull = false): number | null {
@@ -101,6 +103,8 @@ export function buildFoodcostSalesReadModel(
   }
   const missing: MissingCell[] = [];
   const allFacts: PosterSalesFact[] = [];
+  const factsBySpot = new Map<number, PosterSalesFact[]>();
+  const factsByDate = new Map<string, PosterSalesFact[]>();
   const selectedFacts: SalesFactRead[] = [];
   const fetchedAt: string[] = [];
   let completedCells = 0;
@@ -127,6 +131,8 @@ export function buildFoodcostSalesReadModel(
         throw new Error("invalid_snapshot_totals");
       }
       allFacts.push(...parsed);
+      factsBySpot.set(spotId, [...(factsBySpot.get(spotId) ?? []), ...parsed]);
+      factsByDate.set(businessDate, [...(factsByDate.get(businessDate) ?? []), ...parsed]);
       selectedFacts.push(...rows);
       fetchedAt.push(run.source_fetched_at);
       completedCells++;
@@ -137,6 +143,7 @@ export function buildFoodcostSalesReadModel(
   if (missing.length) return {
     status: "incomplete", expectedCells: businessDates.length * spotIds.length,
     completedCells, missing, sourceFetchedAt: null, metrics: null, categories: null, products: null,
+    productsBySpot: null, productsByDate: null,
   };
   const categoryNames = new Map<number | null, Set<string>>();
   for (const row of selectedFacts) {
@@ -155,5 +162,9 @@ export function buildFoodcostSalesReadModel(
     status: "complete", expectedCells: businessDates.length * spotIds.length,
     completedCells, missing: [], sourceFetchedAt: fetchedAt.sort()[0] ?? null,
     metrics: salesMetrics(allFacts), categories, products: groupProductSales(allFacts),
+    productsBySpot: spotIds.map((spotId) => ({ spotId,
+      products: groupProductSales(factsBySpot.get(spotId) ?? []) })),
+    productsByDate: businessDates.map((businessDate) => ({ businessDate,
+      products: groupProductSales(factsByDate.get(businessDate) ?? []) })),
   };
 }

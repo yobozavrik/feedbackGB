@@ -109,7 +109,7 @@ export function FoodCostProducts() {
         pagination={{ current: page, pageSize: 25, total: data.totalProducts ?? 0,
           showSizeChanger: false, onChange: (value) => setPage(value) }} columns={[
           { title: "Продукт", dataIndex: "productName", render: (_value, row) => <>
-            {row.currentCatalogPresent ? <Link href={productHref(row.productId)}>{row.productName}</Link>
+            {row.currentCatalogPresent ? <Link href={`${productHref(row.productId)}?tab=foodcost`}>{row.productName}</Link>
               : <Typography.Text>{row.productName}</Typography.Text>}
             <Typography.Text type="secondary" className="ml-2 text-xs">#{row.productId}</Typography.Text>
             {row.productNameConflict && <Tag color="gold" className="ml-2">Назва змінювалась</Tag>}

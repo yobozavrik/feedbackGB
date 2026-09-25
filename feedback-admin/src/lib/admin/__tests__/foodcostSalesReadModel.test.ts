@@ -38,13 +38,17 @@ describe("foodcost snapshot read model", () => {
     expect(result.categories?.[0]).toMatchObject({ categoryName: "Напівфабрикати",
       categoryNameConflict: false });
     expect(result.products?.[0].payedSumMinor).toBe(40000);
+    expect(result.productsBySpot?.map((row) => [row.spotId, row.products[0]?.payedSumMinor]))
+      .toEqual([[1, 10000], [2, 30000]]);
+    expect(result.productsByDate?.[0].products[0].payedSumMinor).toBe(40000);
   });
 
   it("never presents partial network metrics when a spot is missing", () => {
     const result = buildFoodcostSalesReadModel([date], [1, 2], [run()], [fact()]);
     expect(result).toMatchObject({ status: "incomplete", completedCells: 1,
       missing: [{ businessDate: date, spotId: 2, reason: "missing_run" }],
-      metrics: null, categories: null, products: null });
+      metrics: null, categories: null, products: null,
+      productsBySpot: null, productsByDate: null });
   });
 
   it("selects the latest completed version and ignores running/failed runs", () => {
