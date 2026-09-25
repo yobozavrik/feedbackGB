@@ -36,6 +36,7 @@ export type SalesMetrics = {
 export type ProductSales = SalesMetrics & {
   productId: number;
   productName: string;
+  productNameConflict: boolean;
   categoryId: number | null;
   categoryConflict: boolean;
   unit: string | null;
@@ -173,11 +174,13 @@ export function groupProductSales(rows: readonly PosterSalesFact[]): ProductSale
   }
   return [...groups.entries()].map(([productId, group]) => {
     const first = group[0];
+    const productNameConflict = group.some((row) => row.productName !== first.productName);
     const categoryConflict = group.some((row) => row.categoryId !== first.categoryId);
     const unitConflict = group.some((row) => row.unit !== first.unit || row.weightBased !== first.weightBased);
     const quantity = unitConflict ? null : formatQuantity(group.reduce((sum, row) => sum + quantityScaled(row.quantity), 0n));
     return {
-      productId, productName: first.productName, categoryId: categoryConflict ? null : first.categoryId,
+      productId, productName: first.productName, productNameConflict,
+      categoryId: categoryConflict ? null : first.categoryId,
       categoryConflict, unit: unitConflict ? null : first.unit, unitConflict,
       weightBased: unitConflict ? null : first.weightBased, quantity,
       modificationIds: [...new Set(group.map((row) => row.modificationId))].sort((a, b) => a - b),

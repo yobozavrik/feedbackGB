@@ -99,6 +99,15 @@ describe("Poster sales aggregation", () => {
     expect(products[0]).toMatchObject({ categoryConflict: true, categoryId: null });
   });
 
+  it("marks a renamed product without changing its summed money", () => {
+    const products = groupProductSales([
+      parsePosterSalesRow(raw()),
+      parsePosterSalesRow(raw({ product_name: "Нова назва", payed_sum: "1000", product_profit: "500" })),
+    ]);
+    expect(products[0]).toMatchObject({ productId: 121, productNameConflict: true,
+      payedSumMinor: 20000, productProfitMinor: 11500 });
+  });
+
   it("calculates network food cost from summed money, not mean of percentages", () => {
     const rows = [
       parsePosterSalesRow(raw({ payed_sum: "10000", product_profit: "5000", product_profit_netto: "5500" })),

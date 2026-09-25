@@ -40,7 +40,7 @@ export default async function TechnologistFoodCostPage({ searchParams }: {
   ]);
   const tab = Array.isArray(searchParams?.tab) ? searchParams.tab[0] : searchParams?.tab;
   return <AdminPageContainer title="Фудкост" subTitle="Огляд мережі та пілот одного продукту">
-    <FoodCostWorkspace initialTab={tab === "categories" ? "categories" : "overview"} overview={<>
+    <FoodCostWorkspace initialTab={tab === "categories" || tab === "products" ? tab : "overview"} overview={<>
       <FoodCostRecentSummary data={recent} />
       {sample ? <FoodCostSampleView data={sample.data} supply={sample.supply} />
         : <Alert type="error" showIcon message="Не вдалося отримати дані продукту з Poster"

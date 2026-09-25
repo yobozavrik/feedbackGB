@@ -3,13 +3,14 @@
 import { useState, type ReactNode } from "react";
 import { Tabs } from "antd";
 import { FoodCostCategories } from "./food-cost-categories";
+import { FoodCostProducts } from "./food-cost-products";
 
-type Tab = "overview" | "categories";
+type Tab = "overview" | "categories" | "products";
 
 export function FoodCostWorkspace({ initialTab, overview }: { initialTab: Tab; overview: ReactNode }) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   return <Tabs activeKey={activeTab} onChange={(key) => {
-    const next = key === "categories" ? "categories" : "overview";
+    const next = key === "categories" || key === "products" ? key : "overview";
     setActiveTab(next);
     const url = new URL(window.location.href);
     if (next === "overview") url.searchParams.delete("tab");
@@ -18,5 +19,6 @@ export function FoodCostWorkspace({ initialTab, overview }: { initialTab: Tab; o
   }} items={[
     { key: "overview", label: "Огляд", children: overview },
     { key: "categories", label: "Категорії", children: activeTab === "categories" ? <FoodCostCategories /> : null },
+    { key: "products", label: "Позиції", children: activeTab === "products" ? <FoodCostProducts /> : null },
   ]} />;
 }

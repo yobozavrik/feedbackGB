@@ -31,6 +31,15 @@ try {
       dateTo: data.dateTo, expectedCells: data.expectedCells, completedCells: data.completedCells })}\n`);
     process.exitCode = 2;
   } else {
+    const { getServerSupabase } = require("../src/lib/supabase.ts");
+    const db = getServerSupabase();
+    if (!db) throw new Error("supabase_missing");
+    const catalog = await db.from("v_products").select("id")
+      .in("id", data.products.map((row) => row.productId)).limit(5000);
+    if (catalog.error) throw new Error("foodcost_catalog_read_failed");
+    const catalogIds = new Set((catalog.data ?? []).map((row) => Number(row.id)));
+    const missingCatalogIds = data.products.filter((row) => !catalogIds.has(row.productId))
+      .map((row) => row.productId);
     const amounts = ["payedSumMinor", "productProfitMinor"];
     const reconcile = (rows) => amounts.every((field) =>
       rows.reduce((sum, row) => sum + row[field], 0) === data.metrics[field]);
@@ -43,6 +52,11 @@ try {
       namesFromCurrentPoster: data.categories.filter((row) => row.nameSource === "current_poster_catalog").length,
       categoryNameConflicts: data.categories.filter((row) => row.categoryNameConflict).length,
       productCount: data.products.length, categoryMatched, productMatched,
+      productNameConflicts: data.products.filter((row) => row.productNameConflict).length,
+      categoryConflicts: data.products.filter((row) => row.categoryConflict).length,
+      unitConflicts: data.products.filter((row) => row.unitConflict).length,
+      productsMissingFromCurrentCatalog: missingCatalogIds.length,
+      missingCatalogIdSample: missingCatalogIds.slice(0, 10),
       payedSumMinor: data.metrics.payedSumMinor,
       productProfitMinor: data.metrics.productProfitMinor })}\n`);
     if (!categoryMatched || !productMatched) process.exitCode = 2;
@@ -51,7 +65,8 @@ try {
   const raw = error instanceof Error ? error.message : "unknown_error";
   const safe = ["schema_missing", "service_role_missing", "poster_token_missing",
     "supabase_missing", "foodcost_roster_unavailable", "foodcost_roster_mismatch",
-    "foodcost_read_facts_limit", "foodcost_read_runs_limit"].includes(raw) ? raw : "foodcost_breakdown_failed";
+    "foodcost_read_facts_limit", "foodcost_read_runs_limit",
+    "foodcost_catalog_read_failed"].includes(raw) ? raw : "foodcost_breakdown_failed";
   process.stderr.write(`${safe}\n`);
   process.exitCode = 1;
 }
