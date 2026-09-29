@@ -192,3 +192,98 @@ G5 — Production deploy, CRON_SECRET, первый ночной запуск и
    Проверить наличие `CRON_SECRET` (не выводить значение), Poster token и
    service_role на Production; подтвердить первый actual cron по logs + DB.
    Один HTTP 200 или наличие расписания в Git не считается ночным запуском.
+
+## Readback после применения 040 — 29.09.2026
+
+- Фактически подтверждены: 3 таблицы с RLS, 2 security-invoker view,
+  4 SECURITY DEFINER RPC с фиксированным search_path, trigger журнала,
+  6 индексов (включая PK), отсутствие доступа anon/authenticated.
+- CLI dry-run: `dateFrom=2026-06-01`, `dateTo=2026-09-28`, `spotCount=26`,
+  `healthAvailable=true`, `writes=false`, exit 0.
+- Health: 3120 ожидаемых пар / 390 completed / 2730 пропусков.
+  Jobs / attempts / events = 0 / 0 / 0. Seed/реальная загрузка не запускались.
+- **G3 failed:** фактический ACL `service_role=arwd/supabase_admin`
+  на attempts/events и обеих view. Причина: существующие default privileges
+  выдали CRUD при создании; `GRANT SELECT` в 040 не снимает ранее выданные права.
+  Это недочёт 040, а не ошибка пользователя. Публичный доступ при этом закрыт.
+- Подготовлена forward-only **041_foodcost_backfill_journal_acl.sql**:
+  revoke всех прав на эти четыре объекта и grant только SELECT service_role.
+  Данные, функции, триггер, таблица jobs и default privileges схемы не меняются.
+  Применённую 040 не редактировали. 041 пока **не применена**.
+- G4 заблокирован до подтверждения SELECT-only ACL; нельзя считать readback
+  успешным по одному наличию объектов или запускать следующий gate заранее.
+
+## Приёмка после 041 и реальная дозагрузка — 29.09.2026
+
+Этот раздел обновляет предыдущий статус: **041 применена и проверена**.
+У service_role на attempts/events и обеих view фактически только SELECT;
+INSERT/UPDATE/DELETE false. У anon/authenticated все четыре права false.
+G3 по объектам/RLS/ACL пройден; EXPLAIN/runtime fault-injection не выполнялись.
+
+### Ограниченная приёмка
+
+1. `sync-poster-foodcost-sales-nightly.mjs --execute --max-jobs 1`:
+   seed 2730 / processed 1 / completed 1 / failed 0 / timedOut 0.
+   Кварц, 28.09, run `d8633d1a-1b5a-4d78-9cbc-fd648c2401c1`, 94 строки.
+2. `verify-poster-foodcost-sales-pair.mjs 2026-09-28 1 --check-idempotency`:
+   fresh Poster response, все нормализованные поля 94 строк совпали;
+   суммы raw fields независимо просуммированы через BigInt и совпали с run:
+   paid=2940580 / profit=1780362 / netto=1796027 minor units.
+   SHA-256 raw response: `e089932fcef5bbb336b651e10adf586678a2fadb9359a69b2758a187069ec08b`.
+   Повтор missing-only: тот же run, completed count 1→1, повтор seed добавил 0.
+3. Два параллельных worker с max-jobs=1 обработали разные пары:
+   Шкільна/116 строк и Герцена/85 строк за 28.09. Интервалы attempts
+   реально перекрылись в БД: 11:27:29.838–11:27:30.697 UTC и
+   11:27:29.882–11:27:30.706 UTC. Два разных owner, две успешные attempts.
+   Обе пары дополнительно сверены с fresh Poster по всем нормализованным
+   полям и независимым raw денежным суммам. Дубли не появились.
+   Это ограниченная реальная конкурентная проверка, не доказательство всех
+   аварийных сценариев lease/reclaim/падения процесса.
+
+### Восстановление недели
+
+- После первых трёх пар выполнена партия max-jobs=80:
+  processed=80 / completed=80 / failed=0 / timedOut=0.
+- Readback: 161/182 пары недели, 21 пропуск за 25.09.
+- Выполнена партия max-jobs=21: все 21 completed, failed/timedOut=0.
+- Всего этой задачей записано **104 новых completed пары** реальных продаж.
+  Jobs: completed=104 / pending=2626, нет running/retryable_failed/failed.
+  Completed coverage за 120 дней: 494/3120; исторический roster не подтверждён.
+- Неделя 22–28.09: **182/182**, previous7 15–21.09: **182/182**.
+  Current14 15–28.09: **364/364**; previous14 01–14.09: **130/364**.
+  Current30: 494/780; current60: 494/1560. Длинную историю сейчас не дозагружали.
+
+### Проверка пути чтения приложения
+
+`node scripts/check-foodcost-plan-readback.mjs --read-model-days 7` завершился
+exit 0, read-only. Использован реальный `loadFoodcostRecentBreakdown`, тот же
+server loader, что обслуживает фудкост. Он вернул:
+
+- status=complete, expectedCells=completedCells=182;
+- 26 категорий, 275 продуктов, 7 дат категории;
+- paid=486814868 / profit=290362882 / netto=292479005 minor units.
+
+Независимый SQL по latest completed парам подтвердил те же суммы,
+182 пары и 15920 строк фактов. Проверка metadata↔facts всех 585 completed
+versions в БД: **0 внутренних mismatch**. Это не fresh Poster сверка всех
+585 versions: отдельно fresh сверены только три контрольные пары, как выше.
+Старые исторические версии не пересчитывали; прежнее известное расхождение
+24.09 не объявляем исправленным этим missing-only worker.
+
+G5 остаётся не принят: Production deploy, наличие CRON_SECRET и actual
+ночной запуск в Vercel этой проверкой не подтверждены. Наличие очереди
+или успешный локальный CLI не заменяет фактического Production cron.
+
+### Локальная визуальная проверка
+
+В авторизованной in-app browser вкладке открыта
+`http://localhost:3211/admin/technologist/food-cost?tab=overview&days=7`.
+Первый переход задержался на cold dev compilation (33,5 с в журнале Next),
+после компиляции HTTP 200 и видимый экран подтверждены; таймаут навигации
+не принимали за успешную отрисовку.
+
+На экране подтверждены: 7 завершённых дней, current и previous 182/182,
+оплачено 4 868 148,68 грн, фудкост 40,35% / 39,92%, график, тепловая
+карта на все 7 дат и рейтинги категорий/продуктов. Сообщения о неполном
+снимке недели больше нет. Это проверка локального Overview; все остальные
+вкладки и Production UI в этой итерации заново не проверялись.

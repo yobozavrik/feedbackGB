@@ -5,6 +5,11 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 const require = createRequire(import.meta.url);
+const args = process.argv.slice(2);
+const readModelDays = args.length === 2 && args[0] === "--read-model-days" ? Number(args[1]) : null;
+if (args.length && (readModelDays === null || ![7, 14, 30, 60].includes(readModelDays))) {
+  throw new Error("usage: node scripts/check-foodcost-plan-readback.mjs [--read-model-days 7|14|30|60]");
+}
 require("@next/env").loadEnvConfig(process.cwd());
 const ts = require("typescript");
 const Module = require("node:module");
@@ -65,10 +70,21 @@ try {
       const windows = foodcostPeriodWindows(days, now);
       return { days, current: coverage(windows.current), previous: coverage(windows.previous) };
     }), supply: supplyCoverage };
+  if (readModelDays !== null) {
+    const { loadFoodcostRecentBreakdown } = require("../src/lib/admin/foodcostRecentNetwork.ts");
+    const model = await loadFoodcostRecentBreakdown(now, undefined, readModelDays, { asOf });
+    result.readModel = { days: readModelDays, status: model.status,
+      expectedCells: model.expectedCells, completedCells: model.completedCells,
+      metrics: model.metrics, categoryCount: model.categories?.length ?? null,
+      productCount: model.products?.length ?? null,
+      categoriesByDateCount: model.categoriesByDate?.length ?? null,
+      historicalRosterVerified: model.historicalRosterVerified };
+    if (model.status !== "complete") throw new Error("read_model_incomplete");
+  }
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 } catch (error) {
   const allowlist = new Set(["service_role_missing", "supabase_missing", "poster_token_missing", "foodcost_roster_unavailable", "foodcost_roster_mismatch",
-    "poster_unavailable", "poster_invalid_response", "runs_read_failed", "runs_limit", "supply_read_failed", "supply_documents_read_failed"]);
+    "poster_unavailable", "poster_invalid_response", "runs_read_failed", "runs_limit", "supply_read_failed", "supply_documents_read_failed", "read_model_incomplete"]);
   const raw = error instanceof Error ? error.message : "unknown";
   process.stderr.write((allowlist.has(raw) ? raw : "plan_readback_failed") + "\n");
   process.exitCode = 1;
