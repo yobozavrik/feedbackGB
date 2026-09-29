@@ -1,0 +1,29 @@
+{
+  "productionImport": {
+    "status": "failed",
+    "businessDate": "2026-09-28",
+    "code": "receipt_publish_timeout",
+    "sqlState": "57014",
+    "httpStatus": 500,
+    "acceptedRuns": 0,
+    "receiptVersions": 0,
+    "productLines": 0,
+    "ingestionEnabled": true,
+    "bulkMigrationApplied": false
+  },
+  "localBulkVerification": {
+    "status": "passed",
+    "engine": "PostgreSQL18.3/PGlite0.5.8",
+    "syntheticOnly": true,
+    "checksPassed": 34,
+    "receipts": 2188,
+    "productLines": 4624,
+    "clientSnapshots": 618,
+    "stores": 26,
+    "sourcePages": 3,
+    "insertDurationMs": 1876,
+    "exactReplayPassed": true,
+    "concurrentTransactionsTested": false,
+    "productionSpeedMeasured": false
+  }
+}

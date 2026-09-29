@@ -1,0 +1,12 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+const sql = readFileSync("supabase/046_poster_receipt_bulk_publication.sql", "utf8");
+describe("forward-only atomic bulk receipt publication", () => {
+  it("replaces only the existing private RPC", () => { expect(sql).toContain("create or replace function feedbackgb.import_poster_receipt_bundle"); expect(sql).not.toMatch(/create table|alter table|drop table|alter role|set statement_timeout|create schema/i); });
+  it("does not change applied migrations or disable source safeguards", () => { expect(sql).toContain("receipt_ingestion_disabled"); expect(sql).toContain("receipt_bundle_incomplete"); expect(sql).toContain("receipt_client_incomplete"); expect(sql).toContain("receipt_unknown_spot"); });
+  it("preserves run/account locking and exact replay", () => { expect(sql.indexOf("'poster-receipt-run:'")).toBeLessThan(sql.indexOf("'poster-receipt-account:'")); expect(sql).toContain("bundle_sha256=v_hash"); expect(sql).toContain("receipt_run_conflict"); });
+  it("uses table-function lateral records instead of repeated composite-expression expansion", () => { expect(sql).toContain("cross join lateral jsonb_populate_record(null::feedbackgb.poster_receipt_versions"); expect(sql).toContain("cross join lateral jsonb_populate_record(null::feedbackgb.poster_receipt_line_versions"); expect(sql.match(/select populated\.\*/g)).toHaveLength(2); expect(sql).not.toContain("select (jsonb_populate_record"); });
+  it("publishes the complete day last in one transaction", () => { expect(sql).toContain("-- Publish LAST."); expect(sql).toContain("set status='accepted'"); expect(sql.match(/commit;/g)).toHaveLength(1); expect(sql.indexOf("insert into feedbackgb.poster_receipt_line_versions")).toBeLessThan(sql.indexOf("set status='accepted'")); });
+  it("keeps repeated ordered product lines and restricted projection allowlists", () => { expect(sql).toContain("with ordinality z(l,ordinality)"); expect(sql).toContain("'source_line_no',z.ordinality::integer"); expect(sql).toContain("jsonb_object_keys(r->'projection')"); expect(sql).toContain("jsonb_object_keys(l)"); });
+  it("does not grant direct table access or browser execute", () => { expect(sql).toContain("grant execute on function feedbackgb.import_poster_receipt_bundle(jsonb) to service_role"); expect(sql).toContain("from public,anon,authenticated,service_role"); expect(sql).not.toMatch(/grant select|grant insert|grant all|disable row level security/i); });
+});

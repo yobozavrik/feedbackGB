@@ -1,0 +1,27 @@
+{
+  "status": "passed",
+  "readOnly": true,
+  "startedAt": "2026-09-29T14:16:28.558Z",
+  "finishedAt": "2026-09-29T14:19:35.166Z",
+  "verifiedCurrentRosterCount": 26,
+  "diagnostics": {
+    "day": "2026-09-28",
+    "sourcePages": 3,
+    "receiptCount": 2188,
+    "productLineCount": 4624,
+    "clientSnapshots": 618,
+    "requests": 624,
+    "sourceBytes": 6533388,
+    "scanStability": "two_identical_scans",
+    "startedAt": "2026-09-29T14:16:28.806Z",
+    "finishedAt": "2026-09-29T14:19:35.065Z"
+  },
+  "limits": [
+    "No Supabase connection or writes, ingestion policy not changed",
+    "Ephemeral encryption namespace/key only, no persistent archive",
+    "Current roster is NOT historical membership proof",
+    "One completed day only; no full Jan1 history validation",
+    "No normalized monetary/time/quantity KPI verification",
+    "Two matching scans do not guarantee no later Poster corrections"
+  ]
+}

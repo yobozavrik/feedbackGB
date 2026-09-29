@@ -1,0 +1,43 @@
+{
+  "date": "2026-09-28",
+  "run_id": "8f458fe3-7ff2-4929-9418-83ff0803cead",
+  "status": "accepted",
+  "publication_attempts": 1,
+  "replayed": false,
+  "cli_exit_code": 0,
+  "source": {
+    "pages": 3,
+    "receipts": 2188,
+    "product_lines": 4624,
+    "client_profiles": 618,
+    "current_roster_stores": 26,
+    "requests": 624,
+    "source_bytes": 6533444,
+    "scan_stability": "two_identical_scans"
+  },
+  "database_readback": {
+    "accepted_receipts": 2188,
+    "product_lines": 4624,
+    "client_snapshots": 618,
+    "raw_source_payloads": 621,
+    "receipt_stores": 26,
+    "raw_sha256_mismatches": 0,
+    "page_metadata_mismatches": 0,
+    "missing_receipts": 0,
+    "header_mapped_field_checks": 72204,
+    "header_mapped_field_mismatches": 0,
+    "line_mapped_field_checks": 110976,
+    "line_mapped_field_mismatches": 0,
+    "receipt_line_count_mismatches": 0,
+    "duplicate_receipt_identities": 0,
+    "missing_receipt_source_refs": 0,
+    "client_link_errors": 0,
+    "client_identity_or_source_mismatches": 0
+  },
+  "limitations": [
+    "One accepted day, not history backfill or nightly cron.",
+    "Monolithic day-verification SQL exceeded authenticator 8-second statement timeout; equivalent checks were split by source page and relation.",
+    "No isolated staging or two-session concurrency acceptance.",
+    "Raw-source parity does not itself validate downstream financial analytics."
+  ]
+}

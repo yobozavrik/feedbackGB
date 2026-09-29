@@ -1,0 +1,22 @@
+import { describe, expect, it } from "vitest";
+import { decryptReceiptArchive, encryptReceiptArchive, ReceiptArchiveContext } from "../posterReceiptArchive";
+const key = Buffer.alloc(32, 17);
+const context: ReceiptArchiveContext = { accountId: "test-account", objectId: "run:1:page:1", endpoint: "transactions.getTransactions" };
+const raw = Buffer.from('{ "large":9007199254740993, "lines":[{"id":1},{"id":1}],"client":{"phone":"PRIVATE"},"unknown":null }\n');
+const archive = () => encryptReceiptArchive(raw, context, key, "key-v1");
+describe("full Poster receipt archive", () => {
+  it("preserves exact bytes including large numbers, repeated lines, whitespace and unknown fields", () => expect(decryptReceiptArchive(archive(), context, key)).toEqual(raw));
+  it("does not expose plaintext in envelope", () => expect(JSON.stringify(archive())).not.toContain("PRIVATE"));
+  it("uses fresh nonces for each encryption", () => expect(archive().nonce).not.toBe(archive().nonce));
+  it.each([16, 31, 33])("rejects invalid key size %s", n => expect(() => encryptReceiptArchive(raw, context, Buffer.alloc(n), "v1")).toThrow("receipt_archive_invalid"));
+  it("rejects empty source", () => expect(() => encryptReceiptArchive(Buffer.alloc(0), context, key, "v1")).toThrow());
+  it("rejects oversized source", () => expect(() => encryptReceiptArchive(Buffer.alloc(32 * 1024 * 1024 + 1), context, key, "v1")).toThrow());
+  it.each(["accountId", "objectId", "endpoint"] as const)("binds %s to ciphertext", field => expect(() => decryptReceiptArchive(archive(), { ...context, [field]: field === "endpoint" ? "clients.getClient" : "other" }, key)).toThrow("receipt_archive_invalid"));
+  it("binds key ID", () => expect(() => decryptReceiptArchive({ ...archive(), keyId: "v2" }, context, key)).toThrow());
+  it("rejects wrong key", () => expect(() => decryptReceiptArchive(archive(), context, Buffer.alloc(32, 99))).toThrow());
+  it.each(["ciphertext", "nonce", "tag"] as const)("rejects tampered %s", field => { const env = archive(); const bytes = Buffer.from(env[field], "base64"); bytes[0] ^= 1; expect(() => decryptReceiptArchive({ ...env, [field]: bytes.toString("base64") }, context, key)).toThrow("receipt_archive_invalid"); });
+  it("rejects non-canonical base64", () => expect(() => decryptReceiptArchive({ ...archive(), tag: "!!!!" }, context, key)).toThrow());
+  it("rejects incompatible format", () => expect(() => decryptReceiptArchive({ ...archive(), format: "v2" } as never, context, key)).toThrow());
+  it("does not leak plaintext on failures", () => { try { decryptReceiptArchive(archive(), context, Buffer.alloc(32)); } catch (e) { expect(String(e)).toBe("Error: receipt_archive_invalid"); } });
+  it("supports client snapshot envelope with separate identity", () => { const c = { ...context, endpoint: "clients.getClient" as const, objectId: "client:1:snapshot:1" }; expect(decryptReceiptArchive(encryptReceiptArchive(raw, c, key, "v2"), c, key)).toEqual(raw); });
+});

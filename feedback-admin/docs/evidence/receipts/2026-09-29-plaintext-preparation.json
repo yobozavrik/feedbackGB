@@ -1,0 +1,19 @@
+{
+  "status": "prepared_only",
+  "databaseWriteRequested": false,
+  "diagnostics": {
+    "day": "2026-09-28",
+    "sourcePages": 3,
+    "receiptCount": 2188,
+    "productLineCount": 4624,
+    "clientSnapshots": 618,
+    "requests": 624,
+    "sourceBytes": 6533406,
+    "scanStability": "two_identical_scans",
+    "startedAt": "2026-09-29T14:41:15.093Z",
+    "finishedAt": "2026-09-29T14:44:23.256Z"
+  },
+  "publication": null,
+  "currentRosterCount": 26,
+  "archiveFormat": "raw-utf8-v1"
+}
