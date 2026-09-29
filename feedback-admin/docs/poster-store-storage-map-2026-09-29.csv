@@ -1,0 +1,27 @@
+spot_id,store_name,storage_id,db_storage_spot_id,source_status
+1,Кварц,3,1,poster_and_db_match
+2,Шкільна,8,2,poster_and_db_match
+3,Герцена,9,3,poster_and_db_match
+4,Проспект,7,4,poster_and_db_match
+5,Гравітон,2,5,poster_and_db_match
+6,Руська,6,6,poster_and_db_match
+7,Комарова 26 круг,21,7,poster_and_db_match
+8,Героїв Майдану,5,8,poster_and_db_match
+9,Ентузіастів,20,9,poster_and_db_match
+10,Садгора,25,10,poster_and_db_match
+11,Сторожинець,26,11,poster_and_db_match
+12,Черемош,30,12,poster_and_db_match
+13,Київ,33,13,poster_and_db_match
+14,Рівненська,36,14,poster_and_db_match
+15,Садова,34,15,poster_and_db_match
+16,Хотинська,39,16,poster_and_db_match
+17,Компас,53,17,poster_and_db_match
+18,Клуб,52,18,poster_and_db_match
+19,Мікрорайон,43,19,poster_and_db_match
+20,Білоруська,44,20,poster_and_db_match
+21,Бульвар,45,21,poster_and_db_match
+22,Квартал,47,22,poster_and_db_match
+23,Роша,55,23,poster_and_db_match
+24,Берегомет,57,24,poster_and_db_match
+25,Щербанюка,58,25,poster_and_db_match
+26,Рута,59,,poster_confirmed_db_link_missing
