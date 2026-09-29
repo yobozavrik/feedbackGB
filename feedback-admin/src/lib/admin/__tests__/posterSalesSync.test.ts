@@ -19,12 +19,16 @@ function posterRow() {
   };
 }
 
+function abortable<T>(promise: Promise<T>) {
+  return Object.assign(promise, { abortSignal: (_signal: AbortSignal) => promise });
+}
+
 function leaseRpc(method: string, args: { p_run_id?: string }) {
-  if (method === "acquire_foodcost_sales_batch_lease") return Promise.resolve({ data: true, error: null });
-  if (method === "release_foodcost_sales_batch_lease") return Promise.resolve({ data: null, error: null });
-  if (method === "acquire_foodcost_sales_sync_lease") return Promise.resolve({ data: true, error: null });
-  if (method === "release_foodcost_sales_sync_lease") return Promise.resolve({ data: null, error: null });
-  if (method === "complete_foodcost_sales_sync_run") return Promise.resolve({ data: args.p_run_id, error: null });
+  if (method === "acquire_foodcost_sales_batch_lease") return abortable(Promise.resolve({ data: true, error: null }));
+  if (method === "release_foodcost_sales_batch_lease") return abortable(Promise.resolve({ data: null, error: null }));
+  if (method === "acquire_foodcost_sales_sync_lease") return abortable(Promise.resolve({ data: true, error: null }));
+  if (method === "release_foodcost_sales_sync_lease") return abortable(Promise.resolve({ data: null, error: null }));
+  if (method === "complete_foodcost_sales_sync_run") return abortable(Promise.resolve({ data: args.p_run_id, error: null }));
   throw new Error(`unexpected_rpc_${method}`);
 }
 
@@ -68,6 +72,19 @@ describe("single-spot Poster sales sync", () => {
     await expect(syncPosterSalesSpotDay("2026-09-23", 1)).rejects.toThrow("invalid_count");
     expect(mocked.getServerSupabase).toHaveBeenCalledOnce();
     expect(from).not.toHaveBeenCalled();
+  });
+
+  it("preserves a source failure when bounded lease cleanup also fails", async () => {
+    mocked.posterRequest.mockResolvedValueOnce([{ spot_id: "1" }])
+      .mockResolvedValueOnce([{ ...posterRow(), count: "NaN" }]);
+    const rpc = vi.fn((method: string) => method === "acquire_foodcost_sales_sync_lease"
+      ? abortable(Promise.resolve({ data: true, error: null }))
+      : abortable(Promise.reject(new Error("release_failed"))));
+    mocked.getServerSupabase.mockReturnValue({ rpc, from: vi.fn() });
+    await expect(syncPosterSalesSpotDay("2026-09-23", 1)).rejects.toThrow("invalid_count");
+    expect(rpc.mock.calls.map(([method]) => method)).toEqual([
+      "acquire_foodcost_sales_sync_lease", "release_foodcost_sales_sync_lease",
+    ]);
   });
 
   it("marks a run completed only after fact count and sums are read back", async () => {
@@ -166,6 +183,29 @@ describe("single-spot Poster sales sync", () => {
     expect(result).toMatchObject({ runId: "existing-run", unchanged: true,
       sourceFetchedAt: "2026-09-24T00:00:00Z" });
     expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("rechecks completed data under the cell lease in missing-only mode", async () => {
+    const rpc = vi.fn(leaseRpc);
+    const db = {
+      rpc,
+      from(table: string) {
+        expect(table).toBe("foodcost_sales_runs");
+        const query = {
+          select: () => query, eq: () => query, order: () => query, limit: () => query,
+          maybeSingle: async () => ({ data: { id: "raced-completed-run" }, error: null }),
+        };
+        return query;
+      },
+    };
+    mocked.getServerSupabase.mockReturnValue(db);
+    const result = await syncPosterSalesSpotDay("2026-09-23", 1, new Set([1]), undefined,
+      { missingOnly: true });
+    expect(result).toMatchObject({ runId: "raced-completed-run", alreadyCompleted: true });
+    expect(rpc.mock.calls.map(([method]) => method)).toEqual([
+      "acquire_foodcost_sales_sync_lease", "release_foodcost_sales_sync_lease",
+    ]);
+    expect(mocked.posterRequest).not.toHaveBeenCalled();
   });
 
   it("starts a new version when Poster changes historical profit but not paid sales", async () => {

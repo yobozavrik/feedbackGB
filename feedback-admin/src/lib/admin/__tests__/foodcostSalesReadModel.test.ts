@@ -28,7 +28,7 @@ describe("foodcost snapshot read model", () => {
       run(), run({ id: "run-2", spot_id: 2, payed_sum_minor: 30000, product_profit_minor: 24000,
         product_profit_netto_minor: 25000, source_fetched_at: "2026-09-24T02:00:00Z" }),
     ], [fact(), fact({ run_id: "run-2", payed_sum_minor: 30000,
-      product_profit_minor: 24000, product_profit_netto_minor: 25000 })]);
+      product_profit_minor: 24000, product_profit_netto_minor: 25000 })], { includeCategoriesByDate: true });
     expect(result).toMatchObject({ status: "complete", expectedCells: 2, completedCells: 2,
       sourceFetchedAt: "2026-09-24T00:59:00Z" });
     expect(result.metrics?.payedSumMinor).toBe(40000);
@@ -41,6 +41,11 @@ describe("foodcost snapshot read model", () => {
     expect(result.productsBySpot?.map((row) => [row.spotId, row.products[0]?.payedSumMinor]))
       .toEqual([[1, 10000], [2, 30000]]);
     expect(result.productsByDate?.[0].products[0].payedSumMinor).toBe(40000);
+    expect(result.categoriesByDate?.[0].categories[0]).toMatchObject({ categoryId: 7,
+      payedSumMinor: 40000, foodCostPercent: 25, nettoFoodCostPercent: 21.25 });
+    expect(result.categoriesByDate?.[0].productIdsByCategory).toEqual([
+      { categoryId: 7, productIds: [121] },
+    ]);
   });
 
   it("never presents partial network metrics when a spot is missing", () => {
@@ -48,7 +53,7 @@ describe("foodcost snapshot read model", () => {
     expect(result).toMatchObject({ status: "incomplete", completedCells: 1,
       missing: [{ businessDate: date, spotId: 2, reason: "missing_run" }],
       metrics: null, categories: null, products: null,
-      productsBySpot: null, productsByDate: null });
+      productsBySpot: null, productsByDate: null, categoriesByDate: null });
   });
 
   it("selects the latest completed version and ignores running/failed runs", () => {

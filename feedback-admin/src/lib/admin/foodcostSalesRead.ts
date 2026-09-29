@@ -20,20 +20,21 @@ function validDate(value: string): boolean {
 
 /** Read-only bounded loader. Check run coverage before fetching any facts, so
  * a longer period without backfill never becomes a misleading partial total. */
-export async function loadFoodcostSalesPeriod(businessDates: readonly string[], spotIds: readonly number[]) {
+export async function loadFoodcostSalesPeriod(businessDates: readonly string[], spotIds: readonly number[],
+  asOf = new Date().toISOString(), options: { includeCategoriesByDate?: boolean } = {}) {
   if (!businessDates.length || businessDates.length > 60 ||
     new Set(businessDates).size !== businessDates.length || businessDates.some((date) => !validDate(date)) ||
     !spotIds.length || spotIds.length > 100 ||
     new Set(spotIds).size !== spotIds.length ||
-    spotIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+    spotIds.some((id) => !Number.isSafeInteger(id) || id <= 0) ||
+    !Number.isFinite(Date.parse(asOf)) || new Date(asOf).toISOString() !== asOf) {
     throw new Error("invalid_sales_read_scope");
   }
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("service_role_missing");
   const db = getServerSupabase();
   if (!db) throw new Error("supabase_missing");
 
-  // Fix an upper bound so a newly completed run cannot shift offset pages.
-  const asOf = new Date().toISOString();
+  // Fix one upper bound for both equal periods, so new runs cannot shift either read.
   const runs: (SalesRunRead & FoodcostOverviewRun)[] = [];
   for (let pageNo = 0; pageNo < MAX_RUN_PAGES; pageNo++) {
     const page = await db.from("foodcost_sales_runs")
@@ -64,6 +65,7 @@ export async function loadFoodcostSalesPeriod(businessDates: readonly string[], 
     completedCells: coverage.completedCells, missing: coverage.missing,
     sourceFetchedAt: null, newestSourceFetchedAt: null,
     metrics: null, categories: null, products: null, productsBySpot: null, productsByDate: null,
+    categoriesByDate: null,
   };
 
   const facts: SalesFactRead[] = [];
@@ -89,9 +91,9 @@ export async function loadFoodcostSalesPeriod(businessDates: readonly string[], 
     for (const group of groups) facts.push(...group);
   }
 
-  return buildFoodcostSalesReadModel(businessDates, spotIds, [...latest.values()], facts);
+  return buildFoodcostSalesReadModel(businessDates, spotIds, [...latest.values()], facts, options);
 }
 
-export async function loadFoodcostSalesDay(businessDate: string, spotIds: readonly number[]) {
-  return loadFoodcostSalesPeriod([businessDate], spotIds);
+export async function loadFoodcostSalesDay(businessDate: string, spotIds: readonly number[], asOf?: string) {
+  return loadFoodcostSalesPeriod([businessDate], spotIds, asOf);
 }

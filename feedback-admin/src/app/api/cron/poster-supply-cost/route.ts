@@ -6,18 +6,23 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
+}
+
 export async function GET(request: Request) {
-  const auth = checkCronAuth(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  // Preview shares the production database. Never let its cron write there.
-  if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") {
-    return NextResponse.json({ ok: true, skipped: true, reason: "non_production_environment" });
+  if (process.env.VERCEL_ENV !== "production") {
+    return json({ ok: true, skipped: true, reason: "non_production_environment" });
   }
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return json({ error: "cron_secret_not_configured" }, 503);
+  const auth = checkCronAuth(request);
+  if (!auth.ok) return json({ error: auth.error }, auth.status);
   try {
     const result = await syncPosterSupplyCosts();
     console.info(JSON.stringify({ event: "poster_supply_cost_sync", status: result.status,
       window: result.window, expected: result.expected, remaining: result.remaining }));
-    return NextResponse.json({ ok: true, ...result });
+    return json({ ok: true, ...result });
   } catch (error) {
     const code = error instanceof Error ? error.message : "supply_sync_failed";
     const safeCode = code === "schema_missing" ? code : "supply_sync_failed";
@@ -27,6 +32,6 @@ export async function GET(request: Request) {
         "incomplete_supply_document", "incomplete_supply_snapshot"].includes(code)
       ? code : "unexpected_error";
     console.error(JSON.stringify({ event: "poster_supply_cost_sync_failed", code: diagnosticCode }));
-    return NextResponse.json({ ok: false, error: safeCode }, { status: safeCode === "schema_missing" ? 503 : 500 });
+    return json({ ok: false, error: safeCode }, safeCode === "schema_missing" ? 503 : 500);
   }
 }

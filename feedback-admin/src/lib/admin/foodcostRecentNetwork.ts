@@ -9,16 +9,22 @@ import { lastClosedKyivDates, type FoodcostPeriodDays } from "./foodcostPeriod";
  * Only the CURRENT Poster/v_stores roster is known. This deliberately does not
  * claim historical network completeness for 7/14/30/60-day windows.
  */
-export async function loadVerifiedCurrentFoodcostSpotIds(): Promise<number[]> {
+export async function loadVerifiedCurrentFoodcostSpotIds(signal?: AbortSignal): Promise<number[]> {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("service_role_missing");
   const token = process.env.POSTER_TOKEN;
   if (!token) throw new Error("poster_token_missing");
   const db = getServerSupabase();
   if (!db) throw new Error("supabase_missing");
 
+  const storeQuery = db.from("v_stores").select("id").order("id");
+  const boundedStoreQuery = signal
+    ? (typeof storeQuery.abortSignal === "function"
+      ? storeQuery.abortSignal(signal) : (() => { throw new Error("supabase_abort_unsupported"); })())
+    : storeQuery;
   const [posterSpots, stores] = await Promise.all([
-    posterRequest<unknown>("access.getSpots", {}, token),
-    db.from("v_stores").select("id").order("id"),
+    signal ? posterRequest<unknown>("access.getSpots", {}, token, signal)
+      : posterRequest<unknown>("access.getSpots", {}, token),
+    boundedStoreQuery,
   ]);
   if (stores.error) throw new Error("foodcost_roster_unavailable");
   const spotIds = posterSpotIds(posterSpots);
@@ -62,7 +68,7 @@ function currentPosterCategoryNames(value: unknown): Map<number, string> {
 
 /** Fact-backed breakdown; never return partial category or product metrics. */
 export async function loadFoodcostRecentBreakdown(now = new Date(), selectedSpotId?: number,
-  periodDays: 3 | FoodcostPeriodDays = 3) {
+  periodDays: 3 | FoodcostPeriodDays = 3, readOptions: { asOf?: string } = {}) {
   const verifiedSpotIds = await loadVerifiedCurrentFoodcostSpotIds();
   if (selectedSpotId !== undefined &&
     (!Number.isSafeInteger(selectedSpotId) || !verifiedSpotIds.includes(selectedSpotId))) {
@@ -70,7 +76,8 @@ export async function loadFoodcostRecentBreakdown(now = new Date(), selectedSpot
   }
   const spotIds = selectedSpotId === undefined ? verifiedSpotIds : [selectedSpotId];
   const dates = periodDays === 3 ? lastThreeClosedKyivDates(now) : lastClosedKyivDates(periodDays, now);
-  const snapshot = await loadFoodcostSalesPeriod(dates, spotIds);
+  const snapshot = await loadFoodcostSalesPeriod(dates, spotIds, readOptions.asOf,
+    { includeCategoriesByDate: true });
   // The sales API omits category names in this account. Current Poster menu is
   // only a display fallback; it never rewrites historical category IDs or sums.
   const currentNames = snapshot.status === "complete"

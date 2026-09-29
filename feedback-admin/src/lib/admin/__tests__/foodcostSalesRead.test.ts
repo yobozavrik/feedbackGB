@@ -6,9 +6,9 @@ vi.mock("@/lib/supabase", () => ({ getServerSupabase: mocked.getServerSupabase }
 import { loadFoodcostSalesDay, loadFoodcostSalesPeriod } from "../foodcostSalesRead";
 import { lastClosedKyivDates } from "../foodcostPeriod";
 
-function query(rows: unknown[]) {
+function query(rows: unknown[], lteCalls: unknown[][] = []) {
   const chain = {
-    eq: () => chain, in: () => chain, lte: () => chain, order: () => chain,
+    eq: () => chain, in: () => chain, lte: (...args: unknown[]) => { lteCalls.push(args); return chain; }, order: () => chain,
     range: async () => ({ data: rows, error: null }),
   };
   return { select: () => chain };
@@ -34,6 +34,8 @@ describe("bounded read-only foodcost loader", () => {
       .rejects.toThrow("invalid_sales_read_scope");
     await expect(loadFoodcostSalesPeriod(Array.from({ length: 61 }, (_, index) =>
       new Date(Date.UTC(2026, 8, 24 - index)).toISOString().slice(0, 10)), [1]))
+      .rejects.toThrow("invalid_sales_read_scope");
+    await expect(loadFoodcostSalesPeriod(["2026-09-23"], [1], "not-a-timestamp"))
       .rejects.toThrow("invalid_sales_read_scope");
     expect(mocked.getServerSupabase).not.toHaveBeenCalled();
   });
@@ -66,6 +68,8 @@ describe("bounded read-only foodcost loader", () => {
   });
 
   it("reads only latest completed facts and recomputes the two methods", async () => {
+    const lteCalls: unknown[][] = [];
+    const asOf = "2026-09-25T00:30:00.000Z";
     const from = vi.fn((table: string) => {
       if (table === "foodcost_sales_runs") return query([{
         id: "run-1", business_date: "2026-09-23", spot_id: 1, status: "completed",
@@ -73,7 +77,7 @@ describe("bounded read-only foodcost loader", () => {
         completed_at: "2026-09-24T01:00:00Z", source_fetched_at: "2026-09-24T00:59:00Z",
         source_row_count: 1, payed_sum_minor: "10000", product_profit_minor: "6000",
         product_profit_netto_minor: "6500",
-      }]);
+      }], lteCalls);
       if (table === "foodcost_sales_facts") return query([{
         run_id: "run-1", source_row_no: 0, product_id: 121, modification_id: 0,
         category_id_snapshot: 7, product_name_snapshot: "Пельмені зі свинини",
@@ -84,10 +88,11 @@ describe("bounded read-only foodcost loader", () => {
       throw new Error("unexpected_table");
     });
     mocked.getServerSupabase.mockReturnValue({ from });
-    const result = await loadFoodcostSalesDay("2026-09-23", [1]);
+    const result = await loadFoodcostSalesDay("2026-09-23", [1], asOf);
     expect(result).toMatchObject({ status: "complete", completedCells: 1 });
     expect(result.metrics?.foodCostPercent).toBe(40);
     expect(result.metrics?.nettoFoodCostPercent).toBe(35);
+    expect(lteCalls).toContainEqual(["completed_at", asOf]);
     expect(from).toHaveBeenCalledTimes(2);
   });
 

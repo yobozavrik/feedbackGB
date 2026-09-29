@@ -5,13 +5,17 @@ export class PosterApiError extends Error {
 }
 
 /** Server-only Poster request. Never include the URL or Poster body in errors: the URL contains the token. */
-export async function posterRequest<T>(method: string, params: Record<string, string>, token: string): Promise<T> {
+export async function posterRequest<T>(method: string, params: Record<string, string>, token: string,
+  signal?: AbortSignal): Promise<T> {
   const url = new URL(method, POSTER_API);
   url.searchParams.set("token", token);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   let response: Response;
   try {
-    response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20000) });
+    const requestSignal = signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(20000)])
+      : AbortSignal.timeout(20000);
+    response = await fetch(url, { cache: "no-store", signal: requestSignal });
   } catch {
     throw new PosterApiError("poster_unavailable");
   }

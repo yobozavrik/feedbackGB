@@ -63,7 +63,7 @@ describe("current-roster recent network overview", () => {
   it("uses the same verified roster for fact-backed category and product breakdowns", async () => {
     const result = await loadFoodcostRecentBreakdown(new Date("2026-09-24T12:00:00Z"));
     expect(mocked.loadFoodcostSalesPeriod).toHaveBeenCalledWith(
-      ["2026-09-23", "2026-09-22", "2026-09-21"], [1, 2]);
+      ["2026-09-23", "2026-09-22", "2026-09-21"], [1, 2], undefined, { includeCategoriesByDate: true });
     expect(result).toMatchObject({ status: "complete", spotCount: 2,
       dateFrom: "2026-09-21", dateTo: "2026-09-23", historicalRosterVerified: false });
     expect(result.categories?.[0]).toMatchObject({ displayName: "Напівфабрикати",
@@ -87,10 +87,18 @@ describe("current-roster recent network overview", () => {
   it("scopes one store only after checking the current Poster/v_stores roster", async () => {
     const result = await loadFoodcostRecentBreakdown(new Date("2026-09-24T12:00:00Z"), 2);
     expect(mocked.loadFoodcostSalesPeriod).toHaveBeenCalledWith(
-      ["2026-09-23", "2026-09-22", "2026-09-21"], [2]);
+      ["2026-09-23", "2026-09-22", "2026-09-21"], [2], undefined, { includeCategoriesByDate: true });
     expect(result).toMatchObject({ spotCount: 1, spotIds: [2] });
     await expect(loadFoodcostRecentBreakdown(new Date("2026-09-24T12:00:00Z"), 999))
       .rejects.toThrow("invalid_foodcost_spot");
+  });
+
+  it("passes the shared asOf boundary and category option to the fact read", async () => {
+    const asOf = "2026-09-24T10:00:00.000Z";
+    await loadFoodcostRecentBreakdown(new Date("2026-09-24T12:00:00Z"), 2, 7, { asOf });
+    expect(mocked.loadFoodcostSalesPeriod).toHaveBeenCalledWith(
+      ["2026-09-23", "2026-09-22", "2026-09-21", "2026-09-20", "2026-09-19", "2026-09-18", "2026-09-17"],
+      [2], asOf, { includeCategoriesByDate: true });
   });
 
   it("keeps categories and products unavailable when fact coverage is incomplete", async () => {

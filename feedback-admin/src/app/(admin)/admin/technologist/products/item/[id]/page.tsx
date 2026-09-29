@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { Alert, Button } from "antd";
+import { Alert, Button, Space } from "antd";
 import Link from "next/link";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 import { SESSION_COOKIE, isSuperAdmin, verifySession } from "@/lib/session";
@@ -9,13 +9,14 @@ import { UNCATEGORIZED_ID, productCategoryHref, type CatalogProduct } from "@/li
 import { getPosterProductPhoto } from "@/lib/admin/posterProductPhotos";
 import { parseFoodcostSpotId } from "@/lib/admin/foodcostScope";
 import { parseFoodcostPeriodDays } from "@/lib/admin/foodcostPeriod";
+import { foodcostMatrixReturnHref, parseFoodcostMatrixCategoryKey, parseFoodcostMatrixMethod } from "@/lib/admin/foodcostMatrixUrl";
 import { ProductDetail } from "./product-detail-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProductDetailPage({ params, searchParams }: {
   params: { id: string }; searchParams?: { tab?: string | string[]; spot_id?: string | string[];
-    days?: string | string[] };
+    days?: string | string[]; method?: string | string[]; category_id?: string | string[]; return_to?: string | string[] };
 }) {
   const session = await verifySession(cookies().get(SESSION_COOKIE)?.value);
   if (!session || !isSuperAdmin(session.role)) redirect("/admin");
@@ -46,8 +47,16 @@ export default async function ProductDetailPage({ params, searchParams }: {
   let days;
   try { days = parseFoodcostPeriodDays(rawDays); }
   catch { return <AdminPageContainer title="Картка продукту"><Alert type="warning" showIcon message="Некоректний період" /></AdminPageContainer>; }
+  const rawMethod = Array.isArray(searchParams?.method) ? searchParams.method[0] : searchParams?.method;
+  const rawCategory = Array.isArray(searchParams?.category_id) ? searchParams.category_id[0] : searchParams?.category_id;
+  const returnTo = Array.isArray(searchParams?.return_to) ? searchParams.return_to[0] : searchParams?.return_to;
+  const returnHref = returnTo === "matrix" ? foodcostMatrixReturnHref({ days, spotId,
+    method: parseFoodcostMatrixMethod(rawMethod), categoryKey: parseFoodcostMatrixCategoryKey(rawCategory) }) : null;
   const initialTab = ["stock", "characteristics", "tech", "foodcost", "stages"].includes(tab ?? "") ? tab : "stock";
-  return <AdminPageContainer title={product.name} subTitle="Картка продукту з товарного каталогу POS" extra={<Link href={categoryHref}><Button>До категорії</Button></Link>}>
+  return <AdminPageContainer title={product.name} subTitle="Картка продукту з товарного каталогу POS" extra={<Space>
+    {returnHref && <Link href={returnHref}><Button>До матриці</Button></Link>}
+    <Link href={categoryHref}><Button>До категорії</Button></Link>
+  </Space>}>
     <ProductDetail product={product} posterPhoto={posterPhoto} photoError={photoError} initialTab={initialTab} spotId={spotId} initialDays={days} />
   </AdminPageContainer>;
 }

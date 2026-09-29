@@ -46,6 +46,8 @@ export type SalesReadModel = {
   products: ProductSales[] | null;
   productsBySpot: { spotId: number; products: ProductSales[] }[] | null;
   productsByDate: { businessDate: string; products: ProductSales[] }[] | null;
+  categoriesByDate: { businessDate: string; categories: CategorySales[];
+    productIdsByCategory: { categoryId: number | null; productIds: number[] }[] }[] | null;
 };
 
 function money(value: number | string | null, allowNull = false): number | null {
@@ -83,6 +85,7 @@ function toFact(row: SalesFactRead): PosterSalesFact {
 export function buildFoodcostSalesReadModel(
   businessDates: readonly string[], spotIds: readonly number[],
   runs: readonly SalesRunRead[], facts: readonly SalesFactRead[],
+  options: { includeCategoriesByDate?: boolean } = {},
 ): SalesReadModel {
   if (!businessDates.length || !spotIds.length ||
     new Set(businessDates).size !== businessDates.length || new Set(spotIds).size !== spotIds.length) {
@@ -145,7 +148,7 @@ export function buildFoodcostSalesReadModel(
     status: "incomplete", expectedCells: businessDates.length * spotIds.length,
     completedCells, missing, sourceFetchedAt: null, newestSourceFetchedAt: null,
     metrics: null, categories: null, products: null,
-    productsBySpot: null, productsByDate: null,
+    productsBySpot: null, productsByDate: null, categoriesByDate: null,
   };
   const categoryNames = new Map<number | null, Set<string>>();
   for (const row of selectedFacts) {
@@ -169,5 +172,16 @@ export function buildFoodcostSalesReadModel(
       products: groupProductSales(factsBySpot.get(spotId) ?? []) })),
     productsByDate: businessDates.map((businessDate) => ({ businessDate,
       products: groupProductSales(factsByDate.get(businessDate) ?? []) })),
+    categoriesByDate: options.includeCategoriesByDate ? businessDates.map((businessDate) => {
+      const facts = factsByDate.get(businessDate) ?? [];
+      const productIds = new Map<number | null, Set<number>>();
+      for (const fact of facts) {
+        const ids = productIds.get(fact.categoryId) ?? new Set<number>();
+        ids.add(fact.productId);
+        productIds.set(fact.categoryId, ids);
+      }
+      return { businessDate, categories: groupCategorySales(facts),
+        productIdsByCategory: [...productIds].map(([categoryId, ids]) => ({ categoryId, productIds: [...ids] })) };
+    }) : null,
   };
 }
