@@ -21,6 +21,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
 import { NotificationsBell } from "@/components/admin/NotificationsBell";
+import { CalendarReminders } from "@/components/admin/CalendarReminders";
 import { ThemeModeSwitch } from "@/components/admin/ThemeModeSwitch";
 import {
   adminBreadcrumbNames,
@@ -286,6 +287,7 @@ export function AdminShell({ children, user }: AdminShellProps) {
       )}
     >
       <App>
+        <CalendarReminders />
         <div className="admin-shell__content">{children}</div>
       </App>
     </ProLayout>

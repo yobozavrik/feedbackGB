@@ -66,6 +66,7 @@ const adminGroups: AdminGroupDef[] = [
     items: [
       { path: "/admin", name: "Огляд", icon: createElement(DashboardOutlined) },
       { path: "/admin/tasks", name: "Мої завдання", icon: createElement(InboxOutlined) },
+      { path: "/admin/calendar", name: "Календар", icon: createElement(CalendarOutlined) },
       { path: "/admin/photo-report", name: "Фотозвіт", icon: createElement(CameraOutlined) },
     ],
   },
@@ -147,6 +148,7 @@ export function buildAdminRoute(isSuperAdmin: boolean): ProLayoutProps["route"] 
 export const adminBreadcrumbNames: Record<string, string> = {
   "/admin": "Огляд",
   "/admin/tasks": "Мої завдання",
+  "/admin/calendar": "Календар",
   "/admin/users": "Співробітники",
   "/admin/audit": "Журнал дій",
   "/admin/tools": "Інструменти",

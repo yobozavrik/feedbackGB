@@ -142,7 +142,7 @@ export default async function AdminPage() {
 
   return (
     <AdminPageContainer
-      title="Огляд"
+      title={sess ? `Вітаємо, ${sess.full_name}!` : "Огляд"}
       subTitle="Стрічка фідбеку та швидкі дії адміністратора"
       extra={
         sess ? (
