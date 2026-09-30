@@ -8,10 +8,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { StoreAnalyticsOverview, StoreAnalyticsWindow } from "@/lib/admin/storeAnalyticsOverview";
 import { buildStoreAnalyticsRanking } from "@/lib/admin/storeAnalyticsRanking";
 import type { StoreCategoryProductAnalytics } from "@/lib/admin/storeCategoryProductAnalytics";
+import type { StoreAnalyticsComparison } from "@/lib/admin/storeAnalyticsComparison";
 import type { StoreRow } from "./page";
 
 type Payload = { data: StoreAnalyticsOverview };
 type CatalogPayload = { data: StoreCategoryProductAnalytics };
+type ComparisonPayload = { data: StoreAnalyticsComparison };
 type View = "overview" | "stores" | "categories" | "products" | "penetration" | "comparison" | "quality";
 const PERIODS = [
   ["7d", "7 завершених днів"], ["14d", "14 завершених днів"],
@@ -60,6 +62,9 @@ export function StoreAnalyticsWorkspace({ stores }: { stores: StoreRow[] }) {
   const [catalog, setCatalog] = useState<StoreCategoryProductAnalytics | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [comparisonData, setComparisonData] = useState<StoreAnalyticsComparison | null>(null);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
 
   const endpointQuery = useMemo(() => {
     const params = new URLSearchParams(search.toString());
@@ -108,6 +113,20 @@ export function StoreAnalyticsWorkspace({ stores }: { stores: StoreRow[] }) {
     return () => controller.abort();
   }, [catalogQuery, view]);
 
+  useEffect(() => {
+    if (view !== "comparison") return;
+    const controller = new AbortController(); setComparisonLoading(true); setComparisonError(null);
+    fetch(`/api/admin/stores/analytics/comparison?${catalogQuery}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error ?? "store_comparison_unavailable");
+        return body as ComparisonPayload;
+      }).then((body) => setComparisonData(body.data)).catch((reason: unknown) => {
+        if ((reason as { name?: string }).name !== "AbortError") setComparisonError(reason instanceof Error ? reason.message : "store_comparison_unavailable");
+      }).finally(() => { if (!controller.signal.aborted) setComparisonLoading(false); });
+    return () => controller.abort();
+  }, [catalogQuery, view]);
+
   const nextUrl = (changes: Record<string, string | null>) => {
     const params = new URLSearchParams(search.toString()); params.set("tab", "analytics");
     for (const [key, value] of Object.entries(changes)) value === null ? params.delete(key) : params.set(key, value);
@@ -116,6 +135,15 @@ export function StoreAnalyticsWorkspace({ stores }: { stores: StoreRow[] }) {
   const update = (changes: Record<string, string | null>) => router.replace(nextUrl(changes));
   const drill = (changes: Record<string, string | null>) => router.push(nextUrl(changes));
   const range = period === "custom" ? [search.get("from"), search.get("to")] : [null, null];
+  const comparisonMode = search.get("comparison") ?? "previous";
+  const comparisonRange = comparisonMode === "custom" ? [search.get("compare_from"), search.get("compare_to")] : [null, null];
+  const defaultCustomComparison = () => {
+    const currentFrom = range[0] ? dayjs(range[0]) : dayjs().subtract(7, "day");
+    const currentTo = range[1] ? dayjs(range[1]) : dayjs().subtract(1, "day");
+    const days = Math.max(1, currentTo.diff(currentFrom, "day") + 1);
+    const to = currentFrom.subtract(1, "day");
+    return [to.subtract(days - 1, "day").format("YYYY-MM-DD"), to.format("YYYY-MM-DD")];
+  };
 
   return <Space direction="vertical" size="middle" className="w-full">
     <Card size="small">
@@ -133,9 +161,19 @@ export function StoreAnalyticsWorkspace({ stores }: { stores: StoreRow[] }) {
             placeholder="Уся мережа" options={stores.filter((store) => store.is_active).map((store) => ({ value: store.id, label: store.name }))}
             onChange={(ids: number[]) => update({ spot_ids: ids.length ? [...ids].sort((a, b) => a - b).join(",") : "all" })} /></label>
         <label><Typography.Text type="secondary" className="mb-1 block text-xs">Порівняння</Typography.Text>
-          <Select value={search.get("comparison") ?? "previous"} className="min-w-48" options={[
-            { value: "previous", label: "Попередній період" }, { value: "off", label: "Без порівняння" },
-          ]} onChange={(value) => update({ comparison: value })} /></label>
+          <Select value={comparisonMode} className="min-w-48" options={[
+            { value: "previous", label: "Попередній період" }, { value: "custom", label: "Свій період" },
+            { value: "off", label: "Без порівняння" },
+          ]} onChange={(value) => {
+            const defaults = value === "custom" ? defaultCustomComparison() : [null, null];
+            update({ comparison: value, compare_from: defaults[0], compare_to: defaults[1] });
+          }} /></label>
+        {comparisonMode === "custom" && <label><Typography.Text type="secondary" className="mb-1 block text-xs">Період порівняння</Typography.Text>
+          <DatePicker.RangePicker allowClear={false} value={comparisonRange[0] && comparisonRange[1]
+            ? [dayjs(comparisonRange[0]), dayjs(comparisonRange[1])] : null}
+            onChange={(value: null | [Dayjs | null, Dayjs | null]) => value?.[0] && value[1] && update({
+              comparison: "custom", compare_from: value[0].format("YYYY-MM-DD"), compare_to: value[1].format("YYYY-MM-DD"),
+            })} /></label>}
       </div>
     </Card>
     <Tabs activeKey={view} onChange={(key) => update({ view: key,
@@ -145,10 +183,16 @@ export function StoreAnalyticsWorkspace({ stores }: { stores: StoreRow[] }) {
     })} items={[
       { key: "overview", label: "Огляд" }, { key: "stores", label: "Магазини" },
       { key: "categories", label: "Категорії" }, { key: "products", label: "Товари" },
-      { key: "penetration", label: "Проникнення", disabled: true }, { key: "comparison", label: "Порівняння", disabled: true },
+      { key: "penetration", label: "Проникнення", disabled: true }, { key: "comparison", label: "Порівняння" },
       { key: "quality", label: "Якість даних" },
     ]} />
-    {["categories", "products"].includes(view) ? catalogLoading ? <Skeleton active paragraph={{ rows: 8 }} />
+    {view === "comparison" ? comparisonLoading ? <Skeleton active paragraph={{ rows: 8 }} />
+      : comparisonError ? <Alert type="error" showIcon message="Порівняння недоступне"
+        description={comparisonError === "store_comparison_schema_missing" ? "Потрібні міграції 050–053." : "Не вдалося прочитати перевірені агрегати."} />
+      : comparisonData ? <ComparisonView data={comparisonData}
+        onSelectStore={(spotId) => drill({ view: "stores", spot_ids: String(spotId) })}
+        onSelectCategory={(categoryId) => drill({ view: "products", category_id: categoryId, page: "1" })} /> : <Empty />
+      : ["categories", "products"].includes(view) ? catalogLoading ? <Skeleton active paragraph={{ rows: 8 }} />
       : catalogError ? <Alert type="error" showIcon message="Аналітика категорій і товарів недоступна"
         description={catalogError === "store_catalog_schema_missing" ? "Потрібно застосувати міграцію 052." : "Не вдалося прочитати перевірені агрегати."} />
       : catalog ? view === "categories" ? <CategoriesView data={catalog} onSelect={(categoryId) => drill({
@@ -167,6 +211,74 @@ export function StoreAnalyticsWorkspace({ stores }: { stores: StoreRow[] }) {
         : view === "stores" ? <StoresView data={data} stores={stores} onSelectStore={(spotId) => drill({ spot_ids: String(spotId) })}
           onAllStores={() => update({ spot_ids: "all" })} />
         : <Overview data={data} onSelectStore={(spotId) => drill({ view: "stores", spot_ids: String(spotId) })} /> : <Empty />}
+  </Space>;
+}
+
+function ComparisonView({ data, onSelectStore, onSelectCategory }: { data: StoreAnalyticsComparison;
+  onSelectStore: (spotId: number) => void; onSelectCategory: (categoryId: string) => void }) {
+  if (data.status !== "complete") {
+    const reasons: Record<Exclude<StoreAnalyticsComparison["reason"], null>, string> = {
+      current_incomplete: "Поточний період неповний.", comparison_missing: "Оберіть період порівняння.",
+      comparison_incomplete: "Період порівняння неповний.", catalog_incomplete: "Категорії за один із періодів неповні.",
+      source_mismatch: "Джерела огляду та категорій мають різний scope або asOf.",
+    };
+    return <Alert type="warning" showIcon message="Порівняння не розраховане"
+      description={data.reason ? reasons[data.reason] : "Немає перевірених даних."} />;
+  }
+  const storeChart = data.storeContributions.slice(0, 12).map((row) => ({
+    name: row.name, delta: Number(row.deltaRevenueMinor) / 100,
+    direction: BigInt(row.deltaRevenueMinor) >= 0n ? "Зростання" : "Падіння",
+  }));
+  return <Space direction="vertical" size="middle" className="w-full">
+    <Alert type="info" showIcon message="Це не like-for-like порівняння"
+      description="Порівнюється поточний вибраний склад магазинів. Історичні інтервали роботи точок ще не підтверджені." />
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <Card><Statistic title={`${data.current.from} — ${data.current.to}`} value={formatMinor(data.current.revenueMinor)} /></Card>
+      <Card><Statistic title={`${data.comparison.from} — ${data.comparison.to}`} value={formatMinor(data.comparison.revenueMinor)} /></Card>
+      <Card><Statistic title="Зміна виручки" value={formatMinor(data.deltaRevenueMinor)}
+        valueStyle={{ color: BigInt(data.deltaRevenueMinor ?? "0") >= 0n ? "#389e0d" : "#cf1322" }} /></Card>
+      <Card><Statistic title="Зміна, %" value={data.deltaRevenuePercent === null ? "—" : `${data.deltaRevenuePercent}%`} /></Card>
+    </div>
+    <Card size="small"><Typography.Text>
+      Виручка/день: {formatMinorDecimal(data.current.revenuePerDayMinor)} проти {formatMinorDecimal(data.comparison.revenuePerDayMinor)}.
+      Абсолютні підсумки та денний темп показані окремо.
+    </Typography.Text></Card>
+    {!data.reconciliation.storeContributionsMatch && <Alert type="error" showIcon message="Внески магазинів не сходяться з загальною зміною"
+      description="Графік і таблицю внесків приховано." />}
+    {data.reconciliation.storeContributionsMatch && <>
+      <Card title="Найбільші внески магазинів у зміну виручки"><Bar data={storeChart} xField="delta" yField="name" colorField="direction"
+        scale={{ color: { range: ["#52c41a", "#ff4d4f"] } }} height={360}
+        axis={{ x: { title: "Δ, ₴" } }} tooltip={{ items: [{ field: "delta", name: "Зміна" }] }} /></Card>
+      <Card title="Внески магазинів"><Table rowKey="id" dataSource={data.storeContributions} pagination={false} scroll={{ x: 900 }}
+        onRow={(row) => ({ onClick: () => onSelectStore(Number(row.id)), className: "cursor-pointer" })}
+        columns={[
+          { title: "Магазин", dataIndex: "name", fixed: "left" as const, width: 220,
+            render: (value: string, row) => <Button type="link" className="h-auto p-0" onClick={(event) => {
+              event.stopPropagation(); onSelectStore(Number(row.id));
+            }}>{value}</Button> },
+          { title: "Поточний", dataIndex: "currentRevenueMinor", align: "right" as const, render: formatMinor },
+          { title: "Попередній", dataIndex: "comparisonRevenueMinor", align: "right" as const, render: formatMinor },
+          { title: "Δ", dataIndex: "deltaRevenueMinor", align: "right" as const, render: signedMinor },
+          { title: "Δ%", dataIndex: "deltaRevenuePercent", align: "right" as const,
+            render: (value: string | null) => value === null ? "—" : `${value}%` },
+        ]} /></Card>
+    </>}
+    {!data.reconciliation.categoryContributionsMatch ? <Alert type="warning" showIcon
+      message="Внески категорій не сходяться з загальною зміною"
+      description="Категорійну декомпозицію приховано; можливі категорії лише у попередньому періоді." />
+      : <Card title="Внески категорій"><Table rowKey="id" dataSource={data.categoryContributions} pagination={{ pageSize: 15 }} scroll={{ x: 900 }}
+        onRow={(row) => ({ onClick: () => onSelectCategory(row.id), className: "cursor-pointer" })}
+        columns={[
+          { title: "Категорія", dataIndex: "name", fixed: "left" as const, width: 220,
+            render: (value: string, row) => <Button type="link" className="h-auto p-0" onClick={(event) => {
+              event.stopPropagation(); onSelectCategory(row.id);
+            }}>{value}</Button> },
+          { title: "Поточний", dataIndex: "currentRevenueMinor", align: "right" as const, render: formatMinor },
+          { title: "Попередній", dataIndex: "comparisonRevenueMinor", align: "right" as const, render: formatMinor },
+          { title: "Δ", dataIndex: "deltaRevenueMinor", align: "right" as const, render: signedMinor },
+          { title: "Δ%", dataIndex: "deltaRevenuePercent", align: "right" as const,
+            render: (value: string | null) => value === null ? "—" : `${value}%` },
+        ]} /></Card>}
   </Space>;
 }
 

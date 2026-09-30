@@ -258,3 +258,38 @@ browser console warning/error: []
 - неполный 7-дневный период скрывает частичный рейтинг и показывает предупреждение.
 
 Ограничения остаются явными: historical roster не подтверждён; проникновение по чекам не считается; неполное comparison не даёт delta; отдельная heatmap магазин × категория и `EXPLAIN (ANALYZE, BUFFERS)` остаются следующими шагами.
+
+## 30.09.2026 — S-10, сравнение периодов и вклады
+
+Статус: **код, tests/build и контрольный runtime passed; бизнес-сравнение разных полных окон blocked качеством истории**.
+
+Реализовано без новой миграции поверх принятых readers 050/053:
+
+- защищённый `/api/admin/stores/analytics/comparison`, только `super_admin`, no-store;
+- overview и category reader получают один `scope` и один server-owned `asOf`;
+- отдельный custom comparison RangePicker; два периода сохраняются в URL;
+- absolute revenue и revenue/day показаны отдельно, поэтому окна разной длины не сравниваются как равные totals;
+- signed contributions магазинов и категорий; переходы к магазину и товарам категории;
+- сумма вкладов магазинов и категорий обязана совпасть с общей Δ; несошедшийся блок скрывается;
+- incomplete current/previous скрывает KPI и вклады, а не публикует частичный результат;
+- явная подпись: это текущий выбранный roster, не like-for-like cohort.
+
+Проверки:
+
+```text
+targeted Vitest: 2 files / 8 tests passed
+full Vitest: 104 files / 1042 tests passed
+typecheck/build: passed
+production build: /admin/stores 23.3 kB, First Load JS 1.14 MB
+browser console warning/error: []
+```
+
+Runtime:
+
+- 16–22.09 против 09–15.09, вся сеть и отдельно Клуб: previous incomplete, UI честно показывает unavailable;
+- 16–22.09 против 01–07.08: previous incomplete, UI честно показывает unavailable;
+- контроль 16–22.09 против тех же 16–22.09: оба окна complete, `4 852 512,28 ₴` против `4 852 512,28 ₴`, Δ `0,00 ₴`, revenue/day `693 216,04 ₴` с обеих сторон;
+- 26 store contributions и 27 category contributions reconciled с общей нулевой Δ;
+- category drilldown `Вареники` открыл `view=products&category_id=5` с сохранением обоих периодов.
+
+Ограничение: это доказывает runtime-механику и reconciliation, но не реальное изменение между двумя разными полными периодами. Для бизнес-приёмки S-10 нужно дозагрузить хотя бы одно отличающееся полное окно; до этого статус полного бизнес-gate остаётся blocked.
