@@ -63,8 +63,10 @@ export async function middleware(req: NextRequest) {
       return NextResponse.json({ error: "unauthenticated" }, { status: 401, headers: { "x-request-id": id } });
     }
     const url = req.nextUrl.clone();
+    const next = `${pathname}${req.nextUrl.search}`;
     url.pathname = "/login";
-    url.searchParams.set("next", pathname);
+    url.search = "";
+    url.searchParams.set("next", next);
     logRequest("http.request.decision", req, id, "redirect_login");
     const res = NextResponse.redirect(url);
     res.headers.set("x-request-id", id);

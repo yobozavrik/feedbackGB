@@ -275,7 +275,7 @@ Views/RPC:
 - `poster_receipt_line_versions`: receipt-version × source_line_no, product/modification, numeric quantity, source payment/discount/tax fields.
 - `v_poster_receipts_latest`, `v_poster_receipt_lines_latest`, `v_poster_receipt_coverage` и paginated read RPC.
 
-Сохранять повторные товарные строки, порядок и связь с версией чека. Уникальность чека проверять в пределах согласованного scope аккаунта, не по номеру кассы. Не включать PII клиентов; sanitized source payload только после security review.
+Сохранять повторные товарные строки, порядок и связь с версией чека. Уникальность чека проверять в пределах согласованного scope аккаунта, не по номеру кассы. Дополнение пользователя29.09: нужен полный источник, включая клиентские данные. Raw receipt payload и клиентские snapshots хранятся в отдельном защищённом контуре feedbackgb; публичные/обычные аналитические проекции не содержат PII. Полный контракт, индексы и ограничения месячных partitions: `POSTER_FULL_RECEIPT_IMPORT_CONTRACT_2026-09-29.md`. Source/API credentials не архивируются.
 
 Poster pagination не даёт нам автоматически транзакционный snapshot источника. Сохранять manifest count/page IDs, отлавливать drift count/duplicates, повторять изменившийся дневной список перед публикацией и сверять контрольные деньги. Времена начала/конца fetch и границы проверки отражать в отчёте. `asOf` фиксирует уже опубликованные версии нашей БД, но не делает несколько HTTP страниц одним atomic Poster snapshot. При неподтверждённой стабильности imported day остаётся unverified, не получает ложный «полный» статус.
 

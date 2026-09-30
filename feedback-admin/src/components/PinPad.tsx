@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { identifyUser, track } from "@/lib/analytics";
+import { safeLoginNext } from "@/lib/loginRedirect";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "OK"];
 const PIN_LENGTH = 6;
@@ -22,7 +23,7 @@ const PIN_LENGTH = 6;
 export function PinPad() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/";
+  const next = safeLoginNext(params.get("next"));
 
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);

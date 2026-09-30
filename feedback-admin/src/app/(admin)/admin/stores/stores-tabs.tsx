@@ -1,8 +1,9 @@
 "use client";
 
 import { Badge, Card, Empty, Tabs, Typography } from "antd";
-import { PlannedDataPlaceholder } from "@/components/admin/PlannedDataPlaceholder";
+import { useRouter } from "next/navigation";
 import { StoresClient } from "./stores-client";
+import { StoreAnalyticsWorkspace } from "./store-analytics-workspace";
 import type { StoreFeedRow, StoreRow, StoreSeller } from "./page";
 
 interface Props {
@@ -11,12 +12,15 @@ interface Props {
   sellers: StoreSeller[];
   windowDays: number;
   error: string | null;
+  initialTab: "stores" | "reports" | "analytics";
 }
 
 export function StoresTabs(props: Props) {
+  const router = useRouter();
   return (
     <Tabs
-      defaultActiveKey="stores"
+      activeKey={props.initialTab}
+      onChange={(key) => router.push(key === "stores" ? "/admin/stores" : `/admin/stores?tab=${key}`)}
       items={[
         {
           key: "stores",
@@ -31,7 +35,7 @@ export function StoresTabs(props: Props) {
         {
           key: "analytics",
           label: "Аналітика",
-          children: <PlannedDataPlaceholder title="Аналітика магазинів" description="Метрики, цілі, періоди порівняння й джерела аналітики ще не погоджені. Показники не вигадуються до затвердження їхнього складу." scope="network" />,
+          children: props.initialTab === "analytics" ? <StoreAnalyticsWorkspace stores={props.stores} /> : null,
         },
       ]}
     />

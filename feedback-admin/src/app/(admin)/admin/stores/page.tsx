@@ -39,7 +39,7 @@ export interface StoreSeller {
   last_login: string | null;
 }
 
-async function fetchData(): Promise<{
+async function fetchData(includeReports: boolean): Promise<{
   stores: StoreRow[];
   feed: StoreFeedRow[];
   sellers: StoreSeller[];
@@ -64,18 +64,18 @@ async function fetchData(): Promise<{
       .from("v_stores")
       .select("id, name, address, lat, lng, is_active")
       .order("id", { ascending: true }),
-    supabase
+    includeReports ? supabase
       .from("feedback_feed")
       .select(
         "created_at,store_id,store_name,category,category_emoji,category_title,status,product_id,product_name,summary,user_full_name,user_role",
       )
       .gte("created_at", since)
       .order("created_at", { ascending: false })
-      .limit(10000),
-    supabase
+      .limit(10000) : Promise.resolve({ data: [], error: null }),
+    includeReports ? supabase
       .from("users")
       .select("id, full_name, store_id, is_active, pin_hash, last_login")
-      .order("full_name", { ascending: true }),
+      .order("full_name", { ascending: true }) : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (storesRes.error) {
@@ -108,13 +108,17 @@ async function fetchData(): Promise<{
   };
 }
 
-export default async function AdminStoresPage() {
-  const { stores, feed, sellers, error } = await fetchData();
+export default async function AdminStoresPage({ searchParams }: { searchParams?: { tab?: string | string[] } }) {
+  const rawTab = Array.isArray(searchParams?.tab) ? searchParams?.tab[0] : searchParams?.tab;
+  const initialTab = rawTab === "reports" || rawTab === "analytics" ? rawTab : "stores";
+  const { stores, feed, sellers, error } = await fetchData(initialTab === "reports");
 
   return (
     <AdminPageContainer
       title="Магазини"
-      subTitle={`Каталог магазинів, активність продавчинь і фідбеку. Вікно — ${WINDOW_DAYS} днів.`}
+      subTitle={initialTab === "analytics"
+        ? "Аналітика продажів, фудкосту та повноти даних по магазинах."
+        : `Каталог магазинів, активність продавчинь і фідбеку. Вікно — ${WINDOW_DAYS} днів.`}
     >
       <StoresTabs
         stores={stores}
@@ -122,6 +126,7 @@ export default async function AdminStoresPage() {
         sellers={sellers}
         windowDays={WINDOW_DAYS}
         error={error}
+        initialTab={initialTab}
       />
     </AdminPageContainer>
   );
