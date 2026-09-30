@@ -5,12 +5,12 @@ export const STORE_ANALYTICS_VIEWS = ["overview", "stores", "categories", "produ
 export type StoreAnalyticsView = typeof STORE_ANALYTICS_VIEWS[number];
 export type StoreAnalyticsQuery = {
   period: AnalyticsPeriod; scope: AnalyticsScope; view: StoreAnalyticsView;
-  categoryId: number | "unknown" | null; productId: number | null;
+  categoryId: number | "unknown" | null; productId: number | null; modificationId: number | null;
   page: number; pageSize: number; search: string;
   sort: "revenue" | "change" | "name"; direction: "asc" | "desc";
 };
 const ALLOWED = new Set(["tab", "view", "period", "days", "from", "to", "grain", "comparison",
-  "compare_from", "compare_to", "spot_id", "spot_ids", "category_id", "product_id", "page", "page_size", "search", "sort", "direction"]);
+  "compare_from", "compare_to", "spot_id", "spot_ids", "category_id", "product_id", "modification_id", "page", "page_size", "search", "sort", "direction"]);
 
 function id(value: string): number {
   if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value))) throw new Error("invalid_store_analytics_id");
@@ -35,6 +35,10 @@ export function parseStoreAnalyticsQuery(params: URLSearchParams, now = new Date
   const rawCategory = params.get("category_id"), rawProduct = params.get("product_id");
   const categoryId = rawCategory === null ? null : rawCategory === "unknown" ? "unknown" : id(rawCategory);
   const productId = rawProduct === null ? null : id(rawProduct);
+  const rawModification = params.get("modification_id");
+  const modificationId = rawModification === null ? null : (/^\d+$/.test(rawModification) && Number.isSafeInteger(Number(rawModification))
+    ? Number(rawModification) : (() => { throw new Error("invalid_store_analytics_id"); })());
+  if (modificationId !== null && productId === null) throw new Error("invalid_store_analytics_id");
   const page = params.has("page") ? id(params.get("page")!) : 1;
   const pageSize = params.has("page_size") ? id(params.get("page_size")!) : 25;
   if (page > 10000 || ![25, 50, 100].includes(pageSize)) throw new Error("invalid_store_analytics_pagination");
@@ -44,6 +48,6 @@ export function parseStoreAnalyticsQuery(params: URLSearchParams, now = new Date
   if (!["revenue", "change", "name"].includes(sort) || !["asc", "desc"].includes(direction)) {
     throw new Error("invalid_store_analytics_sort");
   }
-  return { period, scope, view: view as StoreAnalyticsView, categoryId, productId, page, pageSize, search,
+  return { period, scope, view: view as StoreAnalyticsView, categoryId, productId, modificationId, page, pageSize, search,
     sort: sort as StoreAnalyticsQuery["sort"], direction: direction as StoreAnalyticsQuery["direction"] };
 }

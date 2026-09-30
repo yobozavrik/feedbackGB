@@ -2,6 +2,7 @@ import { getServerSupabase } from "@/lib/supabase";
 import { loadFoodcostOverview } from "./foodcostOverview";
 import { loadFoodcostSalesPeriod } from "./foodcostSalesRead";
 import { posterRequest } from "./posterApi";
+import { loadCurrentPosterCategoryNames } from "./posterCategoryNames";
 import { lastThreeClosedKyivDates, posterSpotIds } from "./posterSalesSync";
 import { lastClosedKyivDates, type FoodcostPeriodDays } from "./foodcostPeriod";
 
@@ -49,23 +50,6 @@ export async function loadFoodcostRecentNetwork(now = new Date(), periodDays: 3 
   };
 }
 
-function currentPosterCategoryNames(value: unknown): Map<number, string> {
-  if (!Array.isArray(value) || !value.length || value.length > 1000) {
-    throw new Error("poster_categories_invalid_response");
-  }
-  const names = new Map<number, string>();
-  for (const entry of value) {
-    if (!entry || typeof entry !== "object") throw new Error("poster_categories_invalid_response");
-    const row = entry as { category_id?: unknown; category_name?: unknown };
-    const id = Number(row.category_id);
-    const name = typeof row.category_name === "string" ? row.category_name.trim() : "";
-    if (!Number.isSafeInteger(id) || id <= 0 || !name ||
-      (names.has(id) && names.get(id) !== name)) throw new Error("poster_categories_invalid_response");
-    names.set(id, name);
-  }
-  return names;
-}
-
 /** Fact-backed breakdown; never return partial category or product metrics. */
 export async function loadFoodcostRecentBreakdown(now = new Date(), selectedSpotId?: number,
   periodDays: 3 | FoodcostPeriodDays = 3, readOptions: { asOf?: string } = {}) {
@@ -81,8 +65,7 @@ export async function loadFoodcostRecentBreakdown(now = new Date(), selectedSpot
   // The sales API omits category names in this account. Current Poster menu is
   // only a display fallback; it never rewrites historical category IDs or sums.
   const currentNames = snapshot.status === "complete"
-    ? await posterRequest<unknown>("menu.getCategories", {}, process.env.POSTER_TOKEN!)
-      .then(currentPosterCategoryNames).catch(() => null)
+    ? await loadCurrentPosterCategoryNames().catch(() => null)
     : null;
   const categories = snapshot.categories?.map((row) => {
     const currentName = row.categoryId === null ? null : currentNames?.get(row.categoryId) ?? null;

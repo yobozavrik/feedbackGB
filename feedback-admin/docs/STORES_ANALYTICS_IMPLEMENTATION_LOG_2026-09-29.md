@@ -177,3 +177,84 @@ production build: exit 0; /admin/stores 19.8 kB, First Load JS 1.13 MB
 ```
 
 Ограничения не сняты: средний чек не вычисляется; historical roster не подтверждён; incomplete comparison не даёт Δ; `Категорії`, `Товари`, `Проникнення`, `Порівняння` ещё disabled; EXPLAIN и concurrency budget S-14 не выполнены. Первый `next start` smoke был испорчен параллельно работавшим `next dev`, который перезаписывал `.next`; после остановки конфликтующего процесса, чистой пересборки и новой вкладки production E2E прошёл.
+
+## 30.09.2026 — S-09, категории и товары
+
+Статус: **локальный код passed; SQL runtime, EXPLAIN и browser E2E blocked до применения 052**.
+
+Реализовано:
+
+- forward-only `052_store_category_product_analytics.sql` с private helper latest-facts и service-role-only reader;
+- рейтинги категорий: выручка, доля всей выбранной сети, изменение, изменение доли, фудкост, охват магазинов, число товаров;
+- таблица товаров с bounded pagination/search/sort, количеством, выручкой, долей, изменением, фудкостом, средней ценой реализации и охватом;
+- identity товара не схлопывает модификации и единицы: `product_id + modification_id + category_id + unit + weight_based`;
+- unknown category сохраняется как `Без категорії`; conflict flags не превращаются в выдуманное имя;
+- карточка выбранной identity с revenue trend; при unit conflict количество trend становится `null`, а не суммируется;
+- `/api/admin/stores/analytics/categories` и `/products`: только `super_admin`, server-owned `asOf`, bounded filters/pagination, no-store;
+- drilldown category → products → product использует history navigation; Back восстанавливает scope;
+- penetration остаётся явным `unavailable` с причиной `receipt_line_quantity_and_money_basis_unverified`.
+
+Проверки до SQL runtime:
+
+```text
+targeted Vitest: 4 files / 49 tests passed
+typecheck: exit 0
+lint: exit 0; только 3 прежних warning absences/schedules
+production build: exit 0; routes categories/products присутствуют
+git diff --check: exit 0, только LF/CRLF warnings
+```
+
+Не проверено и не считается готовым:
+
+- PostgreSQL ещё не компилировал 052;
+- readback/ACL и реальные суммы category/product не получены;
+- паритет category sum = network revenue и product/category samples не проверены на рабочей БД;
+- `EXPLAIN (ANALYZE, BUFFERS)` не выполнен, поэтому дополнительные индексы не добавлялись вслепую;
+- вкладки не проходили browser E2E на реальных данных;
+- heatmap магазин × категория не входит в этот первый S-09 срез;
+- вкладки `Проникнення` и `Порівняння` остаются disabled.
+
+Следующий последовательный gate: применить 052, выполнить readback, проверить полный 7-дневный период сети и одного магазина, сверить суммы и EXPLAIN. Только затем browser E2E и решение по heatmap.
+
+### Runtime-дефект 052 и forward-only исправление 053
+
+Первый runtime sample 052 подтвердил компиляцию reader и корректный fail-closed для неполного периода 23–29.09: `156/182`, 26 пропусков за 29.09, categories/products пусты. Одновременно найден дефект: comparison 16–22.09 имел статус `complete`, но `totalRevenueMinor="0"`. Причина в коде 052: вычисление comparison total находилось внутри `if v_current_complete`, поэтому при неполном current сохранялось начальное значение 0.
+
+Применённую 052 не редактируем. Добавлена forward-only `053_store_catalog_comparison_total_fix.sql`, которая проверяет точную сигнатуру и ожидаемый фрагмент сохранённого определения, переносит вычисление comparison total за пределы current gate и проверяет замену. Readback повторяет reported regression и отдельно проверяет полный период 16–22.09, ненулевые category/product rows и reconciliation суммы категорий с network total.
+
+### Runtime/E2E gate после 053
+
+Пользователь применил 053. Readback полного периода 16–22.09 подтвердил:
+
+- `status=complete`, 27 категорий, 315 товарных identity, первая страница 25 строк;
+- network revenue `485251228` minor;
+- сумма категорий `485251228` minor, `categories_reconcile=true`.
+
+Browser E2E выявил, что sales snapshot хранит category ID, но названия категорий в этом аккаунте Poster отсутствуют: все 27 ID ошибочно отображались как `Без категорії`. Исправлено без изменения фактов продаж:
+
+- ID, суммы и группировка остаются из исторического snapshot/RPC;
+- display name для известного ID берётся из текущего `menu.getCategories` и помечается как `current_poster_catalog`;
+- при недоступном справочнике показывается `Категорія #ID`, а не ложное `Без категорії`;
+- настоящий `category_id=null` остаётся `Без категорії`;
+- интерфейс явно сообщает, что названия взяты из текущего справочника Poster.
+
+Финальные проверки этого среза:
+
+```text
+targeted Vitest: 3 files / 20 tests passed
+full Vitest: 102 files / 1034 tests passed
+typecheck: exit 0
+production build: exit 0; /admin/stores 22.1 kB, First Load JS 1.13 MB
+browser console warning/error: []
+```
+
+Авторизованный production E2E на `localhost:3210`:
+
+- сеть 16–22.09: реальные названия категорий, 27 строк, fallback раскрыт пользователю;
+- drilldown `Пельмені` → 12 товаров категории;
+- drilldown `Пельмені зі свинини`: revenue `231 209,02 ₴`, quantity `1 220,805 кг`, average price `189,39 ₴/kg`, trend block;
+- `До списку` сохраняет category filter и период;
+- scope `spot_ids=18` отрабатывает без ошибки и показывает охват `/1`;
+- неполный 7-дневный период скрывает частичный рейтинг и показывает предупреждение.
+
+Ограничения остаются явными: historical roster не подтверждён; проникновение по чекам не считается; неполное comparison не даёт delta; отдельная heatmap магазин × категория и `EXPLAIN (ANALYZE, BUFFERS)` остаются следующими шагами.
