@@ -36,6 +36,10 @@
     {
       "path": "/api/cron/poster-foodcost-sales",
       "schedule": "10 2 * * *"
+    },
+    {
+      "path": "/api/cron/poster-receipts",
+      "schedule": "20 3 * * *"
     }
   ]
 }
