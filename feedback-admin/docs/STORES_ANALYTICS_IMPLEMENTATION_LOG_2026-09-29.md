@@ -500,3 +500,46 @@ production build: passed; /admin/stores 25.7 kB, First Load JS 1.14 MB
 S-13 не добавляет XLSX: текущий принятый формат — защищённый CSV. Следующий этап S-14 —
 измерение SQL/API performance и concurrency; его результаты нельзя объявлять до фактических
 `EXPLAIN (ANALYZE, BUFFERS)` и контролируемого параллельного прогона.
+
+## 01.10.2026 — S-14, первый performance/concurrency gate
+
+Статус: **частично пройден; EXPLAIN и protected API/browser gate ещё не закрыты**.
+
+Добавлен воспроизводимый `scripts/benchmark-store-analytics.mjs`. Он читает текущий roster
+из `v_stores`, фиксирует один `asOf`, не выводит токены/PII/raw receipts и измеряет три
+service-role PostgREST RPC. Опциональный sync допускается только как replay уже
+спроецированного дня; иной результат завершает скрипт ошибкой.
+
+На полном окне 16–22.09.2026 и 26 магазинах одиночный warm p95 составил 166.0 ms для
+overview, 221.4 ms для category/product и 625.8 ms для penetration. При 20 параллельных
+читателях p95: 542.0 / 912.6 / 2348.0 ms соответственно. Максимальный compressed payload —
+3461 bytes, то есть существенно меньше proposed budget 250 KB.
+
+Параллельный прогон 20 penetration readers + projection replay 16.09 подтвердил
+`replayed=true`; reader p95 — 2778.0 ms. Значит correctness/concurrency gate пройден без
+новой записи фактов, но penetration не выдерживает proposed p95 ≤2 s под этой нагрузкой.
+Это зафиксировано как `needs optimization`, а не скрыто как passed.
+
+Полные команды, ограничения и цифры сохранены в
+`docs/evidence/STORES_ANALYTICS_S14_PERFORMANCE_2026-10-01.md`. Read-only SQL Editor probe
+для настоящего `EXPLAIN (ANALYZE, BUFFERS)` сохранён рядом. До получения плана индексы и
+materialized views наугад не добавляются.
+
+Авторизованный локальный UI дополнительно проверен на правильном `view=overview`: данные
+периода и coverage совпали, console warnings/errors отсутствуют. Пять local-dev загрузок
+достигли KPI и маркера `182/182` за 3.30–3.68 s (p50 3.47 s, observed p95 3.68 s), поэтому
+предложенный browser budget ≤3 s пока не подтверждён. Это не production benchmark;
+финальный browser gate остаётся для Preview/production build.
+
+Получен первый SQL Editor plan для overview: execution 1084.649 ms, temp read/write
+3334/1240 blocks, WAL 0. Внешний `Result` не раскрывает внутренние PL/pgSQL statements,
+поэтому этот plan ещё не обосновывает индекс. Для локализации медленного penetration
+добавлен отдельный read-only internal probe; решение об оптимизации остаётся после его
+фактического результата и двух оставшихся outer plans.
+
+Internal penetration P2 выполнен: 683.990 ms, 15,699 eligible receipts, 33,002 product
+links, temp read/write 1676/838 blocks. Индексы receipt/line используются; медленная часть —
+historical catalog + mapping (около 250 ms) и повторные проходы по широким materialized CTE.
+Planner ожидал 200 mapped rows вместо 33,002. Подготовлен read-only rewrite probe с прямым
+catalog source и без лишних category/product link materializations; production function до
+сравнительного плана не меняется.
