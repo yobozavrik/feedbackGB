@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, DatePicker, Empty, Input, Select, Skeleton, Space, Statistic, Table, Tabs, Tag, Typography } from "antd";
+import { DownloadOutlined } from "@ant-design/icons";
 import { Bar, Line } from "@ant-design/plots";
 import dayjs, { type Dayjs } from "dayjs";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -9,11 +10,13 @@ import type { StoreAnalyticsOverview, StoreAnalyticsWindow } from "@/lib/admin/s
 import { buildStoreAnalyticsRanking } from "@/lib/admin/storeAnalyticsRanking";
 import type { StoreCategoryProductAnalytics } from "@/lib/admin/storeCategoryProductAnalytics";
 import type { StoreAnalyticsComparison } from "@/lib/admin/storeAnalyticsComparison";
+import type { StorePenetrationAnalytics } from "@/lib/admin/storePenetrationAnalytics";
 import type { StoreRow } from "./page";
 
 type Payload = { data: StoreAnalyticsOverview };
 type CatalogPayload = { data: StoreCategoryProductAnalytics };
 type ComparisonPayload = { data: StoreAnalyticsComparison };
+type PenetrationPayload = { data: StorePenetrationAnalytics };
 type View = "overview" | "stores" | "categories" | "products" | "penetration" | "comparison" | "quality";
 const PERIODS = [
   ["7d", "7 завершених днів"], ["14d", "14 завершених днів"],
@@ -65,6 +68,9 @@ export function StoreAnalyticsWorkspace({ stores }: { stores: StoreRow[] }) {
   const [comparisonData, setComparisonData] = useState<StoreAnalyticsComparison | null>(null);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [penetrationData, setPenetrationData] = useState<StorePenetrationAnalytics | null>(null);
+  const [penetrationError, setPenetrationError] = useState<string | null>(null);
+  const [penetrationLoading, setPenetrationLoading] = useState(false);
 
   const endpointQuery = useMemo(() => {
     const params = new URLSearchParams(search.toString());
@@ -98,6 +104,12 @@ export function StoreAnalyticsWorkspace({ stores }: { stores: StoreRow[] }) {
     if (!params.has("comparison")) params.set("comparison", "previous");
     return params.toString();
   }, [search, view]);
+  const exportQuery = useMemo(() => {
+    const params = new URLSearchParams(search.toString());
+    params.set("tab", "analytics"); params.set("view", view);
+    params.delete("page"); params.delete("page_size");
+    return params.toString();
+  }, [search, view]);
 
   useEffect(() => {
     if (!["categories", "products"].includes(view)) return;
@@ -124,6 +136,22 @@ export function StoreAnalyticsWorkspace({ stores }: { stores: StoreRow[] }) {
       }).then((body) => setComparisonData(body.data)).catch((reason: unknown) => {
         if ((reason as { name?: string }).name !== "AbortError") setComparisonError(reason instanceof Error ? reason.message : "store_comparison_unavailable");
       }).finally(() => { if (!controller.signal.aborted) setComparisonLoading(false); });
+    return () => controller.abort();
+  }, [catalogQuery, view]);
+
+  useEffect(() => {
+    if (view !== "penetration") return;
+    const controller = new AbortController(); setPenetrationLoading(true); setPenetrationError(null);
+    fetch(`/api/admin/stores/analytics/penetration?${catalogQuery}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error ?? "store_penetration_unavailable");
+        return body as PenetrationPayload;
+      }).then((body) => setPenetrationData(body.data)).catch((reason: unknown) => {
+        if ((reason as { name?: string }).name !== "AbortError") {
+          setPenetrationError(reason instanceof Error ? reason.message : "store_penetration_unavailable");
+        }
+      }).finally(() => { if (!controller.signal.aborted) setPenetrationLoading(false); });
     return () => controller.abort();
   }, [catalogQuery, view]);
 
@@ -177,16 +205,28 @@ export function StoreAnalyticsWorkspace({ stores }: { stores: StoreRow[] }) {
       </div>
     </Card>
     <Tabs activeKey={view} onChange={(key) => update({ view: key,
+      category_id: ["products", "penetration"].includes(key) ? search.get("category_id") : null,
       product_id: key === "products" ? search.get("product_id") : null,
       modification_id: key === "products" ? search.get("modification_id") : null,
       page: ["categories", "products"].includes(key) ? "1" : null,
     })} items={[
       { key: "overview", label: "Огляд" }, { key: "stores", label: "Магазини" },
       { key: "categories", label: "Категорії" }, { key: "products", label: "Товари" },
-      { key: "penetration", label: "Проникнення", disabled: true }, { key: "comparison", label: "Порівняння" },
+      { key: "penetration", label: "Проникнення" }, { key: "comparison", label: "Порівняння" },
       { key: "quality", label: "Якість даних" },
     ]} />
-    {view === "comparison" ? comparisonLoading ? <Skeleton active paragraph={{ rows: 8 }} />
+    {view !== "comparison" && <div className="flex justify-end"><Button icon={<DownloadOutlined />}
+      href={`/api/admin/stores/analytics/export?${exportQuery}`}>Завантажити CSV</Button></div>}
+    {view === "penetration" ? penetrationLoading ? <Skeleton active paragraph={{ rows: 8 }} />
+      : penetrationError ? <Alert type="error" showIcon message="Проникнення недоступне"
+        description={penetrationError === "store_penetration_schema_missing" ? "Потрібно застосувати міграцію 055."
+          : "Не вдалося прочитати перевірену чекову аналітику."} />
+      : penetrationData ? <PenetrationView data={penetrationData} stores={stores}
+          onSelectCategory={(categoryId) => update({ category_id: String(categoryId) })}
+          onSelectStore={(spotId) => drill({ view: "stores", spot_ids: String(spotId), category_id: null })}
+          onSelectProduct={(categoryId, productId, modificationId) => drill({ view: "products",
+            category_id: String(categoryId), product_id: String(productId), modification_id: String(modificationId), page: "1" })} /> : <Empty />
+      : view === "comparison" ? comparisonLoading ? <Skeleton active paragraph={{ rows: 8 }} />
       : comparisonError ? <Alert type="error" showIcon message="Порівняння недоступне"
         description={comparisonError === "store_comparison_schema_missing" ? "Потрібні міграції 050–053." : "Не вдалося прочитати перевірені агрегати."} />
       : comparisonData ? <ComparisonView data={comparisonData}
@@ -282,6 +322,117 @@ function ComparisonView({ data, onSelectStore, onSelectCategory }: { data: Store
   </Space>;
 }
 
+function PenetrationView({ data, stores, onSelectCategory, onSelectStore, onSelectProduct }: {
+  data: StorePenetrationAnalytics;
+  stores: StoreRow[];
+  onSelectCategory: (categoryId: number) => void;
+  onSelectStore: (spotId: number) => void;
+  onSelectProduct: (categoryId: number, productId: number, modificationId: number) => void;
+}) {
+  if (data.status === "incomplete") return <Alert type="warning" showIcon
+    message="Архів чеків за період неповний"
+    description={`${data.coverage.from} — ${data.coverage.to}: ${data.coverage.completedDays}/${data.coverage.expectedDays} завершених днів. ` +
+      `Метрики проникнення приховано. Пропущені дати: ${data.coverage.missingDates.join(", ") || "—"}.`} />;
+  if (data.status === "mapping_incomplete") return <Alert type="error" showIcon
+    message="Не всі рядки чеків зіставлені з категоріями"
+    description={`${data.mapping.mappedRows}/${data.mapping.bridgeRows} зв’язків зіставлено; ${data.mapping.unmappedRows} без категорії. ` +
+      "Рейтинги й відсотки приховано, щоб не показувати спотворений результат."} />;
+
+  const names = new Map(stores.map((store) => [store.id, store.name]));
+  const selected = data.selectedCategoryId === null ? null
+    : data.categories.find((row) => row.categoryId === data.selectedCategoryId) ?? null;
+  const categoryName = selected?.categoryName ?? (data.selectedCategoryId ? `Категорія #${data.selectedCategoryId}` : null);
+  const networkPercent = data.denominator.eligibleReceipts === 0 ? "—"
+    : selected?.penetrationPercent ?? (data.selectedCategoryId ? "0.00" : "—");
+  const usesCurrentCatalog = data.categories.some((row) => row.categoryNameSource === "current_poster_catalog");
+  const maxCategoryPercent = Math.max(1, ...data.categories.map((row) => Number(row.penetrationPercent ?? 0)));
+  const storeRows = [...data.stores].sort((left, right) =>
+    Number(right.penetrationPercent ?? -1) - Number(left.penetrationPercent ?? -1));
+  const trend = data.trend.map((row) => ({ date: row.date, penetration: row.penetrationPercent === null ? null : Number(row.penetrationPercent) }));
+
+  return <Space direction="vertical" size="middle" className="w-full">
+    <Alert type="info" showIcon message="Проникнення у чеки"
+      description="Частка distinct eligible чеків, у яких є категорія або товар. Категорії перетинаються: один чек може входити в кілька категорій, тому сума відсотків може перевищувати 100%." />
+    {usesCurrentCatalog && <Alert type="info" showIcon message="Назви категорій — з поточного довідника Poster"
+      description="Ідентифікатори категорій, зв’язки з чеками та всі розрахунки взяті з історичних фактів і не змінені." />}
+    <Card size="small"><div className="flex flex-wrap items-end gap-3">
+      <label className="min-w-72"><Typography.Text type="secondary" className="mb-1 block text-xs">Категорія для магазинів і тренду</Typography.Text>
+        <Select showSearch optionFilterProp="label" value={data.selectedCategoryId ?? undefined} className="w-full"
+          placeholder="Оберіть категорію" options={data.categories.map((row) => ({ value: row.categoryId, label: row.categoryName }))}
+          onChange={onSelectCategory} /></label>
+      <Typography.Text type="secondary">{data.coverage.from} — {data.coverage.to} · {data.spotIds.length} магазинів · станом на {new Date(data.asOf).toLocaleString("uk-UA")}</Typography.Text>
+    </div></Card>
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Card><Statistic title="Чеки у знаменнику" value={data.denominator.eligibleReceipts ?? "—"} /></Card>
+      <Card><Statistic title={categoryName ? `Чеки · ${categoryName}` : "Чеки вибраної категорії"}
+        value={selected?.receiptCount ?? (data.selectedCategoryId ? 0 : "—")} /></Card>
+      <Card><Statistic title="Проникнення мережі" value={networkPercent}
+        suffix={data.selectedCategoryId && networkPercent !== "—" ? "%" : undefined} /></Card>
+      <Card><Statistic title="Магазини з категорією" value={selected?.storeCount ?? (data.selectedCategoryId ? 0 : "—")}
+        suffix={data.selectedCategoryId ? `/ ${data.spotIds.length}` : undefined} /></Card>
+    </div>
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <Card title="Категорії за проникненням" extra={<Typography.Text type="secondary">Натисніть для деталізації</Typography.Text>}>
+        <div className="space-y-2" aria-label="Категорії за проникненням">
+          {data.categories.slice(0, 15).map((row) => <button key={row.categoryId} type="button"
+            className="block w-full rounded-lg border border-solid border-black/10 bg-transparent p-2 text-left transition hover:border-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+            onClick={() => onSelectCategory(row.categoryId)} aria-current={row.categoryId === data.selectedCategoryId ? "true" : undefined}>
+            <span className="mb-1 flex items-center justify-between gap-3 text-sm"><span className="truncate">{row.categoryName}</span>
+              <strong>{row.penetrationPercent === null ? "—" : `${row.penetrationPercent}%`}</strong></span>
+            <span className="block h-2 overflow-hidden rounded bg-black/10"><span className="block h-full rounded bg-blue-500"
+              style={{ width: `${Math.max(0, Number(row.penetrationPercent ?? 0) / maxCategoryPercent * 100)}%` }} /></span>
+            <span className="mt-1 block text-xs opacity-60">{row.receiptCount} із {data.denominator.eligibleReceipts} чеків · {row.storeCount} магазинів</span>
+          </button>)}
+        </div>
+      </Card>
+      <Card title={categoryName ? `Магазини · ${categoryName}` : "Проникнення по магазинах"}>
+        {!data.selectedCategoryId ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Оберіть категорію для карти магазинів" />
+          : <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5" aria-label="Проникнення по магазинах">
+            {storeRows.map((row) => {
+              const value = Number(row.penetrationPercent ?? 0), alpha = row.penetrationPercent === null ? 0 : 0.08 + Math.min(0.42, value / 180);
+              return <button key={row.spotId} type="button" onClick={() => onSelectStore(row.spotId)}
+                className="aspect-square min-h-28 rounded-lg border border-solid p-3 text-left transition hover:border-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+                style={{ borderColor: "rgba(22,119,255,.35)", background: `rgba(22,119,255,${alpha})` }}
+                title={`${names.get(row.spotId) ?? `Магазин #${row.spotId}`}: ${row.categoryReceipts} із ${row.eligibleReceipts} чеків`}>
+                <span className="block text-xs opacity-65">{names.get(row.spotId) ?? `Магазин #${row.spotId}`}</span>
+                <strong className="mt-2 block text-xl">{row.penetrationPercent === null ? "—" : `${row.penetrationPercent}%`}</strong>
+                <span className="mt-1 block text-xs opacity-65">{row.categoryReceipts}/{row.eligibleReceipts} чеків</span>
+              </button>;
+            })}
+          </div>}
+      </Card>
+    </div>
+    {data.selectedCategoryId && <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <Card title={`Тренд · ${categoryName}`}><Line data={trend} xField="date" yField="penetration" height={300}
+        axis={{ y: { title: "%" } }} tooltip={{ items: [{ field: "penetration", name: "Проникнення" }] }} /></Card>
+      <Card title="Рейтинг магазинів"><Table size="small" rowKey="spotId" dataSource={storeRows} pagination={{ pageSize: 10, hideOnSinglePage: true }}
+        onRow={(row) => ({ onClick: () => onSelectStore(row.spotId), className: "cursor-pointer" })}
+        columns={[
+          { title: "Магазин", dataIndex: "spotId", render: (spotId: number) => <Button type="link" className="h-auto p-0"
+            onClick={(event) => { event.stopPropagation(); onSelectStore(spotId); }}>{names.get(spotId) ?? `#${spotId}`}</Button> },
+          { title: "Чеки", align: "right" as const, render: (_, row) => `${row.categoryReceipts}/${row.eligibleReceipts}` },
+          { title: "Проникнення", dataIndex: "penetrationPercent", align: "right" as const,
+            render: (value: string | null) => value === null ? "—" : `${value}%` },
+        ]} /></Card>
+    </div>}
+    <Card title={categoryName ? `Товари · ${categoryName}` : "Товари у чеках"}><Table rowKey={(row) => `${row.productId}:${row.modificationId}`}
+      dataSource={data.products} pagination={{ pageSize: 15, hideOnSinglePage: true }} scroll={{ x: 820 }}
+      onRow={(row) => ({ onClick: () => onSelectProduct(row.categoryId, row.productId, row.modificationId), className: "cursor-pointer" })}
+      columns={[
+        { title: "Товар", dataIndex: "productName", fixed: "left" as const, width: 280,
+          render: (value: string, row) => <Button type="link" className="h-auto whitespace-normal p-0 text-left" onClick={(event) => {
+            event.stopPropagation(); onSelectProduct(row.categoryId, row.productId, row.modificationId);
+          }}>{value}{row.modificationId ? ` · мод. ${row.modificationId}` : ""}</Button> },
+        { title: "Чеки", dataIndex: "receiptCount", align: "right" as const },
+        { title: "Проникнення мережі", dataIndex: "penetrationPercent", align: "right" as const,
+          render: (value: string | null) => value === null ? "—" : `${value}%` },
+        { title: "Магазини", dataIndex: "storeCount", align: "right" as const,
+          render: (value: number) => `${value}/${data.spotIds.length}` },
+      ]} /></Card>
+    <Typography.Text type="secondary" className="text-xs">Історичний склад мережі не підтверджено. Порівнюється поточний вибраний список магазинів; це не like-for-like cohort.</Typography.Text>
+  </Space>;
+}
+
 function CategoriesView({ data, onSelect }: { data: StoreCategoryProductAnalytics; onSelect: (categoryId: number | null) => void }) {
   if (data.current.status !== "complete") return <Alert type="warning" showIcon message="Період продажів неповний"
     description={`${data.current.from} — ${data.current.to}: ${data.current.completedCells}/${data.current.expectedCells} пар дата × магазин. Частковий рейтинг не показуємо.`} />;
@@ -301,7 +452,7 @@ function CategoriesView({ data, onSelect }: { data: StoreCategoryProductAnalytic
       <Card title="Методика"><Space direction="vertical">
         <Typography.Text>Доля — від усієї виручки вибраних магазинів.</Typography.Text>
         <Typography.Text>Охват — магазини з додатною кількістю продажу категорії.</Typography.Text>
-        <Typography.Text type="secondary">Проникнення по чеках ще недоступне: одиниці рядків чеків не підтверджені.</Typography.Text>
+        <Typography.Text type="secondary">Проникнення у чеки доступне в окремій вкладці «Проникнення».</Typography.Text>
       </Space></Card>
     </div>
     <Card title="Рейтинг категорій"><Table rowKey={(row) => row.categoryId ?? "unknown"} dataSource={data.categories}

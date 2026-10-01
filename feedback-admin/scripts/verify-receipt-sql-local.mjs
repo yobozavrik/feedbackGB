@@ -23,6 +23,7 @@ const key = randomBytes(32);
 const checks = [];
 let bulkDurationMs = null;
 let stage = "init";
+let analyticsDay = null;
 async function check(name, action) { stage = name; await action(); checks.push(name); }
 async function query(sql, args) { return (await db.query(sql, args)).rows; }
 async function expectError(action, expected) {
@@ -203,6 +204,142 @@ try {
     for (const [name, n] of Object.entries(value)) {
       if (/mismatches|errors|duplicate_receipt/.test(name)) assert.equal(Number(n), 0, name);
     }
+  });
+  await check("migration_048_and_054_execute", async () => {
+    await db.exec(readFileSync("supabase/048_poster_receipt_day_audit_rpc.sql", "utf8"));
+    await db.exec(readFileSync("supabase/054_poster_receipt_analytics_projection.sql", "utf8"));
+  });
+  await check("receipt_analytics_projection_trigger_and_methodology", async () => {
+    analyticsDay = (await query("select ($1::date-1)::text as day", [day]))[0].day;
+    const analyticsRaw = bytes({ response: { count: 2,
+      page: { per_page: 1000, page: 1, count: 2 }, data: [
+        { transaction_id: "9007199254741001", spot_id: 1, client_id: 0,
+          date_close: `${analyticsDay} 12:00:00`, sum: "100.25", payed_sum: "100.25",
+          reason: 0, print_fiscal: 1, products: [
+            { product_id: 1, modification_id: 0, num: "1", payed_sum: "40.25" },
+            { product_id: 2, modification_id: 0, num: "0.5", payed_sum: "60.00" },
+          ] },
+        { transaction_id: "9007199254741002", spot_id: 2, client_id: 0,
+          date_close: `${analyticsDay} 13:00:00`, sum: "20.00", payed_sum: "20.00",
+          reason: 0, print_fiscal: 2,
+          products: [{ product_id: 3, modification_id: 0, num: "1", payed_sum: "20.00" }] },
+      ] } });
+    const analyticsBundle = buildPlainPosterReceiptBundle({ ...options,
+      accountId: "local-synthetic-analytics", businessDate: analyticsDay,
+      observedAt: new Date().toISOString() }, [{ bytes: analyticsRaw }], []);
+    await db.exec("set role service_role");
+    try { assert.equal((await invoke(analyticsBundle))[0].result.status, "accepted"); }
+    finally { await db.exec("reset role"); }
+    const audit = (await query("select feedbackgb.audit_poster_receipt_analytics_day($1::date) as value", [analyticsDay]))[0].value;
+    assert.equal(audit.status, "verified");
+    assert.equal(Number(audit.receipts), 2);
+    assert.equal(Number(audit.lines), 3);
+    assert.equal(Number(audit.eligible_receipts), 1);
+    assert.equal(Number(audit.fiscal_returns), 1);
+    assert.equal(audit.paid_minor_total, "12025");
+    assert.equal(audit.eligible_paid_minor, "10025");
+    assert.equal((await query("select count(*)::int as n from feedbackgb.v_poster_receipt_product_bridge"))[0].n, 2);
+  });
+  await check("receipt_analytics_projection_replay_and_acl", async () => {
+    await db.exec("set role service_role");
+    try {
+      const replay = (await query("select feedbackgb.project_poster_receipt_analytics_day($1::date) as value", [analyticsDay]))[0].value;
+      assert.equal(replay.replayed, true);
+      await expectError(() => query("select * from feedbackgb.poster_receipt_analytics_facts"), "42501");
+    } finally { await db.exec("reset role"); }
+    await expectError(() => query("delete from feedbackgb.poster_receipt_analytics_facts"), "poster_receipt_archive_immutable");
+  });
+  await check("migration_055_executes_with_verified_sources", async () => {
+    await db.exec(`
+      create view feedbackgb.v_stores as
+      select id::bigint id, true is_active from (values (1),(2)) stores(id);
+
+      create function feedbackgb._store_analytics_latest_facts(
+        p_from date, p_to date, p_spot_ids bigint[], p_as_of timestamptz
+      ) returns table (
+        business_date date, spot_id bigint, source_row_no integer,
+        product_id bigint, modification_id bigint, category_id bigint,
+        product_name text, category_name text, quantity numeric, unit text,
+        weight_based boolean, revenue_minor bigint, profit_minor bigint
+      ) language sql stable security definer set search_path=feedbackgb,pg_temp as $$
+        select p_from, valueset.spot_id, valueset.source_row_no,
+          valueset.product_id, 0::bigint, valueset.category_id,
+          valueset.product_name, valueset.category_name, 1::numeric, 'шт'::text,
+          false, valueset.revenue_minor, valueset.revenue_minor
+        from (values
+          (1::bigint,1,1::bigint,10::bigint,'Product 1'::text,'Category 10'::text,4025::bigint),
+          (1::bigint,2,2::bigint,20::bigint,'Product 2'::text,'Category 20'::text,6000::bigint),
+          (2::bigint,1,3::bigint,30::bigint,'Return product'::text,'Category 30'::text,2000::bigint)
+        ) valueset(spot_id,source_row_no,product_id,category_id,product_name,category_name,revenue_minor)
+        where valueset.spot_id=any(p_spot_ids) and p_from<=p_to and p_as_of is not null
+      $$;
+    `);
+    await db.exec(readFileSync("supabase/055_store_penetration_analytics.sql", "utf8"));
+  });
+  await check("store_penetration_denominator_mapping_and_acl", async () => {
+    await db.exec("set role service_role");
+    try {
+      const value = (await query(
+        "select feedbackgb.read_store_penetration_analytics($1::date,$1::date,array[1,2]::bigint[],clock_timestamp(),10) as value",
+        [analyticsDay],
+      ))[0].value;
+      assert.equal(value.status, "complete");
+      assert.equal(Number(value.denominator.eligibleReceipts), 1);
+      assert.equal(value.mapping.status, "complete");
+      assert.equal(Number(value.mapping.bridgeRows), 2);
+      assert.equal(Number(value.mapping.unmappedRows), 0);
+      assert.equal(value.categories.length, 2);
+      assert.equal(value.products.length, 1);
+      assert.equal(value.stores.length, 2);
+      assert.equal(value.trend.length, 1);
+      assert.equal(Number(value.categories.find(row => Number(row.categoryId) === 10).receiptCount), 1);
+      assert.equal(Number(value.stores.find(row => Number(row.spotId) === 1).eligibleReceipts), 1);
+      assert.equal(Number(value.stores.find(row => Number(row.spotId) === 2).eligibleReceipts), 0);
+    } finally { await db.exec("reset role"); }
+    for (const role of ["anon", "authenticated"]) {
+      await db.exec(`set role ${role}`);
+      try {
+        await expectError(() => query(
+          "select feedbackgb.read_store_penetration_analytics($1::date,$1::date,array[1,2]::bigint[],clock_timestamp(),10)",
+          [analyticsDay],
+        ), "42501");
+      } finally { await db.exec("reset role"); }
+    }
+  });
+  await check("store_penetration_fails_closed_for_coverage_and_mapping", async () => {
+    const incomplete = (await query(
+      "select feedbackgb.read_store_penetration_analytics(($1::date-1),$1::date,array[1,2]::bigint[],clock_timestamp(),10) as value",
+      [analyticsDay],
+    ))[0].value;
+    assert.equal(incomplete.status, "incomplete");
+    assert.equal(incomplete.denominator.eligibleReceipts, null);
+    assert.deepEqual(incomplete.categories, []);
+
+    await db.exec(`
+      create or replace function feedbackgb._store_analytics_latest_facts(
+        p_from date, p_to date, p_spot_ids bigint[], p_as_of timestamptz
+      ) returns table (
+        business_date date, spot_id bigint, source_row_no integer,
+        product_id bigint, modification_id bigint, category_id bigint,
+        product_name text, category_name text, quantity numeric, unit text,
+        weight_based boolean, revenue_minor bigint, profit_minor bigint
+      ) language sql stable security definer set search_path=feedbackgb,pg_temp as $$
+        select p_from,1::bigint,1,1::bigint,0::bigint,10::bigint,
+          'Product 1'::text,'Category 10'::text,1::numeric,'шт'::text,false,
+          4025::bigint,4025::bigint
+        where 1=any(p_spot_ids) and p_from<=p_to and p_as_of is not null
+      $$;
+    `);
+    const unmapped = (await query(
+      "select feedbackgb.read_store_penetration_analytics($1::date,$1::date,array[1,2]::bigint[],clock_timestamp(),10) as value",
+      [analyticsDay],
+    ))[0].value;
+    assert.equal(unmapped.status, "mapping_incomplete");
+    assert.equal(Number(unmapped.mapping.unmappedRows), 1);
+    assert.deepEqual(unmapped.categories, []);
+    assert.deepEqual(unmapped.products, []);
+    assert.deepEqual(unmapped.stores, []);
+    assert.deepEqual(unmapped.trend, []);
   });
   if (bulkMode) {
     await check("bulk_full_size_synthetic_day_no_partial_chunks", async () => {

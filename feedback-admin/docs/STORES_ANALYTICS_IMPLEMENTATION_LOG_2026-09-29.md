@@ -293,3 +293,210 @@ Runtime:
 - category drilldown `Вареники` открыл `view=products&category_id=5` с сохранением обоих периодов.
 
 Ограничение: это доказывает runtime-механику и reconciliation, но не реальное изменение между двумя разными полными периодами. Для бизнес-приёмки S-10 нужно дозагрузить хотя бы одно отличающееся полное окно; до этого статус полного бизнес-gate остаётся blocked.
+
+## 30.09.2026 — S-11, семантика чеков и безопасная аналитическая проекция
+
+Статус: **live source semantics и локальный SQL runtime passed; рабочая БД blocked до применения 054 и поэтапного projection backfill**.
+
+Проверен официальный контракт `transactions.getTransactions`: `payed_sum` — оплаченная сумма, `print_fiscal=2` — фискальный возврат, `reason` — причина закрытия без оплаты, `num` — количество позиции. Документация сама по себе не задаёт надёжную денежную шкалу для конкретного аккаунта, поэтому выполнена отдельная read-only live-сверка.
+
+Добавлен `scripts/audit-poster-receipt-semantics.mjs`. Он читает полный день с pagination, сравнивает каждый receipt ID/paid total с `dash.getTransactions`, сумму строк с заголовком и `dash.getProductsSales`, но не выводит ID чеков, клиентов, raw payload или token.
+
+Live read-only результаты на семи завершённых днях: 31.07, 15.08, 31.08, 01.09, 15.09, 16.09, 28.09:
+
+- все семь gates passed;
+- проверено 14 968 чеков и 31 586 строк;
+- `transactions.getTransactions` major UAH ×100 точно совпал с minor UAH `dash.getTransactions` на уровне каждого чека;
+- суммы всех receipt lines совпали с receipt headers и network `dash.getProductsSales`;
+- header/line mismatches, missing IDs и pair money mismatches — 0;
+- 31.07 найден реальный `print_fiscal=2`: источник вернул положительные деньги/количество и dashboard включил их в totals. Следовательно возврат нельзя определять по отрицательному знаку; для purchase penetration он исключается явным predicate;
+- на проверенных днях `reason=0`, `pay_type=3`; отсутствие других вариантов не доказывает, что их не бывает.
+
+Read-only аудит импортированной истории через `audit_poster_receipt_day`:
+
+- июль: все закрытые дни verified;
+- август: все закрытые дни verified;
+- сентябрь: 01–28 verified, 29.09 missing;
+- raw payload/PII не читались и не выводились.
+
+Подготовлена forward-only `054_poster_receipt_analytics_projection.sql`:
+
+- exact major→minor parser без float;
+- private immutable receipt/line analytics facts и product bridge;
+- purchase eligibility v1: исключить explicit fiscal return, закрытие без оплаты, non-positive paid, пустой чек; line требует положительного количества, но допускает бесплатную позицию внутри eligible receipt;
+- header paid обязан равняться сумме line paid до публикации проекции;
+- idempotent service-role-only projection/audit RPC;
+- after-accepted trigger проецирует будущие ночные импорты в той же транзакции;
+- raw/customer tables и derived tables не получают прямой SELECT даже для service role;
+- существующая история проецируется отдельно небольшими batch через `project-poster-receipt-analytics.mjs`; default режима — read-only preview.
+
+Локальные проверки без рабочей БД:
+
+```text
+live semantics: 7 days passed
+targeted Vitest: 1 file / 5 tests passed
+node --check: both new scripts passed
+PGlite PostgreSQL 18.3: migrations 043→054, trigger projection, fiscal-return exclusion,
+reconciliation, replay, immutability and ACL passed
+```
+
+Ограничения не сняты:
+
+- 054 не применена к рабочей PostgreSQL 15.8;
+- historical projection backfill не запускался;
+- category bridge и penetration reader/UI относятся к S-12 и не включаются до полного projection coverage;
+- один найденный fiscal return подтверждает необходимость exclusion, но не покрывает все будущие редкие статусы Poster;
+- current roster не является доказательством historical roster;
+- настоящий concurrent DB race и `EXPLAIN (ANALYZE, BUFFERS)` остаются S-14.
+
+### Runtime gate после применения 054
+
+Пользователь применил 054. Readback подтвердил 3 projection tables, RLS, product bridge,
+capture trigger, оба RPC, service-role-only execution, запрет прямого SELECT derived/raw и
+отсутствие прав anon/authenticated. На момент readback `projected_days=0`.
+
+Projection backfill выполнен последовательно небольшими порциями с audit после каждого дня.
+После исправления CLI итоговый preview отдельно показывает `missingSource`, чтобы отсутствие
+исходника нельзя было принять за полное покрытие.
+
+Итоговый read-only coverage audit:
+
+```text
+2026-07: 31 verified days; 62 568 receipts; 131 230 lines;
+         62 560 eligible; 6 fiscal returns; 2 other excluded
+2026-08: 31 verified days; 63 399 receipts; 134 399 lines;
+         63 395 eligible; 0 fiscal returns; 4 other excluded
+2026-09: 28 verified days; 62 552 receipts; 131 532 lines;
+         62 550 eligible; 1 fiscal return; 1 other excluded;
+         missingSource=[2026-09-29]
+TOTAL:   188 519 verified receipts; 397 161 lines; 188 505 eligible;
+         7 fiscal returns and 7 other non-purchase receipts excluded
+```
+
+Каждый projected day получил `status=verified`: source receipt count, derived receipt count,
+line count и header/line paid totals совпали. Июль и август не имеют missing/invalid дней.
+Сентябрь 01–28 complete; 29.09 остаётся `missing_source`, а не нулём.
+
+S-11 projection foundation после этого готов для S-12 reader. Category mapping, network/store
+penetration и heatmap ещё не реализованы и не считаются готовыми.
+
+## 30.09.2026 — S-12, reader проникновения по чекам
+
+Статус: **055 применена; live readback, защищённый API, UI и E2E пройдены**.
+
+Подготовлена `055_store_penetration_analytics.sql` с service-role-only RPC
+`read_store_penetration_analytics`:
+
+- знаменатель — уникальные eligible purchase receipts из проверенной проекции 054;
+- числитель категории/товара — уникальные чеки, где встретилась категория/товар;
+- network penetration считается как отношение сетевых числителя и знаменателя, а не как
+  среднее процентов магазинов;
+- category mapping берётся из исторического sales snapshot через
+  `_store_analytics_latest_facts` для той же даты, магазина, product/modification;
+- при пропуске хотя бы одного дня или неоднозначном/неполном product-category mapping
+  reader возвращает `incomplete`/`mapping_incomplete` и не публикует частичные рейтинги;
+- для выбранной категории возвращаются store heatmap и daily trend;
+- historical roster caveat остаётся явным: `historicalRosterVerified=false`;
+- raw receipts и customer snapshots не читаются и не раскрываются.
+
+Локальная проверка в изолированном PostgreSQL 18.3 (PGlite), без Supabase/Poster/.env:
+
+```text
+targeted Vitest: 2 files / 10 tests passed
+SQL chain 043→054→055: compiled
+synthetic purchase + fiscal return: denominator=1, return excluded
+category/product/store/trend reconciliation: passed
+incomplete day: fail-closed passed
+unmapped eligible product: mapping_incomplete and empty analytics passed
+anon/authenticated execute denied; service_role execute passed
+```
+
+### Runtime gate и UI после применения 055
+
+Live readback рабочей PostgreSQL 15.8 подтвердил service-role-only RPC, RLS/ACL и полную
+проекцию контрольного окна 16–22.09.2026:
+
+```text
+status=complete
+bridge_rows=33002; mapped_rows=33002; unmapped_rows=0
+eligible_receipts=15699
+categories=27; products=100
+```
+
+Подключены строгий server-side parser, защищённый super-admin API
+`/api/admin/stores/analytics/penetration` и вкладка `Проникнення`. Интерфейс не раскрывает
+raw receipt/customer payload, показывает методику и historical-roster caveat, не усредняет
+проценты магазинов и не публикует метрики при incomplete/mapping_incomplete. Реализованы:
+
+- выбор категории и рейтинг категорий;
+- KPI знаменателя, чеков категории, сетевого проникновения и покрытия магазинов;
+- квадратная heatmap магазинов, дневной trend, рейтинг магазинов и таблица товаров;
+- переходы из heatmap в магазин и из товара в карточку товара;
+- названия категорий из текущего справочника Poster без изменения исторических фактов.
+
+Авторизованный E2E на `localhost:3210`, вся сеть, 16–22.09.2026:
+
+```text
+eligible receipts: 15699
+Пельмені receipts: 3685
+network penetration: 23.47%
+stores with category: 26/26
+Берегомет: 36/89 = 40.45%
+Клуб: 133/574 = 23.17%
+Пельмені зі свинини: 1075 receipts = 6.85%, 26/26 stores
+```
+
+Переход товара открыл `view=products&category_id=6&product_id=121&modification_id=0`;
+переход магазина `Клуб` открыл `view=stores&spot_ids=18`. Окно 23–29.09 вернуло
+`incomplete`, UI скрыл бизнес-метрики и показал 6/7 дней и пропуск 29.09. На ширине
+1000 px горизонтального переполнения нет (`scrollWidth=990`), console warning/error — `[]`.
+
+Финальная проверка кода:
+
+```text
+typecheck: passed
+full Vitest: 108 files / 1064 tests passed
+production build: passed; /admin/stores 25.5 kB, First Load JS 1.14 MB
+```
+
+Ограничения остаются явными: historical roster не подтверждён; категории пересекаются,
+поэтому их проценты нельзя складывать; 29.09 отсутствует в исходном архиве; отдельный
+`EXPLAIN (ANALYZE, BUFFERS)` и concurrency budget относятся к S-14.
+
+## 01.10.2026 — S-13, quality UI и защищённый CSV export
+
+Статус: **код, tests/build и авторизованный runtime export passed**.
+
+Добавлен service-side `/api/admin/stores/analytics/export`, доступный только `super_admin`.
+Он повторно применяет те же period/scope/asOf readers, не принимает клиентские totals и не
+читает raw receipt/customer tables. Поддержаны текущие представления `Магазини`, `Категорії`,
+`Товари`, `Проникнення`, `Якість даних` и overview. Для товаров reader проходит все страницы
+на одном `asOf` и прерывает экспорт при изменении snapshot/total.
+
+Правила публикации:
+
+- incomplete sales и incomplete/mapping_incomplete penetration возвращают 409, а не CSV с
+  частичными бизнес-метриками;
+- quality export доступен и при incomplete: он содержит status, coverage и конкретные
+  пропуски дата × магазин/дата чеков;
+- CSV имеет UTF-8 BOM, `;` delimiter, точные bigint/decimal strings и `no-store`;
+- внешние текстовые поля с `=`, `+`, `-`, `@` после пробелов/control characters получают
+  ведущий апостроф, чтобы Excel не выполнял формулы;
+- PII, клиенты, raw payload и source credentials в export не включены.
+
+Авторизованный runtime export для `Пельмені`, вся сеть, 16–22.09 прошёл с HTTP 200. Файл
+`penetration-category-6-2026-09-16-2026-09-22.csv` прочитан обратно: заголовок и строки
+26 магазинов/товаров содержат правильные period/category/receipt denominator/penetration/asOf;
+первые контрольные строки `Кварц 141/466 = 30.26%`, `Шкільна 205/871 = 23.54%`.
+Browser console warning/error — `[]`.
+
+```text
+targeted Vitest: 4 files / 24 tests passed
+full Vitest: 110 files / 1076 tests passed
+typecheck: passed
+production build: passed; /admin/stores 25.7 kB, First Load JS 1.14 MB
+```
+
+S-13 не добавляет XLSX: текущий принятый формат — защищённый CSV. Следующий этап S-14 —
+измерение SQL/API performance и concurrency; его результаты нельзя объявлять до фактических
+`EXPLAIN (ANALYZE, BUFFERS)` и контролируемого параллельного прогона.
