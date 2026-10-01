@@ -35,6 +35,15 @@ describe("store analytics overview API", () => {
     expect(loadStoreAnalyticsOverview).not.toHaveBeenCalled();
   });
 
+  it("rejects unequal comparison windows before reading the roster or aggregate", async () => {
+    const { GET } = await import("../route");
+    const response = await GET(new Request(`${endpoint}?period=30d&spot_ids=all&comparison=custom&compare_from=2026-09-17&compare_to=2026-09-23`));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "store_analytics_comparison_length_mismatch" });
+    expect(from).not.toHaveBeenCalled();
+    expect(loadStoreAnalyticsOverview).not.toHaveBeenCalled();
+  });
+
   it("passes one server-resolved asOf and selected stores to the aggregate reader", async () => {
     const { GET } = await import("../route");
     const response = await GET(new Request(`${endpoint}?period=7d&spot_ids=2,1&comparison=previous&view=overview`));

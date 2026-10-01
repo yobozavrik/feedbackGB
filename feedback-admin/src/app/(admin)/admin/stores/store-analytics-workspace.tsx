@@ -244,9 +244,14 @@ export function StoreAnalyticsWorkspace({ stores }: { stores: StoreRow[] }) {
           page={Number(search.get("page") ?? 1)} pageSize={Number(search.get("page_size") ?? 25)}
           sort={search.get("sort") ?? "revenue"} direction={search.get("direction") ?? "desc"}
           onUpdate={update} onDrill={drill} /> : <Empty />
-      : loading ? <Skeleton active paragraph={{ rows: 8 }} /> : error ? <Alert type="error" showIcon
-      message="Аналітика магазинів недоступна" description={error === "store_analytics_schema_missing"
-        ? "Потрібно застосувати міграцію 050." : "Не вдалося прочитати перевірені агрегати."} />
+      : loading ? <Skeleton active paragraph={{ rows: 8 }} /> : error ? <Alert
+      type={error === "store_analytics_comparison_length_mismatch" ? "warning" : "error"} showIcon
+      message={error === "store_analytics_comparison_length_mismatch"
+        ? "Періоди мають різну тривалість" : "Аналітика магазинів недоступна"}
+      description={error === "store_analytics_schema_missing" ? "Потрібно застосувати міграцію 050."
+        : error === "store_analytics_comparison_length_mismatch"
+          ? "Для коректного порівняння оберіть період з такою самою кількістю днів або виберіть «Попередній період»."
+          : "Не вдалося прочитати перевірені агрегати."} />
       : data ? view === "quality" ? <Quality data={data} stores={stores} />
         : view === "stores" ? <StoresView data={data} stores={stores} onSelectStore={(spotId) => drill({ spot_ids: String(spotId) })}
           onAllStores={() => update({ spot_ids: "all" })} />

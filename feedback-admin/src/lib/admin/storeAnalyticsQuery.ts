@@ -29,6 +29,10 @@ export function parseStoreAnalyticsQuery(params: URLSearchParams, now = new Date
   const period = parseAnalyticsPeriod(normalized, now);
   // Do not advertise live data until the separate provisional pipeline is accepted.
   if (period.provisionalDate !== null) throw new Error("store_analytics_provisional_not_supported");
+  if (period.closed && period.comparison.status === "available" &&
+    period.comparison.window && period.comparison.window.dates.length !== period.closed.dates.length) {
+    throw new Error("store_analytics_comparison_length_mismatch");
+  }
   const scope = parseAnalyticsScope(params);
   const view = params.get("view") ?? "overview";
   if (!STORE_ANALYTICS_VIEWS.includes(view as StoreAnalyticsView)) throw new Error("invalid_store_analytics_view");
