@@ -86,7 +86,7 @@ export function FeedbackForm({ category }: Props) {
     setSubmitting(true);
     setError(null);
 
-    if (category.id === "photo_report" && !currentPhotoReportStore) {
+    if (category.id === "photo_report" && me?.role === "seller" && !currentPhotoReportStore) {
       setError("Оберіть магазин, де працюєте зараз");
       setSubmitting(false);
       webApp?.HapticFeedback?.notificationOccurred("error");
