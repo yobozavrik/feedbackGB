@@ -371,6 +371,7 @@ export function FeedbackForm({ category }: Props) {
               maxOutputBytes={isPhotoReport ? PHOTO_REPORT_MAX_OUTPUT_BYTES : undefined}
               maxDimension={isPhotoReport ? PHOTO_REPORT_MAX_DIMENSION : undefined}
               minDimension={isPhotoReport ? PHOTO_REPORT_MIN_DIMENSION : undefined}
+              shrinkUntilOnePixel={isPhotoReport}
               onChange={setPhotos}
             />
           );

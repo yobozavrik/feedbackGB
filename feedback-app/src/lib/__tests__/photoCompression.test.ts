@@ -6,6 +6,7 @@ import {
   PHOTO_REPORT_MAX_DIMENSION,
   PHOTO_REPORT_MAX_OUTPUT_BYTES,
   PHOTO_REPORT_MIN_DIMENSION,
+  shrinkDimensions,
 } from "@/lib/photoCompression";
 
 describe("photo-report emergency compression", () => {
@@ -50,7 +51,13 @@ describe("photo-report emergency compression", () => {
   it("keeps the approved temporary limits", () => {
     expect(PHOTO_REPORT_MAX_OUTPUT_BYTES).toBe(50 * 1024);
     expect(PHOTO_REPORT_MAX_DIMENSION).toBe(768);
-    expect(PHOTO_REPORT_MIN_DIMENSION).toBe(160);
+    expect(PHOTO_REPORT_MIN_DIMENSION).toBe(1);
     expect(DEFAULT_MIN_DIMENSION).toBe(320);
+  });
+
+  it("can shrink an emergency photo to one pixel without entering a zero-size loop", () => {
+    expect(shrinkDimensions(2, 2, 1)).toEqual({ width: 1, height: 1 });
+    expect(shrinkDimensions(1, 1, 1)).toEqual({ width: 1, height: 1 });
+    expect(shrinkDimensions(160, 96, 1)).toEqual({ width: 120, height: 72 });
   });
 });

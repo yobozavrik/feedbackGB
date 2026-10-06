@@ -6,6 +6,7 @@ import {
   dataUrlByteLength,
   DEFAULT_MIN_DIMENSION,
   encodeCompressedImage,
+  shrinkDimensions,
 } from "@/lib/photoCompression";
 
 const THUMB_GRID_SIZE = 8;
@@ -22,6 +23,7 @@ interface Props {
   maxOutputBytes?: number;
   maxDimension?: number;
   minDimension?: number;
+  shrinkUntilOnePixel?: boolean;
   onChange: (dataUrls: string[]) => void;
 }
 
@@ -36,6 +38,7 @@ export function PhotoInput({
   maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
   maxDimension = DEFAULT_MAX_DIMENSION,
   minDimension = DEFAULT_MIN_DIMENSION,
+  shrinkUntilOnePixel = false,
   onChange,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -58,7 +61,13 @@ export function PhotoInput({
       const compressed = await mapWithConcurrency(
         selected,
         COMPRESS_CONCURRENCY,
-        (file) => compressImage(file, maxOutputBytes, maxDimension, minDimension),
+        (file) => compressImage(
+          file,
+          maxOutputBytes,
+          maxDimension,
+          minDimension,
+          shrinkUntilOnePixel,
+        ),
       );
       const next = [...previews, ...compressed];
       setPreviews(next);
@@ -165,6 +174,7 @@ async function compressImage(
   maxOutputBytes: number,
   maxDimension: number,
   minDimension: number,
+  shrinkUntilOnePixel: boolean,
 ): Promise<string> {
   const dataUrl = await readAsDataUrl(file);
   const img = await loadImage(dataUrl);
@@ -184,7 +194,7 @@ async function compressImage(
   // First lower image quality; then reduce dimensions if the camera image is
   // still too large. This gives the 15-photo report a deterministic request
   // budget instead of letting one modern phone exhaust the API body limit.
-  while (w >= minDimension && h >= minDimension) {
+  while (shrinkUntilOnePixel || (w >= minDimension && h >= minDimension)) {
     canvas.width = w;
     canvas.height = h;
     ctx.drawImage(img, 0, 0, w, h);
@@ -195,8 +205,15 @@ async function compressImage(
       outputMime = out.startsWith("data:image/webp;") ? "image/webp" : "image/jpeg";
       if (dataUrlByteLength(out) <= maxOutputBytes) return out;
     }
-    w = Math.round(w * 0.75);
-    h = Math.round(h * 0.75);
+    if (!shrinkUntilOnePixel) {
+      w = Math.round(w * 0.75);
+      h = Math.round(h * 0.75);
+      continue;
+    }
+    const next = shrinkDimensions(w, h, 1);
+    if (next.width === w && next.height === h) break;
+    w = next.width;
+    h = next.height;
   }
   throw new Error("Фото не вдалося стиснути до безпечного розміру");
 }
