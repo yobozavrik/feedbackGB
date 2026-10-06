@@ -2,6 +2,11 @@
 
 import { useRef, useState } from "react";
 import { CameraIcon, XIcon } from "@/components/icons";
+import {
+  dataUrlByteLength,
+  DEFAULT_MIN_DIMENSION,
+  encodeCompressedImage,
+} from "@/lib/photoCompression";
 
 const THUMB_GRID_SIZE = 8;
 
@@ -13,9 +18,10 @@ const COMPRESS_CONCURRENCY = 2;
 interface Props {
   label: string;
   maxPhotos?: number;
-  /** Decoded JPEG ceiling; photo reports use a tighter ceiling for 15 images. */
+  /** Decoded image ceiling; photo reports use a tighter ceiling for 15 images. */
   maxOutputBytes?: number;
   maxDimension?: number;
+  minDimension?: number;
   onChange: (dataUrls: string[]) => void;
 }
 
@@ -29,6 +35,7 @@ export function PhotoInput({
   maxPhotos = DEFAULT_MAX_PHOTOS,
   maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
   maxDimension = DEFAULT_MAX_DIMENSION,
+  minDimension = DEFAULT_MIN_DIMENSION,
   onChange,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -51,7 +58,7 @@ export function PhotoInput({
       const compressed = await mapWithConcurrency(
         selected,
         COMPRESS_CONCURRENCY,
-        (file) => compressImage(file, maxOutputBytes, maxDimension),
+        (file) => compressImage(file, maxOutputBytes, maxDimension, minDimension),
       );
       const next = [...previews, ...compressed];
       setPreviews(next);
@@ -157,6 +164,7 @@ async function compressImage(
   file: File,
   maxOutputBytes: number,
   maxDimension: number,
+  minDimension: number,
 ): Promise<string> {
   const dataUrl = await readAsDataUrl(file);
   const img = await loadImage(dataUrl);
@@ -171,29 +179,26 @@ async function compressImage(
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas not supported");
+  let outputMime: "image/webp" | "image/jpeg" | null = null;
 
-  // First lower JPEG quality; then reduce dimensions if the camera image is
+  // First lower image quality; then reduce dimensions if the camera image is
   // still too large. This gives the 15-photo report a deterministic request
   // budget instead of letting one modern phone exhaust the API body limit.
-  while (w >= 320 && h >= 320) {
+  while (w >= minDimension && h >= minDimension) {
     canvas.width = w;
     canvas.height = h;
     ctx.drawImage(img, 0, 0, w, h);
     for (let quality = 0.82; quality >= 0.34; quality -= 0.08) {
-      const out = canvas.toDataURL("image/jpeg", quality);
+      const out: string = outputMime === "image/jpeg"
+        ? canvas.toDataURL("image/jpeg", quality)
+        : encodeCompressedImage(canvas, quality);
+      outputMime = out.startsWith("data:image/webp;") ? "image/webp" : "image/jpeg";
       if (dataUrlByteLength(out) <= maxOutputBytes) return out;
     }
     w = Math.round(w * 0.75);
     h = Math.round(h * 0.75);
   }
   throw new Error("Фото не вдалося стиснути до безпечного розміру");
-}
-
-function dataUrlByteLength(dataUrl: string): number {
-  const comma = dataUrl.indexOf(",");
-  const base64Length = comma >= 0 ? dataUrl.length - comma - 1 : dataUrl.length;
-  const padding = dataUrl.endsWith("==") ? 2 : dataUrl.endsWith("=") ? 1 : 0;
-  return Math.floor((base64Length * 3) / 4) - padding;
 }
 
 async function mapWithConcurrency<T, R>(

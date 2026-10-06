@@ -6,6 +6,11 @@ import type { Category } from "@/lib/categories";
 import { PHOTO_REPORT_MAX_PHOTOS, PHOTO_REPORT_MIN_PHOTOS } from "@/lib/feedbackValidation";
 import { useTelegram } from "./TelegramProvider";
 import { PhotoInput } from "./PhotoInput";
+import {
+  PHOTO_REPORT_MAX_DIMENSION,
+  PHOTO_REPORT_MIN_DIMENSION,
+  PHOTO_REPORT_MAX_OUTPUT_BYTES,
+} from "@/lib/photoCompression";
 import { StoreSelect } from "./StoreSelect";
 import { AlertTriangleIcon, CloudUploadIcon, InfoIcon, MapPinIcon } from "@/components/icons";
 
@@ -363,8 +368,9 @@ export function FeedbackForm({ category }: Props) {
               key={f.id}
               label={f.label}
               maxPhotos={isPhotoReport ? PHOTO_REPORT_MAX_PHOTOS : undefined}
-              maxOutputBytes={isPhotoReport ? 280 * 1024 : undefined}
-              maxDimension={isPhotoReport ? 1280 : undefined}
+              maxOutputBytes={isPhotoReport ? PHOTO_REPORT_MAX_OUTPUT_BYTES : undefined}
+              maxDimension={isPhotoReport ? PHOTO_REPORT_MAX_DIMENSION : undefined}
+              minDimension={isPhotoReport ? PHOTO_REPORT_MIN_DIMENSION : undefined}
               onChange={setPhotos}
             />
           );
