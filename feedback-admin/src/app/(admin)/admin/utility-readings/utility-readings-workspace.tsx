@@ -12,13 +12,17 @@ type Row = { store_id: number; store_name: string; category: Category; status: "
   photo_count: number; submission: { id: string; review_status: string; revision: number; submitted_at: string } | null;
   delivery: { state: string; attempts: number; last_error_code: string | null } | null };
 type Detail = { submission: { id: string; store_id: number; category: Category; comment: string | null;
-  revision: number; review_status: string; submitted_at: string; review_note: string | null };
+  revision: number; review_status: string; submitted_at: string; superseded_at: string | null;
+  review_note: string | null };
   photos: Array<{ id: string; url: string | null }>;
   versions: Array<{ id: string; revision: number; review_status: string; submitted_at: string }>;
   delivery: { state: string; attempts: number; last_error_code: string | null } | null };
 
 const categoryLabel: Record<Category, string> = {
   electricity: "Електроенергія", water: "Вода", heating: "Опалення", other: "Інші послуги",
+};
+const reviewLabel: Record<string, string> = {
+  submitted: "Очікує перевірки", verified: "Підтверджено", needs_correction: "Повернуто на виправлення",
 };
 const baseTabs = [
   { key: "coverage", label: "Огляд фото" },
@@ -117,7 +121,8 @@ export function UtilityReadingsWorkspace() {
       render: (status: Row["status"]) => <Tag color={status === "submitted" ? "success" : "default"}>
         {status === "submitted" ? "Подано" : "Немає фото"}
       </Tag> },
-    { title: "Перевірка", key: "review", render: (_, row) => row.submission?.review_status ?? "—" },
+    { title: "Перевірка", key: "review", render: (_, row) => row.submission
+      ? reviewLabel[row.submission.review_status] ?? row.submission.review_status : "—" },
     ...(config?.delivery_enabled
       ? [{ title: "Telegram", key: "delivery", render: (_: unknown, row: Row) => row.delivery?.state ?? "—" }]
       : []),
@@ -172,8 +177,10 @@ export function UtilityReadingsWorkspace() {
         {detail ? <div className="space-y-4">
           <p>Подано: {new Intl.DateTimeFormat("uk-UA",
             { timeZone: "Europe/Kyiv", dateStyle: "medium", timeStyle: "short" }).format(new Date(detail.submission.submitted_at))}
-            {" · "}стан: {detail.submission.review_status}</p>
+            {" · "}стан: {reviewLabel[detail.submission.review_status] ?? detail.submission.review_status}</p>
           {detail.submission.comment ? <Card size="small" title="Коментар">{detail.submission.comment}</Card> : null}
+          {detail.submission.review_note ? <Card size="small" title="Примітка до перевірки">
+            {detail.submission.review_note}</Card> : null}
           <Card size="small" title={`Фото · ${detail.photos.length}`}>
             <Image.PreviewGroup><Space wrap>{detail.photos.map((photo) => photo.url
               ? <Image key={photo.id} src={photo.url} width={150} alt="Фото послуги" />
@@ -181,8 +188,10 @@ export function UtilityReadingsWorkspace() {
           </Card>
           <Card size="small" title="Історія версій"><Space wrap>{detail.versions.map((version) =>
             <Button key={version.id} type={version.id === detail.submission.id ? "primary" : "default"}
-              onClick={() => void openDetail(version.id)}>№{version.revision} · {version.review_status}</Button>)}</Space></Card>
-          {detail.submission.review_status === "submitted" ? <Space direction="vertical" className="w-full">
+              onClick={() => void openDetail(version.id)}>№{version.revision} · {reviewLabel[version.review_status] ?? version.review_status}</Button>)}</Space></Card>
+          {detail.submission.superseded_at ? <Alert type="info" showIcon
+            message="Це попередня версія. Перевіряти можна лише поточну." /> : null}
+          {!detail.submission.superseded_at && detail.submission.review_status === "submitted" ? <Space direction="vertical" className="w-full">
             <Input.TextArea value={note} onChange={(event) => setNote(event.target.value)}
               maxLength={1000} placeholder="Причина повернення або примітка" />
             <Space><Button type="primary" loading={busy} onClick={() => void review("verified")}>Підтвердити</Button>

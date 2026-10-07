@@ -43,13 +43,20 @@ export function UtilityReadingsForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const clientId = useRef(crypto.randomUUID());
+  const selectedStoreRef = useRef<number | null>(null);
+  const storeEpoch = useRef(0);
   const uploaded = useRef<Map<string, string>>(new Map());
   const submittingRef = useRef(false);
 
   useEffect(() => {
     void fetch("/api/utility-readings/stores")
       .then(async (res) => { if (!res.ok) throw new Error("Не вдалося завантажити магазини"); return res.json(); })
-      .then((data: { stores: Store[] }) => { setStores(data.stores); setStoreId(data.stores[0]?.id ?? null); })
+      .then((data: { stores: Store[] }) => {
+        setStores(data.stores);
+        selectedStoreRef.current = data.stores[0]?.id ?? null;
+        storeEpoch.current += 1;
+        setStoreId(selectedStoreRef.current);
+      })
       .catch((cause: Error) => setError(cause.message)).finally(() => setLoading(false));
   }, []);
 
@@ -75,16 +82,20 @@ export function UtilityReadingsForm() {
 
   async function loadMoreHistory() {
     if (!storeId || !config?.history_has_more || historyLoading) return;
+    const requestEpoch = storeEpoch.current;
     setHistoryLoading(true);
     try {
       const response = await fetch(`/api/utility-readings?store_id=${storeId}&history_offset=${config.history.length}`);
       if (!response.ok) throw new Error("Не вдалося завантажити попередні подання");
       const next = await response.json() as Config;
+      if (storeEpoch.current !== requestEpoch || selectedStoreRef.current !== storeId) return;
       setConfig((current) => current ? { ...current,
         history: [...current.history, ...next.history],
         history_has_more: next.history_has_more } : current);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Помилка завантаження");
+      if (storeEpoch.current === requestEpoch && selectedStoreRef.current === storeId) {
+        setError(cause instanceof Error ? cause.message : "Помилка завантаження");
+      }
     } finally { setHistoryLoading(false); }
   }
 
@@ -157,8 +168,13 @@ export function UtilityReadingsForm() {
     <div className="px-1"><h1 className="font-display text-display text-ink-900">Надати показники</h1>
       <p className="mt-1 text-body text-ink-700">Оберіть послугу, зробіть фото та надішліть.</p></div>
     {stores.length > 1 ? <div className="card p-4"><label htmlFor="utility-store" className="field-label">Магазин</label>
-      <select id="utility-store" className="field-input field-select" value={storeId ?? ""} disabled={sending}
-        onChange={(event) => setStoreId(Number(event.target.value))}>
+      <select id="utility-store" className="field-input field-select" value={storeId ?? ""}
+        disabled={sending || photoBusy} onChange={(event) => {
+          const nextStoreId = Number(event.target.value);
+          selectedStoreRef.current = nextStoreId;
+          storeEpoch.current += 1;
+          setStoreId(nextStoreId);
+        }}>
         {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
       </select></div> : null}
     {selectedStore ? <section className="rounded-2xl bg-brand-600 p-4 text-white shadow-soft">
@@ -214,7 +230,7 @@ export function UtilityReadingsForm() {
         {selectedExisting ? <p className="mt-1 text-meta text-ink-500">Нова версія замінить попередні фото.</p> : null}
       </div>
       <PhotoInput key={`${category}:${activePeriod?.id}:${photoInputVersion}`} label="Фото" maxPhotos={3} maxOutputBytes={650 * 1024}
-        maxDimension={1600} disabled={sending} onBusyChange={setPhotoBusy} onChange={setPhotos} />
+        maxDimension={1600} separateSources disabled={sending} onBusyChange={setPhotoBusy} onChange={setPhotos} />
       <div><label htmlFor="utility-comment" className="field-label">Коментар (необов’язково)</label>
         <textarea id="utility-comment" className="field-textarea" maxLength={1000}
           value={comment} onChange={(event) => setComment(event.target.value)} /></div>
@@ -222,7 +238,7 @@ export function UtilityReadingsForm() {
     {error ? <div className="callout callout-danger">{error}</div> : null}
     {success ? <div className="callout callout-success">{success}</div> : null}
     <div className="bottom-action-bar"><div className="mx-auto flex w-full max-w-md gap-2">
-      <button type="button" className="btn-back" disabled={sending} onClick={() => {
+      <button type="button" className="btn-back" disabled={sending || photoBusy} onClick={() => {
         if (category) { setCategory(null); setActivePeriod(null); setPhotos([]); setError(null); setSuccess(null); }
         else history.back();
       }}>Назад</button>

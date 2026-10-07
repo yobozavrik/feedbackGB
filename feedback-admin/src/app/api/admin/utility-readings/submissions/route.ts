@@ -22,7 +22,7 @@ export async function GET(req: Request) {
   const { db } = context;
   const [submissionResult, photosResult, eventsResult, jobResult] = await Promise.all([
     db.from("utility_submissions")
-      .select("id,store_id,period_id,category,comment,submitted_by,submitted_at,revision,supersedes_id,review_status,review_note,reviewed_at")
+      .select("id,store_id,period_id,category,comment,submitted_by,submitted_at,revision,supersedes_id,superseded_at,review_status,review_note,reviewed_at")
       .eq("id", id).maybeSingle(),
     db.from("utility_photos").select("id,upload_id,sort_order")
       .eq("submission_id", id).order("sort_order"),

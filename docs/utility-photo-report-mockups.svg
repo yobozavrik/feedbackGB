@@ -60,8 +60,10 @@
   <text x="432" y="386" class="head">💧 Вода</text>
   <text x="432" y="411" class="body muted">Сфотографуйте лічильник або рахунок</text>
   <text x="432" y="449" class="small">Фото · 1–3</text>
-  <rect x="432" y="461" width="248" height="73" rx="12" fill="#f1f3ff" stroke="#c3c5d7" stroke-dasharray="5 4"/>
-  <text x="476" y="495" class="body" fill="#1353d8">＋ Камера / галерея</text>
+  <rect x="432" y="461" width="119" height="73" rx="12" fill="#f1f3ff" stroke="#c3c5d7" stroke-dasharray="5 4"/>
+  <text x="443" y="501" class="small" fill="#1353d8">Зробити фото</text>
+  <rect x="561" y="461" width="119" height="73" rx="12" fill="#f1f3ff" stroke="#c3c5d7" stroke-dasharray="5 4"/>
+  <text x="581" y="501" class="small" fill="#1353d8">З галереї</text>
   <rect x="432" y="547" width="68" height="68" rx="12" fill="#ddeef1"/>
   <text x="449" y="585" class="small">Фото 1</text>
   <text x="487" y="558" class="body" fill="#ba1a1a">×</text>

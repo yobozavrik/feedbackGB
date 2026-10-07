@@ -26,6 +26,7 @@ interface Props {
   maxDimension?: number;
   minDimension?: number;
   shrinkUntilOnePixel?: boolean;
+  separateSources?: boolean;
   onChange: (dataUrls: string[]) => void;
 }
 
@@ -43,9 +44,11 @@ export function PhotoInput({
   maxDimension = DEFAULT_MAX_DIMENSION,
   minDimension = DEFAULT_MIN_DIMENSION,
   shrinkUntilOnePixel = false,
+  separateSources = false,
   onChange,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [previews, setPreviews] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +87,7 @@ export function PhotoInput({
       setBusy(false);
       onBusyChange?.(false);
       if (inputRef.current) inputRef.current.value = "";
+      if (cameraInputRef.current) cameraInputRef.current.value = "";
     }
   }
 
@@ -108,7 +112,18 @@ export function PhotoInput({
           {previews.length}/{maxPhotos}
         </span>
       </div>
-      <div
+      {separateSources ? <div className="grid grid-cols-2 gap-2">
+        <button type="button" disabled={disabled || busy || previews.length >= maxPhotos}
+          onClick={() => cameraInputRef.current?.click()}
+          className="flex min-h-16 items-center justify-center gap-2 rounded-app border-[1.5px] border-dashed border-ink-300 bg-elev p-3 text-ink-900 disabled:opacity-60">
+          <CameraIcon size={22} /><span className="text-sm font-semibold">Зробити фото</span>
+        </button>
+        <button type="button" disabled={disabled || busy || previews.length >= maxPhotos}
+          onClick={() => inputRef.current?.click()}
+          className="flex min-h-16 items-center justify-center gap-2 rounded-app border-[1.5px] border-dashed border-ink-300 bg-elev p-3 text-ink-900 disabled:opacity-60">
+          <span className="text-sm font-semibold">Обрати з галереї</span>
+        </button>
+      </div> : <div
         className="flex items-center gap-3 rounded-app border-[1.5px] border-dashed border-ink-300 bg-elev p-3 transition [@media(hover:hover)]:hover:border-brand-500/40"
         onClick={() => { if (!disabled && !busy) inputRef.current?.click(); }}
         role="button"
@@ -131,7 +146,8 @@ export function PhotoInput({
                 : `Камера або галерея · до ${maxPhotos} фото`}
           </div>
         </div>
-      </div>
+      </div>}
+      {error && separateSources ? <p className="mt-1 text-meta text-danger">{error}</p> : null}
       {previews.length > 0 ? (
         <div className="mt-2 grid grid-cols-4 gap-2">
           {visibleThumbs.map((src, index) => (
@@ -166,15 +182,24 @@ export function PhotoInput({
       <input
         ref={inputRef}
         type="file"
-        disabled={disabled || busy}
+        disabled={disabled || busy || (separateSources && previews.length >= maxPhotos)}
         accept="image/*"
         multiple
-        capture="environment"
+        capture={separateSources ? undefined : "environment"}
         className="hidden"
         onChange={(e) => {
           void handleFiles(Array.from(e.target.files ?? []));
         }}
       />
+      {separateSources ? <input
+        ref={cameraInputRef}
+        type="file"
+        disabled={disabled || busy || previews.length >= maxPhotos}
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => { void handleFiles(Array.from(e.target.files ?? [])); }}
+      /> : null}
     </div>
   );
 }
