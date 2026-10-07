@@ -68,8 +68,15 @@ export async function POST(req: Request) {
   const { data: period, error: periodError } = await db.from("utility_periods")
     .select("id,period_start,period_end,due_at,status").eq("id", periodId).maybeSingle();
   if (periodError) return trace.fail("query_failed", 500, "utility.period.read_failed", "error", { store_id: storeId, period_id: periodId });
-  if (!period || period.status !== "open" || new Date(period.due_at).getTime() < Date.now()) {
-    return trace.fail("period_closed", 409, "utility.period.closed", "info", { store_id: storeId, period_id: periodId });
+  if (!period) return trace.fail("period_closed", 409, "utility.period.closed", "info", { store_id: storeId, period_id: periodId });
+  if (period.status !== "open" || new Date(period.due_at).getTime() < Date.now()) {
+    const { data: prior, error: priorError } = await db.from("utility_submissions").select("id")
+      .eq("store_id", storeId).eq("period_id", periodId).eq("category", category)
+      .is("superseded_at", null).maybeSingle();
+    if (priorError) return trace.fail("query_failed", 500, "utility.upload.prior_read_failed", "error",
+      { store_id: storeId, period_id: periodId, category });
+    if (!prior) return trace.fail("period_closed", 409, "utility.period.closed", "info",
+      { store_id: storeId, period_id: periodId, category });
   }
   const { count: pendingCount, error: countError } = await db.from("utility_uploads")
     .select("id", { count: "exact", head: true }).eq("user_id", actor.id).eq("category", category)

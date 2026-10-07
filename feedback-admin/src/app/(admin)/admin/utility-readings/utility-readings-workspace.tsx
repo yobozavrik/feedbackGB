@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Alert, Button, Card, Image, Input, Modal, Space, Statistic, Table, Tag } from "antd";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Button, Card, Image, Input, Modal, Select, Space, Statistic, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 
@@ -29,6 +29,9 @@ const tabs = [
 export function UtilityReadingsWorkspace() {
   const [tab, setTab] = useState("coverage");
   const [config, setConfig] = useState<Config | null>(null);
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
+  const selectedPeriodIdRef = useRef<string | null>(null);
+  const coverageRequestSeq = useRef(0);
   const [rows, setRows] = useState<Row[]>([]);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,20 +39,50 @@ export function UtilityReadingsWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
-  async function load() {
+  async function loadCoverage(periodId: string) {
+    const requestSeq = ++coverageRequestSeq.current;
+    setLoading(true); setError(null);
+    try {
+      const response = await fetch(`/api/admin/utility-readings/coverage?period_id=${periodId}`);
+      if (!response.ok) throw new Error("Не вдалося завантажити подання");
+      const payload = await response.json() as { rows: Row[] };
+      if (requestSeq !== coverageRequestSeq.current) return;
+      setRows(payload.rows);
+      setSelectedPeriodId(periodId);
+      selectedPeriodIdRef.current = periodId;
+      setDetail(null);
+    } catch (cause) {
+      if (requestSeq === coverageRequestSeq.current) setError(cause instanceof Error ? cause.message : "Помилка завантаження");
+    } finally {
+      if (requestSeq === coverageRequestSeq.current) setLoading(false);
+    }
+  }
+
+  const load = useCallback(async () => {
+    const requestSeq = ++coverageRequestSeq.current;
     setLoading(true); setError(null);
     try {
       const response = await fetch("/api/admin/utility-readings/config");
       if (!response.ok) throw new Error("Не вдалося завантажити поточний місяць");
       const next = await response.json() as Config;
-      const coverage = await fetch(`/api/admin/utility-readings/coverage?period_id=${next.current_period_id}`);
+      const periodId = selectedPeriodIdRef.current
+        && next.periods.some((item) => item.id === selectedPeriodIdRef.current)
+        ? selectedPeriodIdRef.current : next.current_period_id;
+      const coverage = await fetch(`/api/admin/utility-readings/coverage?period_id=${periodId}`);
       if (!coverage.ok) throw new Error("Не вдалося завантажити подання");
+      const payload = await coverage.json() as { rows: Row[] };
+      if (requestSeq !== coverageRequestSeq.current) return;
       setConfig(next);
-      setRows((await coverage.json() as { rows: Row[] }).rows);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Помилка завантаження"); }
-    finally { setLoading(false); }
-  }
-  useEffect(() => { void load(); }, []);
+      setRows(payload.rows);
+      setSelectedPeriodId(periodId);
+      selectedPeriodIdRef.current = periodId;
+    } catch (cause) {
+      if (requestSeq === coverageRequestSeq.current) setError(cause instanceof Error ? cause.message : "Помилка завантаження");
+    } finally {
+      if (requestSeq === coverageRequestSeq.current) setLoading(false);
+    }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
 
   async function openDetail(id: string) {
     setError(null); setDetail(null);
@@ -90,7 +123,7 @@ export function UtilityReadingsWorkspace() {
     { title: "Деталі", key: "detail", render: (_, row) => row.submission
       ? <Button type="link" onClick={() => void openDetail(row.submission!.id)}>Відкрити</Button> : "—" },
   ];
-  const current = config?.periods.find((period) => period.id === config.current_period_id);
+  const selectedPeriod = config?.periods.find((period) => period.id === selectedPeriodId);
   const submitted = rows.filter((row) => row.status === "submitted").length;
   const missing = rows.filter((row) => row.status === "missing").length;
   const reviewPending = rows.filter((row) => row.submission?.review_status === "submitted").length;
@@ -100,11 +133,15 @@ export function UtilityReadingsWorkspace() {
     tabs={{ activeKey: tab, onChange: setTab, items: tabs }}>
     <div className="space-y-4">
       {error ? <Alert type="error" showIcon message={error} /> : null}
-      <Card><Space wrap><span>Поточний місяць: {current
-        ? `${current.period_start} — ${current.period_end}` : "завантаження"}</span>
+      <Card><Space wrap><span>Місяць:</span>
+        <Select value={selectedPeriodId ?? undefined} className="min-w-[220px]"
+          options={(config?.periods ?? []).map((period) => ({
+            value: period.id, label: `${period.period_start} — ${period.period_end}`,
+          }))}
+          onChange={(periodId) => void loadCoverage(periodId)} />
         <Button onClick={() => void load()}>Оновити</Button></Space>
-        {current ? <p className="mt-2 text-sm text-ink-500">Подати до {new Intl.DateTimeFormat("uk-UA",
-          { timeZone: "Europe/Kyiv", dateStyle: "medium", timeStyle: "short" }).format(new Date(current.due_at))} за Києвом</p> : null}
+        {selectedPeriod ? <p className="mt-2 text-sm text-ink-500">Термін першого подання: {new Intl.DateTimeFormat("uk-UA",
+          { timeZone: "Europe/Kyiv", dateStyle: "medium", timeStyle: "short" }).format(new Date(selectedPeriod.due_at))} за Києвом</p> : null}
       </Card>
       {tab === "coverage" || tab === "submissions" ? <>
         <div className="grid gap-3 md:grid-cols-3">

@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   if (!Number.isInteger(storeId) || storeId <= 0 || !validUuid(body.period_id)
     || !validUuid(body.client_submission_id) || typeof category !== "string" || !CATEGORIES.has(category)
     || (comment !== null && (typeof comment !== "string" || comment.length > 1000))
-    || !Array.isArray(uploadIds) || uploadIds.length < 1 || uploadIds.length > 15
+    || !Array.isArray(uploadIds) || uploadIds.length < 1 || uploadIds.length > 3
     || !uploadIds.every(validUuid) || new Set(uploadIds).size !== uploadIds.length) {
     return trace.fail("invalid_packet", 400, "utility.submission.invalid", "info");
   }
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   });
   if (error) {
     const message = error.message ?? "";
-    const conflict = /idempotency|verified_revision|period_closed|deadline/.test(message);
+    const conflict = /idempotency|period_closed|deadline|initial_period/.test(message);
     const forbidden = /forbidden/.test(message);
     const code = forbidden ? "forbidden" : conflict ? "conflict" : "submission_failed";
     return trace.fail(code, forbidden ? 403 : conflict ? 409 : 422,

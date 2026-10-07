@@ -22,12 +22,15 @@ export async function GET(req: Request) {
   const [stores, periods] = await Promise.all([
     db.from("v_stores").select("id,name,is_active", { count: "exact" })
       .eq("is_active", true).order("name").limit(1000),
-    db.from("utility_periods").select("id,period_start,period_end,due_at,status")
-      .order("period_start", { ascending: false }).limit(24),
+    db.from("utility_periods").select("id,period_start,period_end,due_at,status", { count: "exact" })
+      .order("period_start", { ascending: false }).limit(1000),
   ]);
   if (stores.error || periods.error) return trace.fail("query_failed", 500, "utility.admin.read_failed", "error");
   if ((stores.count ?? 0) > (stores.data?.length ?? 0)) {
     return trace.fail("store_catalog_too_large", 507, "utility.admin.read_failed", "error");
+  }
+  if ((periods.count ?? 0) > (periods.data?.length ?? 0)) {
+    return trace.fail("period_catalog_too_large", 507, "utility.admin.read_failed", "error");
   }
   return trace.json({ stores: stores.data ?? [], periods: periods.data ?? [], current_period_id: currentPeriodId });
 }
