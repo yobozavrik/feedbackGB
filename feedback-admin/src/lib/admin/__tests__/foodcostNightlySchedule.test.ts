@@ -26,9 +26,12 @@ describe("foodcost nightly schedule", () => {
       .map((job) => job.schedule)).toEqual(["40 23 * * *", "40 1 * * *"]);
   });
 
-  it("contains no duplicate path-and-time entries or wildcard hourly recurrence", () => {
+  it("contains no duplicate entries and keeps nightly jobs at fixed times", () => {
     expect(new Set(config.crons.map((job) => `${job.path}:${job.schedule}`)).size)
       .toBe(config.crons.length);
-    expect(config.crons.every((job) => /^\d+ \d+ \* \* \*$/.test(job.schedule))).toBe(true);
+    expect(config.crons.filter((job) => job.path !== "/api/cron/utility-dispatch")
+      .every((job) => /^\d+ \d+ \* \* \*$/.test(job.schedule))).toBe(true);
+    expect(config.crons.filter((job) => job.path === "/api/cron/utility-dispatch"))
+      .toEqual([{ path: "/api/cron/utility-dispatch", schedule: "*/5 * * * *" }]);
   });
 });

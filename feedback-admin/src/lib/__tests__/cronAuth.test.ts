@@ -47,11 +47,15 @@ describe("checkCronAuth", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("allows Vercel's own cron call in production when CRON_SECRET is unset", () => {
+  it("rejects a spoofed Vercel cron header in production when CRON_SECRET is unset", () => {
     vi.stubEnv("CRON_SECRET", "");
     vi.stubEnv("NODE_ENV", "production");
     const result = checkCronAuth(req({ "x-vercel-cron": "1" }));
-    expect(result.ok).toBe(true);
+    expect(result).toEqual({
+      ok: false,
+      status: 503,
+      error: "cron_secret_not_configured",
+    });
   });
 
   it("rejects a non-Vercel-cron call in production when CRON_SECRET is unset", () => {

@@ -29,16 +29,13 @@ export type CronAuthResult =
  * scheduled invocation. Ad-hoc/manual calls to these endpoints (ops,
  * debugging) must present the same header.
  *
- * When CRON_SECRET isn't configured at all: allowed outside production
- * (local dev convenience), but in production only Vercel's own
- * `x-vercel-cron: 1` request is trusted — anything else is rejected so
- * the endpoint doesn't run wide open just because the env var was never
- * set.
+ * When CRON_SECRET isn't configured, local development stays available.
+ * Production fails closed: x-vercel-cron is a request header, not proof
+ * that the caller is Vercel Cron.
  */
 export function checkCronAuth(req: Request): CronAuthResult {
   const authHeader = req.headers.get("authorization") ?? "";
   const cronSecret = process.env.CRON_SECRET;
-  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
 
   if (cronSecret) {
     const provided = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
@@ -48,7 +45,7 @@ export function checkCronAuth(req: Request): CronAuthResult {
     return { ok: true };
   }
 
-  if (process.env.NODE_ENV === "production" && !isVercelCron) {
+  if (process.env.NODE_ENV === "production") {
     return { ok: false, status: 503, error: "cron_secret_not_configured" };
   }
 
