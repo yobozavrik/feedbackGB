@@ -21,6 +21,7 @@ export function CategoryGrid() {
   const techIssue = getCategory("tech_issue");
   const consumables = getCategory("consumables_request");
   const photoReport = getCategory("photo_report");
+  const utilityEnabled = process.env.NEXT_PUBLIC_UTILITY_READINGS_ENABLED === "true";
   const secondary = getSecondaryCategories();
 
   return (
@@ -55,6 +56,18 @@ export function CategoryGrid() {
 
       {/* 4. Daily photo report */}
       {photoReport && <PriorityCard c={photoReport} idx={3} />}
+
+      {utilityEnabled ? (
+        <Link href="/utility-readings"
+          className="group relative flex min-h-[80px] items-center rounded-card border border-ink-300/20 bg-elev p-4 shadow-soft transition-all active:scale-[0.985]">
+          <div className="flex w-full items-center gap-4">
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[14px] bg-cat-supply text-[26px]">💡</div>
+            <div className="min-w-0 flex-1"><h3 className="font-display text-[17px] font-bold text-ink-900">Надати показники</h3>
+              <p className="text-body text-ink-700">Вода, світло, опалення та інше</p></div>
+            <ChevronRightIcon size={20} className="flex-shrink-0 text-ink-500" />
+          </div>
+        </Link>
+      ) : null}
 
       {/* 5. HR questions flow button */}
       <Link

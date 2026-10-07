@@ -1,6 +1,7 @@
 import {
   AimOutlined,
   CameraOutlined,
+  BulbOutlined,
   DashboardOutlined,
   FunnelPlotOutlined,
   HistoryOutlined,
@@ -68,6 +69,9 @@ const adminGroups: AdminGroupDef[] = [
       { path: "/admin/tasks", name: "Мої завдання", icon: createElement(InboxOutlined) },
       { path: "/admin/calendar", name: "Календар", icon: createElement(CalendarOutlined) },
       { path: "/admin/photo-report", name: "Фотозвіт", icon: createElement(CameraOutlined) },
+      ...(process.env.NEXT_PUBLIC_UTILITY_READINGS_ENABLED === "true"
+        ? [{ path: "/admin/utility-readings", name: "Показники", icon: createElement(BulbOutlined) }]
+        : []),
     ],
   },
   {
@@ -166,6 +170,7 @@ export const adminBreadcrumbNames: Record<string, string> = {
   "/admin/technologist/food-cost": "Фудкост",
   "/admin/technologist/production-technology": "Технологія виробництва",
   "/admin/photo-report": "Фотозвіт",
+  "/admin/utility-readings": "Показники",
   "/admin/settings": "Налаштування",
 };
 

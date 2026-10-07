@@ -40,6 +40,14 @@
     {
       "path": "/api/cron/poster-receipts",
       "schedule": "20 3 * * *"
+    },
+    {
+      "path": "/api/cron/utility-dispatch",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/utility-cleanup",
+      "schedule": "15 2 * * *"
     }
   ]
 }
