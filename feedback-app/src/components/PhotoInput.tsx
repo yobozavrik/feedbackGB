@@ -18,6 +18,8 @@ const COMPRESS_CONCURRENCY = 2;
 
 interface Props {
   label: string;
+  disabled?: boolean;
+  onBusyChange?: (busy: boolean) => void;
   maxPhotos?: number;
   /** Decoded image ceiling; photo reports use a tighter ceiling for 15 images. */
   maxOutputBytes?: number;
@@ -34,6 +36,8 @@ interface Props {
  */
 export function PhotoInput({
   label,
+  disabled = false,
+  onBusyChange,
   maxPhotos = DEFAULT_MAX_PHOTOS,
   maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
   maxDimension = DEFAULT_MAX_DIMENSION,
@@ -47,8 +51,9 @@ export function PhotoInput({
   const [error, setError] = useState<string | null>(null);
 
   async function handleFiles(files: File[]) {
-    if (files.length === 0) return;
+    if (disabled || busy || files.length === 0) return;
     setBusy(true);
+    onBusyChange?.(true);
     setError(null);
     try {
       const slots = Math.max(0, maxPhotos - previews.length);
@@ -77,11 +82,13 @@ export function PhotoInput({
       setError("Не вдалося додати фото. Спробуй інше або зроби знімок ще раз.");
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
       if (inputRef.current) inputRef.current.value = "";
     }
   }
 
   function removePhoto(index: number) {
+    if (disabled || busy) return;
     const next = previews.filter((_, i) => i !== index);
     setPreviews(next);
     onChange(next);
@@ -103,11 +110,12 @@ export function PhotoInput({
       </div>
       <div
         className="flex items-center gap-3 rounded-app border-[1.5px] border-dashed border-ink-300 bg-elev p-3 transition [@media(hover:hover)]:hover:border-brand-500/40"
-        onClick={() => inputRef.current?.click()}
+        onClick={() => { if (!disabled && !busy) inputRef.current?.click(); }}
         role="button"
-        tabIndex={0}
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled || busy}
         onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
+          if (!disabled && !busy && (e.key === "Enter" || e.key === " ")) inputRef.current?.click();
         }}
       >
         <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
@@ -136,6 +144,7 @@ export function PhotoInput({
               />
               <button
                 type="button"
+                disabled={disabled || busy}
                 onClick={(e) => {
                   e.stopPropagation();
                   removePhoto(index);
@@ -157,6 +166,7 @@ export function PhotoInput({
       <input
         ref={inputRef}
         type="file"
+        disabled={disabled || busy}
         accept="image/*"
         multiple
         capture="environment"

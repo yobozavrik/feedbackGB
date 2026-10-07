@@ -35,6 +35,7 @@ export function UtilityReadingsForm() {
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const clientId = useRef(crypto.randomUUID());
@@ -67,7 +68,7 @@ export function UtilityReadingsForm() {
   }
 
   async function submit() {
-    if (submittingRef.current || !storeId || !config?.period || !category) return;
+    if (submittingRef.current || photoBusy || !storeId || !config?.period || !category) return;
     if (photos.length < 1) { setError("Додайте хоча б одне фото"); return; }
     submittingRef.current = true;
     setSending(true); setError(null);
@@ -155,7 +156,7 @@ export function UtilityReadingsForm() {
       <div><h2 className="font-display text-title">{chosen.icon} {chosen.label}</h2>
         <p className="mt-1 text-body text-ink-700">Сфотографуйте лічильник, квитанцію або інший документ для цієї послуги.</p></div>
       <PhotoInput key={category} label="Фото" maxPhotos={15} maxOutputBytes={650 * 1024}
-        maxDimension={1600} onChange={setPhotos} />
+        maxDimension={1600} disabled={sending} onBusyChange={setPhotoBusy} onChange={setPhotos} />
       <div><label htmlFor="utility-comment" className="field-label">Коментар (необов’язково)</label>
         <textarea id="utility-comment" className="field-textarea" maxLength={1000}
           value={comment} onChange={(event) => setComment(event.target.value)} /></div>
@@ -168,7 +169,7 @@ export function UtilityReadingsForm() {
         else history.back();
       }}>Назад</button>
       {category ? <button type="button" className="btn-primary flex-1"
-        disabled={sending || !canSubmit || !photos.length || !!success}
+        disabled={sending || photoBusy || !canSubmit || !photos.length || !!success}
         onClick={() => void submit()}>{sending ? "Надсилаємо…" : "Надіслати фото"}</button> : null}
     </div></div>
   </div>;
