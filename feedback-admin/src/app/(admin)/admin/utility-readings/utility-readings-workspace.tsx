@@ -38,19 +38,21 @@ export function UtilityReadingsWorkspace() {
   const [rows, setRows] = useState<Row[]>([]);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [coverageReady, setCoverageReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
   async function loadCoverage(periodId: string) {
     const requestSeq = ++coverageRequestSeq.current;
-    setLoading(true); setError(null);
+    setLoading(true); setCoverageReady(false); setError(null);
     try {
       const response = await fetch(`/api/admin/utility-readings/coverage?period_id=${periodId}`);
       if (!response.ok) throw new Error("Не вдалося завантажити подання");
       const payload = await response.json() as { rows: Row[] };
       if (requestSeq !== coverageRequestSeq.current) return;
       setRows(payload.rows);
+      setCoverageReady(true);
       setSelectedPeriodId(periodId);
       selectedPeriodIdRef.current = periodId;
       setDetail(null);
@@ -63,7 +65,7 @@ export function UtilityReadingsWorkspace() {
 
   const load = useCallback(async () => {
     const requestSeq = ++coverageRequestSeq.current;
-    setLoading(true); setError(null);
+    setLoading(true); setCoverageReady(false); setError(null);
     try {
       const response = await fetch("/api/admin/utility-readings/config");
       if (!response.ok) throw new Error("Не вдалося завантажити поточний місяць");
@@ -77,6 +79,7 @@ export function UtilityReadingsWorkspace() {
       if (requestSeq !== coverageRequestSeq.current) return;
       setConfig(next);
       setRows(payload.rows);
+      setCoverageReady(true);
       setSelectedPeriodId(periodId);
       selectedPeriodIdRef.current = periodId;
     } catch (cause) {
@@ -152,7 +155,7 @@ export function UtilityReadingsWorkspace() {
         {selectedPeriod ? <p className="mt-2 text-sm text-ink-500">Термін першого подання: {new Intl.DateTimeFormat("uk-UA",
           { timeZone: "Europe/Kyiv", dateStyle: "medium", timeStyle: "short" }).format(new Date(selectedPeriod.due_at))} за Києвом</p> : null}
       </Card>
-      {tab === "coverage" || tab === "submissions" ? <>
+      {coverageReady && (tab === "coverage" || tab === "submissions") ? <>
         <div className="grid gap-3 md:grid-cols-3">
           <Card><Statistic title="Категорій з фото" value={submitted} /></Card>
           <Card><Statistic title="Без фото" value={missing} /></Card>

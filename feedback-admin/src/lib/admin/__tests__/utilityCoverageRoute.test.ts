@@ -46,6 +46,21 @@ describe("utility coverage route", () => {
     expect(await response.json()).toEqual({ error: "forbidden" });
   });
 
+  it("allows coverage without a configured feature flag", async () => {
+    vi.stubEnv("NEXT_PUBLIC_UTILITY_READINGS_ENABLED", undefined);
+    mocks.context.mockResolvedValue({ db: dbMock(), actor: { id: "admin", role: "admin" } });
+    const response = await GET(request());
+    expect(response.status).toBe(200);
+    expect((await response.json() as { rows: unknown[] }).rows).toHaveLength(4);
+  });
+
+  it("still allows an explicit emergency shutdown", async () => {
+    vi.stubEnv("NEXT_PUBLIC_UTILITY_READINGS_ENABLED", "false");
+    const response = await GET(request());
+    expect(response.status).toBe(404);
+    expect(mocks.context).not.toHaveBeenCalled();
+  });
+
   it("returns four category rows and counts only photos of the matching submission", async () => {
     mocks.context.mockResolvedValue({ db: dbMock(), actor: { id: "admin", role: "admin" } });
     const response = await GET(request());

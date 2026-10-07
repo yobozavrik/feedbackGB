@@ -5,7 +5,9 @@ node_modules
 .yarn/install-state.gz
 
 # testing
-coverage
+/coverage/
+/feedback-app/coverage/
+/feedback-admin/coverage/
 
 # next.js
 .next/
