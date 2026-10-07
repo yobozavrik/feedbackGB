@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   if (ensureError || !periodId) return NextResponse.json({ error: "period_unavailable" }, { status: 503 });
   const [{ data: period, error: periodError }, { data: latest, error: latestError }] = await Promise.all([
     db.from("utility_periods").select("id,period_start,period_end,due_at,status").eq("id", periodId).single(),
-    db.from("utility_submissions").select("id,category,review_status,revision,submitted_at")
+    db.from("utility_submissions").select("id,category,review_status,review_note,revision,submitted_at")
       .eq("store_id", storeId).eq("period_id", periodId).is("superseded_at", null),
   ]);
   if (periodError || latestError || !period) return NextResponse.json({ error: "query_failed" }, { status: 500 });

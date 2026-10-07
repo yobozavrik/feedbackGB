@@ -88,6 +88,7 @@ export async function GET(req: Request) {
       const batch = photos.slice(start, start + 10);
       const form = new FormData();
       form.set("chat_id", chatId);
+      form.set("reply_parameters", JSON.stringify({ message_id: messageId }));
       const media: Array<{ type: "photo"; media: string; caption?: string }> = [];
       const attachments: Array<{ blob: Blob; filename: string }> = [];
       for (const [index, photo] of batch.entries()) {

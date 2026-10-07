@@ -7,7 +7,8 @@ import { PhotoInput } from "@/components/PhotoInput";
 type Category = "electricity" | "water" | "heating" | "other";
 type Store = { id: number; name: string };
 type Period = { id: string; due_at: string; status: string };
-type Latest = { id: string; category: Category; review_status: string; revision: number };
+type Latest = { id: string; category: Category; review_status: string;
+  review_note: string | null; revision: number };
 type Config = { period: Period; latest: Latest[] };
 
 const categories: Array<{ id: Category; label: string; description: string; icon: string; tint: string }> = [
@@ -100,10 +101,10 @@ export function UtilityReadingsForm() {
           : "Не вдалося надіслати фото. Спробуйте ще раз.");
       }
       const result = await response.json() as { submission_id: string };
-      setSuccess(`Фото збережено. Номер подання: ${result.submission_id}. Пересилання в Telegram очікується.`);
+      setSuccess(`Фото збережено. Номер подання: ${result.submission_id}.`);
       setConfig((current) => current ? { ...current, latest: [
         ...current.latest.filter((item) => item.category !== category),
-        { id: result.submission_id, category, review_status: "submitted",
+        { id: result.submission_id, category, review_status: "submitted", review_note: null,
           revision: (current.latest.find((item) => item.category === category)?.revision ?? 0) + 1 },
       ] } : current);
       clientId.current = crypto.randomUUID(); uploaded.current.clear();
@@ -143,6 +144,8 @@ export function UtilityReadingsForm() {
           <span className="ml-4 min-w-0 flex-1"><span className="block font-display text-[17px] font-bold text-ink-900">{item.label}</span>
             <span className="block text-body text-ink-700">{latest?.review_status === "verified"
               ? "Перевірено · зміни через адміністратора"
+              : latest?.review_status === "needs_correction"
+                ? `Потрібне виправлення${latest.review_note ? `: ${latest.review_note}` : ""}`
               : latest ? `Подано · версія №${latest.revision}` : item.description}</span></span>
           <ChevronRightIcon size={20} className="flex-shrink-0 text-ink-500" />
         </button>;
