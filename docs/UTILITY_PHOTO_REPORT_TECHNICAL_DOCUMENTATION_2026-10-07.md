@@ -46,7 +46,7 @@
 
 ### 3.1 Подача продавцом
 
-1. Главная карточка открывает `/utility-readings`, если включён `NEXT_PUBLIC_UTILITY_READINGS_ENABLED`.
+1. Главная карточка открывает `/utility-readings` по умолчанию; явное `NEXT_PUBLIC_UTILITY_READINGS_ENABLED=false` скрывает раздел.
 2. UI запрашивает `/api/utility-readings/stores`. Продавец видит только активные магазины из основного `store_id` и активных разрешений; при нескольких выбирает магазин.
 3. UI запрашивает `/api/utility-readings?store_id=…`: сервер проверяет право магазина, создаёт или получает текущий месячный период, отдаёт deadline и последние версии по четырём категориям, а также первую страницу истории старых текущих поданий (20 строк). Кнопка «Показати ще» запрашивает следующие строки через `history_offset`.
 4. Пользователь открывает текущую категорию или ранее поданную категорию старого месяца, снимает/выбирает 1–3 фото. На этом экране общий `PhotoInput` показывает отдельные кнопки камеры и галереи; обычный «Фото звіт» сохраняет прежний ввод. Фото сжимается на устройстве до 1600 px и целевого предела 650 KiB. Пользователь может удалить фото. Переключение магазина и уход назад блокируются на время сжатия; ответ устаревшего запроса истории другого магазина не добавляется в текущий список.
@@ -227,7 +227,7 @@ RPC: `ensure_current_utility_period()` создаёт/возвращает те�
 | Cron `GET /api/cron/utility-dispatch` | Авторизованный cron → итог одного job | Выключенный флаг: skipped; нет чат ID/токена: `503`; ошибки claim/state: `500`; результат `sent`/ошибка/`uncertain`. После обработанного job даже при `ok:false` текущий маршрут возвращает HTTP 200: мониторинг должен читать JSON/БД, а не только HTTP-статус. |
 | Cron `GET /api/cron/utility-cleanup` | Авторизованный cron → `{ok, cleaned, failed, scanned}` | До 100 незакреплённых просроченных файлов; частичная ошибка даёт `ok:false`, `failed>0` при HTTP 200. |
 
-Страницы: app `/utility-readings`; admin `/admin/utility-readings`. Публичный клиентский feature flag скрывает обе страницы и соответствующие пункты меню, серверные API проверяют флаг ещё раз. В админке вкладка и колонка Telegram видны только если `UTILITY_READINGS_ENABLED=true`, заданы `TELEGRAM_UTILITY_CHAT_ID` и `TELEGRAM_BOT_TOKEN`; иначе показано уведомление об отсутствии пересылки. Это проверка конфигурации, не подтверждение работающего cron. `UTILITY_READINGS_ENABLED` управляет только Telegram worker. Cleanup включается флагом админки `NEXT_PUBLIC_UTILITY_READINGS_ENABLED` и работает без чата.
+Страницы: app `/utility-readings`; admin `/admin/utility-readings`. Первый этап доступен по умолчанию; явное `NEXT_PUBLIC_UTILITY_READINGS_ENABLED=false` скрывает страницы и пункты меню, серверные API проверяют то же правило. В админке вкладка и колонка Telegram видны только если `UTILITY_READINGS_ENABLED=true`, заданы `TELEGRAM_UTILITY_CHAT_ID` и `TELEGRAM_BOT_TOKEN`; иначе показано уведомление об отсутствии пересылки. Это проверка конфигурации, не подтверждение работающего cron. `UTILITY_READINGS_ENABLED` управляет только Telegram worker. Cleanup следует правилу доступа админки и работает без чата.
 
 Таблица перечисляет маршрутные ошибки, не исчерпывая общие ответы: seller API также могут вернуть `404 feature_disabled`, `401 unauthenticated`, `403 forbidden`, `503 backend_unavailable`; admin API — `404 feature_disabled`, `403 forbidden`, `503 backend_unavailable`; cron — `401 unauthenticated` или `503 cron_secret_not_configured` по общему `checkCronAuth`. Без `CRON_SECRET` production-запуск не следует считать безопасно настроенным.
 

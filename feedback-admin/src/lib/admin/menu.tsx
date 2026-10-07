@@ -21,6 +21,7 @@ import {
 } from "@ant-design/icons";
 import type { ProLayoutProps } from "@ant-design/pro-components";
 import { createElement } from "react";
+import { utilityReadingsEnabled } from "@/lib/admin/utilityFeature";
 
 /**
  * Структура sidebar-у адмінки, згрупована по розділах (план S4).
@@ -69,7 +70,7 @@ const adminGroups: AdminGroupDef[] = [
       { path: "/admin/tasks", name: "Мої завдання", icon: createElement(InboxOutlined) },
       { path: "/admin/calendar", name: "Календар", icon: createElement(CalendarOutlined) },
       { path: "/admin/photo-report", name: "Фотозвіт", icon: createElement(CameraOutlined) },
-      ...(process.env.NEXT_PUBLIC_UTILITY_READINGS_ENABLED === "true"
+      ...(utilityReadingsEnabled()
         ? [{ path: "/admin/utility-readings", name: "Показники", icon: createElement(BulbOutlined) }]
         : []),
     ],

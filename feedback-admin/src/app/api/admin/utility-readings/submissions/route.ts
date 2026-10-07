@@ -1,5 +1,6 @@
 import { adminUtilityContext } from "@/lib/admin/utilityAccess";
 import { utilityTrace } from "@/lib/admin/utilityLog";
+import { utilityReadingsEnabled } from "@/lib/admin/utilityFeature";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,7 +8,7 @@ const uuid = (value: unknown): value is string => typeof value === "string" && /
 
 export async function GET(req: Request) {
   const trace = utilityTrace(req, "GET /api/admin/utility-readings/submissions");
-  if (process.env.NEXT_PUBLIC_UTILITY_READINGS_ENABLED !== "true") {
+  if (!utilityReadingsEnabled()) {
     return trace.fail("feature_disabled", 404, "utility.access.denied", "warn");
   }
   const context = await adminUtilityContext();
@@ -64,7 +65,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const trace = utilityTrace(req, "POST /api/admin/utility-readings/submissions");
-  if (process.env.NEXT_PUBLIC_UTILITY_READINGS_ENABLED !== "true") {
+  if (!utilityReadingsEnabled()) {
     return trace.fail("feature_disabled", 404, "utility.access.denied", "warn");
   }
   const context = await adminUtilityContext();

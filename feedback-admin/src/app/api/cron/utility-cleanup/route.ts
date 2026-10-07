@@ -1,6 +1,7 @@
 import { checkCronAuth } from "@/lib/cronAuth";
 import { getServerSupabase } from "@/lib/supabase";
 import { utilityTrace } from "@/lib/admin/utilityLog";
+import { utilityReadingsEnabled } from "@/lib/admin/utilityFeature";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export async function GET(req: Request) {
   if (!auth.ok) return trace.fail(auth.error, auth.status, "utility.access.denied", "warn");
   // Photo cleanup must run when the app/admin feature is on, even while
   // Telegram dispatch remains disabled pending its separate chat setup.
-  if (process.env.NEXT_PUBLIC_UTILITY_READINGS_ENABLED !== "true") {
+  if (!utilityReadingsEnabled()) {
     return trace.json({ ok: true, skipped: true });
   }
   const db = getServerSupabase();

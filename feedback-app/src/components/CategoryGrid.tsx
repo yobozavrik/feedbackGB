@@ -9,6 +9,7 @@ import {
 import { track } from "@/lib/analytics";
 import { ChevronRightIcon } from "@/components/icons";
 import { CATEGORY_TINT_BG } from "@/lib/categoryTint";
+import { utilityReadingsEnabled } from "@/lib/utilityFeature";
 
 /**
  * Main screen grid layout:
@@ -21,7 +22,7 @@ export function CategoryGrid() {
   const techIssue = getCategory("tech_issue");
   const consumables = getCategory("consumables_request");
   const photoReport = getCategory("photo_report");
-  const utilityEnabled = process.env.NEXT_PUBLIC_UTILITY_READINGS_ENABLED === "true";
+  const utilityEnabled = utilityReadingsEnabled();
   const secondary = getSecondaryCategories();
 
   return (

@@ -1,12 +1,13 @@
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 import { getServerSupabase } from "@/lib/supabase";
+import { utilityReadingsEnabled } from "@/lib/utilityFeature";
 
 export type UtilityDb = NonNullable<ReturnType<typeof getServerSupabase>>;
 export type UtilityActor = { id: string; role: "seller" | "admin" | "super_admin"; homeStoreId: number | null };
 
 export async function utilityContext(): Promise<{ db: UtilityDb; actor: UtilityActor } | { error: string; status: number }> {
-  if (process.env.NEXT_PUBLIC_UTILITY_READINGS_ENABLED !== "true") return { error: "feature_disabled", status: 404 };
+  if (!utilityReadingsEnabled()) return { error: "feature_disabled", status: 404 };
   const session = await verifySession(cookies().get(SESSION_COOKIE)?.value);
   if (!session) return { error: "unauthenticated", status: 401 };
   const db = getServerSupabase();
