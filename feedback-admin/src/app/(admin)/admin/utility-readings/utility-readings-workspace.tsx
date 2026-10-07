@@ -6,7 +6,7 @@ import type { ColumnsType } from "antd/es/table";
 import { AdminPageContainer } from "@/components/admin/AdminPageContainer";
 
 type Period = { id: string; period_start: string; period_end: string; due_at: string; status: string };
-type Config = { periods: Period[]; current_period_id: string };
+type Config = { periods: Period[]; current_period_id: string; delivery_enabled: boolean };
 type Category = "electricity" | "water" | "heating" | "other";
 type Row = { store_id: number; store_name: string; category: Category; status: "missing" | "submitted";
   photo_count: number; submission: { id: string; review_status: string; revision: number; submitted_at: string } | null;
@@ -20,10 +20,9 @@ type Detail = { submission: { id: string; store_id: number; category: Category; 
 const categoryLabel: Record<Category, string> = {
   electricity: "Електроенергія", water: "Вода", heating: "Опалення", other: "Інші послуги",
 };
-const tabs = [
+const baseTabs = [
   { key: "coverage", label: "Огляд фото" },
   { key: "submissions", label: "Подання" },
-  { key: "delivery", label: "Доставка в Telegram" },
 ];
 
 export function UtilityReadingsWorkspace() {
@@ -119,7 +118,9 @@ export function UtilityReadingsWorkspace() {
         {status === "submitted" ? "Подано" : "Немає фото"}
       </Tag> },
     { title: "Перевірка", key: "review", render: (_, row) => row.submission?.review_status ?? "—" },
-    { title: "Telegram", key: "delivery", render: (_, row) => row.delivery?.state ?? "—" },
+    ...(config?.delivery_enabled
+      ? [{ title: "Telegram", key: "delivery", render: (_: unknown, row: Row) => row.delivery?.state ?? "—" }]
+      : []),
     { title: "Деталі", key: "detail", render: (_, row) => row.submission
       ? <Button type="link" onClick={() => void openDetail(row.submission!.id)}>Відкрити</Button> : "—" },
   ];
@@ -130,9 +131,12 @@ export function UtilityReadingsWorkspace() {
 
   return <AdminPageContainer title="Показники комунальних послуг"
     subTitle="Фото за чотирма категоріями по магазинах"
-    tabs={{ activeKey: tab, onChange: setTab, items: tabs }}>
+    tabs={{ activeKey: tab, onChange: setTab, items: config?.delivery_enabled
+      ? [...baseTabs, { key: "delivery", label: "Доставка в Telegram" }] : baseTabs }}>
     <div className="space-y-4">
       {error ? <Alert type="error" showIcon message={error} /> : null}
+      {config && !config.delivery_enabled ? <Alert type="info" showIcon
+        message="Фото зберігаються в системі. Пересилання в Telegram ще не налаштоване." /> : null}
       <Card><Space wrap><span>Місяць:</span>
         <Select value={selectedPeriodId ?? undefined} className="min-w-[220px]"
           options={(config?.periods ?? []).map((period) => ({

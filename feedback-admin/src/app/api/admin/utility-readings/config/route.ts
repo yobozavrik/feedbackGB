@@ -32,5 +32,8 @@ export async function GET(req: Request) {
   if ((periods.count ?? 0) > (periods.data?.length ?? 0)) {
     return trace.fail("period_catalog_too_large", 507, "utility.admin.read_failed", "error");
   }
-  return trace.json({ stores: stores.data ?? [], periods: periods.data ?? [], current_period_id: currentPeriodId });
+  return trace.json({ stores: stores.data ?? [], periods: periods.data ?? [], current_period_id: currentPeriodId,
+    delivery_enabled: process.env.UTILITY_READINGS_ENABLED === "true"
+      && !!process.env.TELEGRAM_UTILITY_CHAT_ID?.trim()
+      && !!process.env.TELEGRAM_BOT_TOKEN?.trim() });
 }

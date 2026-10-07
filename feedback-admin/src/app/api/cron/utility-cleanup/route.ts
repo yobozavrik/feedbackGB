@@ -10,7 +10,11 @@ export async function GET(req: Request) {
   const trace = utilityTrace(req, "GET /api/cron/utility-cleanup");
   const auth = checkCronAuth(req);
   if (!auth.ok) return trace.fail(auth.error, auth.status, "utility.access.denied", "warn");
-  if (process.env.UTILITY_READINGS_ENABLED !== "true") return trace.json({ ok: true, skipped: true });
+  // Photo cleanup must run when the app/admin feature is on, even while
+  // Telegram dispatch remains disabled pending its separate chat setup.
+  if (process.env.NEXT_PUBLIC_UTILITY_READINGS_ENABLED !== "true") {
+    return trace.json({ ok: true, skipped: true });
+  }
   const db = getServerSupabase();
   if (!db) return trace.fail("backend_unavailable", 503, "utility.access.backend_failed", "error");
   const { data: expired, error } = await db.from("utility_uploads").select("id,storage_path")

@@ -73,7 +73,7 @@ Worker посылает текст с магазином, услугой, пер
 
 [Telegram Bot API](https://core.telegram.org/bots/api#sendmediagroup) допускает 2–10 объектов в одном `sendMediaGroup` и возвращает массив сообщений. **Требуется до запуска:** проверить тариф/план Vercel: [документация Vercel](https://vercel.com/docs/cron-jobs/manage-cron-jobs) ограничивает Hobby cron одним запуском в день; конфигурация `*/5` без подходящего плана может не развернуться. Vercel также не повторяет неудачную cron-инвокацию автоматически, поэтому состояние очереди и ошибки необходимо наблюдать отдельно.
 
-Cron `/api/cron/utility-cleanup` идёт ежедневно в `02:15 UTC`, берёт до 100 просроченных незакреплённых загрузок, удаляет файлы и затем строки. При ошибке отдельного файла/строки продолжает цикл, пишет безопасное событие и увеличивает `failed` в ответе.
+Cron `/api/cron/utility-cleanup` идёт ежедневно в `02:15 UTC`, берёт до 100 просроченных незакреплённых загрузок, удаляет файлы и затем строки. При ошибке отдельного файла/строки продолжает цикл, пишет безопасное событие и увеличивает `failed` в ответе. Он включается флагом админки `NEXT_PUBLIC_UTILITY_READINGS_ENABLED`, отдельно от Telegram worker; для первого этапа нужны работающий cron и `CRON_SECRET`.
 
 ## 4. Схемы Mermaid
 
@@ -227,7 +227,7 @@ RPC: `ensure_current_utility_period()` создаёт/возвращает те�
 | Cron `GET /api/cron/utility-dispatch` | Авторизованный cron → итог одного job | Выключенный флаг: skipped; нет чат ID/токена: `503`; ошибки claim/state: `500`; результат `sent`/ошибка/`uncertain`. После обработанного job даже при `ok:false` текущий маршрут возвращает HTTP 200: мониторинг должен читать JSON/БД, а не только HTTP-статус. |
 | Cron `GET /api/cron/utility-cleanup` | Авторизованный cron → `{ok, cleaned, failed, scanned}` | До 100 незакреплённых просроченных файлов; частичная ошибка даёт `ok:false`, `failed>0` при HTTP 200. |
 
-Страницы: app `/utility-readings`; admin `/admin/utility-readings`. Публичный клиентский feature flag скрывает обе страницы и соответствующие пункты меню, серверные API проверяют флаг ещё раз. `UTILITY_READINGS_ENABLED` отдельно управляет только cron worker/cleanup.
+Страницы: app `/utility-readings`; admin `/admin/utility-readings`. Публичный клиентский feature flag скрывает обе страницы и соответствующие пункты меню, серверные API проверяют флаг ещё раз. В админке вкладка и колонка Telegram видны только если `UTILITY_READINGS_ENABLED=true`, заданы `TELEGRAM_UTILITY_CHAT_ID` и `TELEGRAM_BOT_TOKEN`; иначе показано уведомление об отсутствии пересылки. Это проверка конфигурации, не подтверждение работающего cron. `UTILITY_READINGS_ENABLED` управляет только Telegram worker. Cleanup включается флагом админки `NEXT_PUBLIC_UTILITY_READINGS_ENABLED` и работает без чата.
 
 Таблица перечисляет маршрутные ошибки, не исчерпывая общие ответы: seller API также могут вернуть `404 feature_disabled`, `401 unauthenticated`, `403 forbidden`, `503 backend_unavailable`; admin API — `404 feature_disabled`, `403 forbidden`, `503 backend_unavailable`; cron — `401 unauthenticated` или `503 cron_secret_not_configured` по общему `checkCronAuth`. Без `CRON_SECRET` production-запуск не следует считать безопасно настроенным.
 
@@ -335,7 +335,7 @@ group by state order by state;
 | Фактическая отправка в отдельный Telegram-чат | Не проверено; `TELEGRAM_UTILITY_CHAT_ID` не предоставлен. |
 | Сквозное структурированное логирование ошибок | Реализовано в локальном серверном коде seller/admin API и cron; unit-тесты проверяют request ID и исключение неразрешённых полей. Staging/production лог и алерты не проверены. |
 
-Перед включением нужны: staging-проверка RPC и всего маршрута, точный отдельный Telegram-чат и ответственный за `uncertain`, проверка логов/алертов и ручная приёмка на устройствах. Правило повторной отправки уже согласовано; нельзя обозначать модуль как запущенный, пока эти пункты не проверены.
+Для первого этапа без Telegram нужны staging-проверка RPC и маршрута seller → Supabase → admin, проверка cleanup cron/`CRON_SECRET`, логов и ручная приёмка на устройствах. Только после этого можно отдельно включить флаги app/admin. Telegram-чат, ответственный за `uncertain`, проверка отправки и накопленной очереди относятся ко второму этапу; до этого `UTILITY_READINGS_ENABLED` остаётся выключенным. Первый этап нельзя обозначать как доставку бухгалтеру в чат.
 
 ## 9. Карта исходного кода
 

@@ -79,7 +79,6 @@
   <line x1="750" y1="202" x2="1438" y2="202" stroke="#e6e7ef"/>
   <text x="774" y="237" class="body" fill="#1353d8" font-weight="700">Огляд фото</text>
   <text x="915" y="237" class="body muted">Подання</text>
-  <text x="1020" y="237" class="body muted">Доставка в Telegram</text>
   <line x1="774" y1="247" x2="881" y2="247" stroke="#1353d8" stroke-width="3"/>
   <rect x="772" y="269" width="644" height="65" rx="12" fill="#f1f3ff"/>
   <text x="790" y="295" class="body" font-weight="700">Місяць: 01.10–31.10  ▾</text>
@@ -100,6 +99,7 @@
   <line x1="790" y1="591" x2="1398" y2="591" stroke="#e6e7ef"/>
   <text x="804" y="626" class="body">Галі Балувані · Центр</text><text x="990" y="626" class="body">Опалення</text>
   <text x="1136" y="626" class="body">0</text><text x="1205" y="626" class="body muted">—</text>
+  <text x="790" y="687" class="small">Пересилання в Telegram ще не налаштоване.</text>
   <text x="790" y="746" class="small">Натискання «Відкрити» показує фото, коментар, версії й рішення адміністратора.</text>
   <text x="42" y="823" class="small">Дані в ескізі вигадані для показу інтерфейсу; фактичні магазини, лічильники й статуси беруться з Supabase.</text>
 </svg>
