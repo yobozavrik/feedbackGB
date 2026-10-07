@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { NextResponse } from "next/server";
 import { canUseUtilityStore, utilityContext, validUuid } from "@/lib/utilityAccess";
+import { utilityTrace } from "@/lib/utilityLog";
 
 export const runtime = "nodejs";
 const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
@@ -43,50 +43,62 @@ function imageType(bytes: Uint8Array): { mime: string; ext: string } | null {
 
 /** One photo per request keeps the request below hosting body limits. */
 export async function POST(req: Request) {
+  const trace = utilityTrace(req, "POST /api/utility-readings/uploads");
   const contentLength = Number(req.headers.get("content-length") ?? 0);
-  if (contentLength > MAX_REQUEST_BYTES) return NextResponse.json({ error: "photo_too_large" }, { status: 413 });
+  if (contentLength > MAX_REQUEST_BYTES) return trace.fail("photo_too_large", 413, "utility.upload.too_large", "info");
   const context = await utilityContext();
-  if ("error" in context) return NextResponse.json({ error: context.error }, { status: context.status });
+  if ("error" in context) return trace.fail(context.error, context.status,
+    context.status >= 500 ? "utility.access.backend_failed" : "utility.access.denied",
+    context.status >= 500 ? "error" : "warn");
   const { db, actor } = context;
   const form = await boundedFormData(req);
-  if (form === "too_large") return NextResponse.json({ error: "photo_too_large" }, { status: 413 });
+  if (form === "too_large") return trace.fail("photo_too_large", 413, "utility.upload.too_large", "info");
   const storeId = Number(form?.get("store_id"));
   const periodId = form?.get("period_id");
   const category = form?.get("category");
+  const clientSubmissionId = form?.get("client_submission_id");
   const photo = form?.get("photo");
   if (!Number.isInteger(storeId) || storeId <= 0 || !validUuid(periodId)
-    || typeof category !== "string" || !CATEGORIES.has(category) || !(photo instanceof File)) {
-    return NextResponse.json({ error: "invalid_upload" }, { status: 400 });
+    || typeof category !== "string" || !CATEGORIES.has(category) || !(photo instanceof File)
+    || (clientSubmissionId !== null && !validUuid(clientSubmissionId))) {
+    return trace.fail("invalid_upload", 400, "utility.upload.invalid", "info");
   }
-  if (!(await canUseUtilityStore(db, actor, storeId))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  if (photo.size < 1 || photo.size > MAX_PHOTO_BYTES) return NextResponse.json({ error: "photo_too_large" }, { status: 413 });
+  if (!(await canUseUtilityStore(db, actor, storeId))) return trace.fail("forbidden", 403, "utility.access.denied", "warn", { store_id: storeId });
+  if (photo.size < 1 || photo.size > MAX_PHOTO_BYTES) return trace.fail("photo_too_large", 413, "utility.upload.too_large", "info", { store_id: storeId });
   const { data: period, error: periodError } = await db.from("utility_periods")
     .select("id,period_start,period_end,due_at,status").eq("id", periodId).maybeSingle();
-  if (periodError) return NextResponse.json({ error: "query_failed" }, { status: 500 });
+  if (periodError) return trace.fail("query_failed", 500, "utility.period.read_failed", "error", { store_id: storeId, period_id: periodId });
   if (!period || period.status !== "open" || new Date(period.due_at).getTime() < Date.now()) {
-    return NextResponse.json({ error: "period_closed" }, { status: 409 });
+    return trace.fail("period_closed", 409, "utility.period.closed", "info", { store_id: storeId, period_id: periodId });
   }
   const { count: pendingCount, error: countError } = await db.from("utility_uploads")
     .select("id", { count: "exact", head: true }).eq("user_id", actor.id).eq("category", category)
     .is("claimed_by", null).gte("expires_at", new Date().toISOString());
-  if (countError) return NextResponse.json({ error: "query_failed" }, { status: 500 });
-  if ((pendingCount ?? 0) >= 30) return NextResponse.json({ error: "too_many_pending_photos" }, { status: 429 });
+  if (countError) return trace.fail("query_failed", 500, "utility.upload.pending_count_failed", "error", { store_id: storeId, period_id: periodId });
+  if ((pendingCount ?? 0) >= 30) return trace.fail("too_many_pending_photos", 429, "utility.upload.pending_limit", "info", { store_id: storeId });
   const bytes = new Uint8Array(await photo.arrayBuffer());
   const type = imageType(bytes);
-  if (!type) return NextResponse.json({ error: "invalid_photo_type" }, { status: 400 });
+  if (!type) return trace.fail("invalid_photo_type", 400, "utility.upload.invalid", "info", { store_id: storeId });
   const id = randomUUID();
   const path = `utility/${storeId}/${periodId}/${category}/${id}.${type.ext}`;
   const { error: storageError } = await db.storage.from("utility-reading-photos")
     .upload(path, bytes, { contentType: type.mime, upsert: false });
-  if (storageError) return NextResponse.json({ error: "storage_failed" }, { status: 503 });
+  if (storageError) return trace.fail("storage_failed", 503, "utility.upload.storage_failed", "error",
+    { phase: "storage_upload", store_id: storeId, period_id: periodId, category, upload_id: id,
+      client_submission_id: clientSubmissionId ?? undefined });
   const { error: insertError } = await db.from("utility_uploads").insert({
     id, user_id: actor.id, store_id: storeId, period_id: periodId, category,
     storage_path: path, mime: type.mime, bytes: bytes.length,
     sha256: createHash("sha256").update(bytes).digest("hex"),
   });
   if (insertError) {
-    await db.storage.from("utility-reading-photos").remove([path]);
-    return NextResponse.json({ error: "upload_record_failed" }, { status: 503 });
+    trace.log("utility.upload.record_failed", "error", { phase: "metadata_insert", store_id: storeId, period_id: periodId, category, upload_id: id,
+      client_submission_id: clientSubmissionId ?? undefined, error_code: "upload_record_failed" });
+    const { error: compensationError } = await db.storage.from("utility-reading-photos").remove([path]);
+    if (compensationError) trace.log("utility.upload.compensation_failed", "critical",
+      { phase: "storage_compensation", store_id: storeId, period_id: periodId, category, upload_id: id,
+        client_submission_id: clientSubmissionId ?? undefined, error_code: "compensation_failed" });
+    return trace.json({ error: "upload_record_failed" }, 503);
   }
-  return NextResponse.json({ upload_id: id, bytes: bytes.length, mime: type.mime });
+  return trace.json({ upload_id: id, bytes: bytes.length, mime: type.mime });
 }

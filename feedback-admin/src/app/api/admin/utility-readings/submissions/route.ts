@@ -1,18 +1,24 @@
-import { NextResponse } from "next/server";
 import { adminUtilityContext } from "@/lib/admin/utilityAccess";
+import { utilityTrace } from "@/lib/admin/utilityLog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const uuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f-]{36}$/i.test(value);
 
 export async function GET(req: Request) {
+  const trace = utilityTrace(req, "GET /api/admin/utility-readings/submissions");
   if (process.env.NEXT_PUBLIC_UTILITY_READINGS_ENABLED !== "true") {
-    return NextResponse.json({ error: "feature_disabled" }, { status: 404 });
+    return trace.fail("feature_disabled", 404, "utility.access.denied", "warn");
   }
   const context = await adminUtilityContext();
-  if ("error" in context) return NextResponse.json({ error: context.error }, { status: context.status });
+  if ("error" in context) {
+    const status = context.status ?? 500;
+    return trace.fail(context.error ?? "backend_unavailable", status,
+      status >= 500 ? "utility.access.backend_failed" : "utility.access.denied",
+      status >= 500 ? "error" : "warn");
+  }
   const id = new URL(req.url).searchParams.get("id");
-  if (!uuid(id)) return NextResponse.json({ error: "invalid_id" }, { status: 400 });
+  if (!uuid(id)) return trace.fail("invalid_id", 400, "utility.admin.invalid", "info");
   const { db } = context;
   const [submissionResult, photosResult, eventsResult, jobResult] = await Promise.all([
     db.from("utility_submissions")
@@ -26,25 +32,25 @@ export async function GET(req: Request) {
       .eq("submission_id", id).maybeSingle(),
   ]);
   if (submissionResult.error || photosResult.error || eventsResult.error || jobResult.error) {
-    return NextResponse.json({ error: "query_failed" }, { status: 500 });
+    return trace.fail("query_failed", 500, "utility.admin.read_failed", "error", { submission_id: id });
   }
   const submission = submissionResult.data;
-  if (!submission) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!submission) return trace.fail("not_found", 404, "utility.admin.not_found", "info", { submission_id: id });
   const { data: versions, error: versionsError } = await db.from("utility_submissions")
     .select("id,revision,submitted_at,review_status,superseded_at")
     .eq("store_id", submission.store_id).eq("period_id", submission.period_id)
     .eq("category", submission.category).order("revision", { ascending: false });
-  if (versionsError) return NextResponse.json({ error: "query_failed" }, { status: 500 });
+  if (versionsError) return trace.fail("query_failed", 500, "utility.admin.read_failed", "error", { submission_id: id });
   const ids = (photosResult.data ?? []).map((photo) => photo.upload_id);
   const { data: uploads, error: uploadError } = ids.length
     ? await db.from("utility_uploads").select("id,storage_path,mime,bytes").in("id", ids)
     : { data: [], error: null };
-  if (uploadError) return NextResponse.json({ error: "query_failed" }, { status: 500 });
+  if (uploadError) return trace.fail("query_failed", 500, "utility.admin.read_failed", "error", { submission_id: id });
   const paths = (uploads ?? []).map((upload) => upload.storage_path);
   const { data: signed, error: signError } = paths.length
     ? await db.storage.from("utility-reading-photos").createSignedUrls(paths, 10 * 60)
     : { data: [], error: null };
-  if (signError) return NextResponse.json({ error: "signing_failed" }, { status: 500 });
+  if (signError) return trace.fail("signing_failed", 500, "utility.admin.sign_failed", "error", { submission_id: id });
   const urlByPath = new Map((signed ?? []).flatMap((item) => item.path && item.signedUrl
     ? [[item.path, item.signedUrl] as const] : []));
   const uploadById = new Map((uploads ?? []).map((upload) => [upload.id, upload]));
@@ -52,33 +58,39 @@ export async function GET(req: Request) {
     const upload = uploadById.get(photo.upload_id);
     return { id: photo.id, url: upload ? urlByPath.get(upload.storage_path) ?? null : null };
   });
-  return NextResponse.json({ submission, photos, versions: versions ?? [],
+  return trace.json({ submission, photos, versions: versions ?? [],
     events: eventsResult.data ?? [], delivery: jobResult.data ?? null });
 }
 
 export async function POST(req: Request) {
+  const trace = utilityTrace(req, "POST /api/admin/utility-readings/submissions");
   if (process.env.NEXT_PUBLIC_UTILITY_READINGS_ENABLED !== "true") {
-    return NextResponse.json({ error: "feature_disabled" }, { status: 404 });
+    return trace.fail("feature_disabled", 404, "utility.access.denied", "warn");
   }
   const context = await adminUtilityContext();
-  if ("error" in context) return NextResponse.json({ error: context.error }, { status: context.status });
+  if ("error" in context) {
+    const status = context.status ?? 500;
+    return trace.fail(context.error ?? "backend_unavailable", status,
+      status >= 500 ? "utility.access.backend_failed" : "utility.access.denied",
+      status >= 500 ? "error" : "warn");
+  }
   const { db, actor } = context;
   const raw = await req.text();
-  if (raw.length > 8_192) return NextResponse.json({ error: "payload_too_large" }, { status: 413 });
+  if (raw.length > 8_192) return trace.fail("payload_too_large", 413, "utility.admin.invalid", "info");
   let body: Record<string, unknown>;
   try { body = JSON.parse(raw) as Record<string, unknown>; }
-  catch { return NextResponse.json({ error: "invalid_json" }, { status: 400 }); }
+  catch { return trace.fail("invalid_json", 400, "utility.admin.invalid", "info"); }
   if (!uuid(body.id) || !["verified", "needs_correction"].includes(String(body.status))
     || (body.note != null && (typeof body.note !== "string" || body.note.length > 1000))) {
-    return NextResponse.json({ error: "invalid_review" }, { status: 400 });
+    return trace.fail("invalid_review", 400, "utility.admin.invalid", "info");
   }
   if (body.status === "needs_correction" && (!body.note || !String(body.note).trim())) {
-    return NextResponse.json({ error: "review_note_required" }, { status: 400 });
+    return trace.fail("review_note_required", 400, "utility.admin.invalid", "info", { submission_id: body.id });
   }
   const { error } = await db.rpc("review_utility_submission", {
     p_submission_id: body.id, p_actor_id: actor.id, p_status: body.status,
     p_note: typeof body.note === "string" ? body.note : null,
   });
-  if (error) return NextResponse.json({ error: "review_conflict" }, { status: 409 });
-  return NextResponse.json({ ok: true });
+  if (error) return trace.fail("review_conflict", 409, "utility.admin.review_failed", "error", { submission_id: body.id });
+  return trace.json({ ok: true });
 }

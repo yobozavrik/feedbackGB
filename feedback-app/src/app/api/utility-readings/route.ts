@@ -1,24 +1,27 @@
-import { NextResponse } from "next/server";
 import { canUseUtilityStore, utilityContext } from "@/lib/utilityAccess";
+import { utilityTrace } from "@/lib/utilityLog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Current month is an internal key; the seller never chooses a period. */
 export async function GET(req: Request) {
+  const trace = utilityTrace(req, "GET /api/utility-readings");
   const context = await utilityContext();
-  if ("error" in context) return NextResponse.json({ error: context.error }, { status: context.status });
+  if ("error" in context) return trace.fail(context.error, context.status,
+    context.status >= 500 ? "utility.access.backend_failed" : "utility.access.denied",
+    context.status >= 500 ? "error" : "warn");
   const { db, actor } = context;
   const storeId = Number(new URL(req.url).searchParams.get("store_id"));
-  if (!Number.isInteger(storeId) || storeId <= 0) return NextResponse.json({ error: "invalid_store" }, { status: 400 });
-  if (!(await canUseUtilityStore(db, actor, storeId))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!Number.isInteger(storeId) || storeId <= 0) return trace.fail("invalid_store", 400, "utility.access.invalid_store", "info");
+  if (!(await canUseUtilityStore(db, actor, storeId))) return trace.fail("forbidden", 403, "utility.access.denied", "warn", { store_id: storeId });
   const { data: periodId, error: ensureError } = await db.rpc("ensure_current_utility_period");
-  if (ensureError || !periodId) return NextResponse.json({ error: "period_unavailable" }, { status: 503 });
+  if (ensureError || !periodId) return trace.fail("period_unavailable", 503, "utility.period.ensure_failed", "error", { store_id: storeId });
   const [{ data: period, error: periodError }, { data: latest, error: latestError }] = await Promise.all([
     db.from("utility_periods").select("id,period_start,period_end,due_at,status").eq("id", periodId).single(),
     db.from("utility_submissions").select("id,category,review_status,review_note,revision,submitted_at")
       .eq("store_id", storeId).eq("period_id", periodId).is("superseded_at", null),
   ]);
-  if (periodError || latestError || !period) return NextResponse.json({ error: "query_failed" }, { status: 500 });
-  return NextResponse.json({ period, latest: latest ?? [] });
+  if (periodError || latestError || !period) return trace.fail("query_failed", 500, "utility.period.read_failed", "error", { store_id: storeId, period_id: periodId });
+  return trace.json({ period, latest: latest ?? [] });
 }

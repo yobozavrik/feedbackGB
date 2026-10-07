@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
 import { checkCronAuth } from "@/lib/cronAuth";
 import { getServerSupabase } from "@/lib/supabase";
 import { TelegramError, telegramAlbum } from "@/lib/admin/utilityTelegram";
+import { utilityTrace } from "@/lib/admin/utilityLog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +9,10 @@ export const maxDuration = 300;
 const categoryLabel: Record<string, string> = {
   electricity: "Електроенергія", water: "Вода", heating: "Опалення", other: "Інші послуги",
 };
+const knownDeliveryErrors = new Set([
+  "submission_missing", "packet_query_failed", "photo_missing", "telegram_text_too_long",
+  "delivery_ledger_write_failed", "upload_missing", "photo_download_failed",
+]);
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -31,20 +35,21 @@ async function telegram(method: string, token: string, body: Record<string, unkn
 
 /** This route is deployed only in feedback-admin, so there is one dispatcher. */
 export async function GET(req: Request) {
+  const trace = utilityTrace(req, "GET /api/cron/utility-dispatch");
   const auth = checkCronAuth(req);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  if (process.env.UTILITY_READINGS_ENABLED !== "true") return NextResponse.json({ ok: true, skipped: true, reason: "feature_disabled" });
+  if (!auth.ok) return trace.fail(auth.error, auth.status, "utility.access.denied", "warn");
+  if (process.env.UTILITY_READINGS_ENABLED !== "true") return trace.json({ ok: true, skipped: true, reason: "feature_disabled" });
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_UTILITY_CHAT_ID;
-  if (!token || !chatId) return NextResponse.json({ error: "utility_telegram_not_configured" }, { status: 503 });
+  if (!token || !chatId) return trace.fail("utility_telegram_not_configured", 503, "utility.delivery.config_failed", "error");
   const db = getServerSupabase();
-  if (!db) return NextResponse.json({ error: "backend_unavailable" }, { status: 503 });
+  if (!db) return trace.fail("backend_unavailable", 503, "utility.access.backend_failed", "error");
   const { data: jobId, error: claimError } = await db.rpc("claim_utility_delivery_job", { p_chat_id: chatId });
-  if (claimError) return NextResponse.json({ error: "claim_failed" }, { status: 500 });
-  if (!jobId) return NextResponse.json({ ok: true, processed: 0 });
-  const { data: job } = await db.from("utility_delivery_jobs").select("id,submission_id,message_ids,chat_id_snapshot")
+  if (claimError) return trace.fail("claim_failed", 500, "utility.delivery.claim_failed", "error");
+  if (!jobId) return trace.json({ ok: true, processed: 0 });
+  const { data: job, error: jobError } = await db.from("utility_delivery_jobs").select("id,submission_id,message_ids,chat_id_snapshot")
     .eq("id", jobId).single();
-  if (!job) return NextResponse.json({ error: "claimed_job_missing" }, { status: 500 });
+  if (jobError || !job) return trace.fail("claimed_job_missing", 500, "utility.delivery.job_read_failed", "critical", { job_id: jobId });
   const ids: number[] = Array.isArray(job.message_ids) ? job.message_ids.filter((id: unknown) => typeof id === "number") : [];
   let outcome: "sent" | "retryable_failed" | "permanent_failed" | "uncertain" = "uncertain";
   let errorCode: string | null = null;
@@ -119,18 +124,30 @@ export async function GET(req: Request) {
     }
     outcome = "sent";
   } catch (error) {
-    errorCode = error instanceof TelegramError ? error.code : error instanceof Error ? error.message : "unknown";
+    errorCode = error instanceof TelegramError && /^telegram_\d{3}$/.test(error.code)
+      ? error.code : error instanceof Error && knownDeliveryErrors.has(error.message)
+        ? error.message : "unknown_delivery_error";
     retryAfter = error instanceof TelegramError ? error.retryAfter : null;
     outcome = ids.length > 0 ? "uncertain" : error instanceof TelegramError
       ? error.code === "telegram_429" || error.code.startsWith("telegram_5") ? "retryable_failed" : "permanent_failed"
       : "uncertain";
+    const event = errorCode === "delivery_ledger_write_failed" ? "utility.delivery.ledger_failed"
+      : error instanceof TelegramError ? "utility.delivery.telegram_failed" : "utility.delivery.packet_failed";
+    trace.log(event, outcome === "uncertain" ? "critical" : "error",
+      { job_id: job.id, submission_id: job.submission_id, error_code: errorCode, message_count: ids.length });
+    if (outcome === "uncertain") trace.log("utility.delivery.uncertain", "critical",
+      { job_id: job.id, submission_id: job.submission_id, error_code: "uncertain_delivery", message_count: ids.length });
   }
   const { error: updateError } = await db.from("utility_delivery_jobs").update({
     state: outcome, message_ids: ids, last_error_code: errorCode, locked_until: null,
     next_attempt_at: outcome === "retryable_failed" ? new Date(Date.now() + (retryAfter ?? 60) * 1000).toISOString() : new Date().toISOString(),
     sent_at: outcome === "sent" ? new Date().toISOString() : null,
   }).eq("id", job.id);
-  if (updateError) return NextResponse.json({ error: "delivery_state_write_failed", job_id: job.id }, { status: 500 });
-  return NextResponse.json({ ok: outcome === "sent", processed: 1, job_id: job.id, state: outcome,
+  if (updateError) {
+    trace.log("utility.delivery.state_write_failed", "critical",
+      { job_id: job.id, submission_id: job.submission_id, error_code: "delivery_state_write_failed", message_count: ids.length });
+    return trace.json({ error: "delivery_state_write_failed", job_id: job.id }, 500);
+  }
+  return trace.json({ ok: outcome === "sent", processed: 1, job_id: job.id, state: outcome,
     message_count: ids.length, error: errorCode });
 }

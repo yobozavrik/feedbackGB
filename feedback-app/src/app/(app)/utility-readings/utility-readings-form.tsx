@@ -82,6 +82,7 @@ export function UtilityReadingsForm() {
           form.set("store_id", String(storeId));
           form.set("period_id", config.period.id);
           form.set("category", category);
+          form.set("client_submission_id", clientId.current);
           form.set("photo", toFile(photo));
           const response = await fetch("/api/utility-readings/uploads", { method: "POST", body: form });
           if (!response.ok) throw new Error("Не вдалося зберегти фото. Спробуйте ще раз.");
