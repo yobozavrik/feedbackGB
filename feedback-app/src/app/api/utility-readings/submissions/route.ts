@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { canUseUtilityStore, utilityContext, validUuid } from "@/lib/utilityAccess";
 import { utilityTrace } from "@/lib/utilityLog";
+import { utilityInitialWindowState } from "@/lib/utilityWindow";
 
 export const runtime = "nodejs";
 const MAX_BODY_BYTES = 16 * 1024;
@@ -30,6 +31,22 @@ export async function POST(req: Request) {
     return trace.fail("invalid_packet", 400, "utility.submission.invalid", "info");
   }
   if (!(await canUseUtilityStore(db, actor, storeId))) return trace.fail("forbidden", 403, "utility.access.denied", "warn", { store_id: storeId });
+  const { data: period, error: periodError } = await db.from("utility_periods")
+    .select("period_start,due_at,status").eq("id", body.period_id).maybeSingle();
+  if (periodError) return trace.fail("query_failed", 500, "utility.period.read_failed", "error",
+    { store_id: storeId, period_id: body.period_id });
+  if (!period) return trace.fail("conflict", 409, "utility.period.closed", "info",
+    { store_id: storeId, period_id: body.period_id });
+  const windowState = utilityInitialWindowState(period);
+  if (windowState !== "open") {
+    const { data: prior, error: priorError } = await db.from("utility_submissions").select("id")
+      .eq("store_id", storeId).eq("period_id", body.period_id).eq("category", category)
+      .is("superseded_at", null).maybeSingle();
+    if (priorError) return trace.fail("query_failed", 500, "utility.submission.prior_read_failed", "error",
+      { store_id: storeId, period_id: body.period_id, category });
+    if (!prior) return trace.fail(windowState === "upcoming" ? "window_not_open" : "conflict",
+      409, "utility.submission.rejected", "info", { store_id: storeId, period_id: body.period_id, category });
+  }
   const payloadSha256 = createHash("sha256").update(JSON.stringify({
     storeId, periodId: body.period_id, category, comment, uploadIds,
   })).digest("hex");
@@ -40,9 +57,11 @@ export async function POST(req: Request) {
   });
   if (error) {
     const message = error.message ?? "";
-    const conflict = /idempotency|period_closed|deadline|initial_period/.test(message);
+    const windowNotOpen = /initial_window_not_open/.test(message);
+    const conflict = /idempotency|period_closed|deadline|initial_period/.test(message) || windowNotOpen;
     const forbidden = /forbidden/.test(message);
-    const code = forbidden ? "forbidden" : conflict ? "conflict" : "submission_failed";
+    const code = forbidden ? "forbidden" : windowNotOpen ? "window_not_open"
+      : conflict ? "conflict" : "submission_failed";
     return trace.fail(code, forbidden ? 403 : conflict ? 409 : 422,
       conflict || forbidden ? "utility.submission.rejected" : "utility.submission.rpc_failed",
       conflict || forbidden ? "info" : "error",

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronRightIcon } from "@/components/icons";
 import { PhotoInput } from "@/components/PhotoInput";
+import { utilityInitialWindowState } from "@/lib/utilityWindow";
 
 type Category = "electricity" | "water" | "heating" | "other";
 type Store = { id: number; name: string };
@@ -42,11 +43,17 @@ export function UtilityReadingsForm() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const clientId = useRef(crypto.randomUUID());
   const selectedStoreRef = useRef<number | null>(null);
   const storeEpoch = useRef(0);
   const uploaded = useRef<Map<string, string>>(new Map());
   const submittingRef = useRef(false);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     void fetch("/api/utility-readings/stores")
@@ -117,7 +124,12 @@ export function UtilityReadingsForm() {
           form.set("client_submission_id", clientId.current);
           form.set("photo", toFile(photo));
           const response = await fetch("/api/utility-readings/uploads", { method: "POST", body: form });
-          if (!response.ok) throw new Error("Не вдалося зберегти фото. Спробуйте ще раз.");
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({})) as { error?: string };
+            throw new Error(data.error === "window_not_open"
+              ? "Перше подання відкриється 28-го числа. Оновіть сторінку."
+              : "Не вдалося зберегти фото. Спробуйте ще раз.");
+          }
           uploadId = (await response.json() as { upload_id: string }).upload_id;
           uploaded.current.set(key, uploadId);
         }
@@ -130,7 +142,9 @@ export function UtilityReadingsForm() {
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({})) as { error?: string };
-        throw new Error(data.error === "conflict"
+        throw new Error(data.error === "window_not_open"
+          ? "Перше подання відкриється 28-го числа. Оновіть сторінку."
+          : data.error === "conflict"
           ? "Перше подання за цей місяць закрито або дані змінилися. Оновіть сторінку."
           : "Не вдалося надіслати фото. Спробуйте ще раз.");
       }
@@ -157,8 +171,9 @@ export function UtilityReadingsForm() {
 
   const selectedStore = stores.find((store) => store.id === storeId);
   const chosen = categories.find((item) => item.id === category);
-  const initialOpen = !!config?.period && config.period.status === "open"
-    && new Date(config.period.due_at).getTime() >= Date.now();
+  const initialWindowState = config?.period
+    ? utilityInitialWindowState(config.period, clockNow) : "closed";
+  const initialOpen = initialWindowState === "open";
   const selectedExisting = activePeriod && category && (activePeriod.id === config?.period.id
     ? config.latest.find((item) => item.category === category)
     : config?.history.find((item) => item.period_id === activePeriod.id && item.category === category));
@@ -182,9 +197,10 @@ export function UtilityReadingsForm() {
       <h2 className="mt-1 font-display text-title">{selectedStore.name}</h2></section> : null}
     {loading ? <div className="card p-5">Завантажуємо…</div> : null}
     {!loading && !selectedStore ? <div className="callout callout-warning">Для вас не призначено магазин. Зверніться до адміністратора.</div> : null}
-    {config?.period ? <p className="px-1 text-meta text-ink-500">Перше подання за цей місяць — до {new Intl.DateTimeFormat("uk-UA",
+    {config?.period ? <p className="px-1 text-meta text-ink-500">Перше подання: з 28-го числа до {new Intl.DateTimeFormat("uk-UA",
       { timeZone: "Europe/Kyiv", dateStyle: "medium", timeStyle: "short" }).format(new Date(config.period.due_at))} за Києвом</p> : null}
-    {config?.period && !initialOpen ? <div className="callout callout-warning">Перше подання за цей місяць закрито. Уже подані фото можна оновити.</div> : null}
+    {config?.period && initialWindowState === "upcoming" ? <div className="callout callout-warning">Перше подання відкриється 28-го числа. Уже подані фото можна оновити в будь-який час.</div> : null}
+    {config?.period && initialWindowState === "closed" ? <div className="callout callout-warning">Перше подання за цей місяць закрито. Уже подані фото можна оновити.</div> : null}
     {!category && !loading && config ? <div className="space-y-3">
       {categories.map((item) => {
         const latest = config.latest.find((entry) => entry.category === item.id);

@@ -152,7 +152,7 @@ export function UtilityReadingsWorkspace() {
           }))}
           onChange={(periodId) => void loadCoverage(periodId)} />
         <Button onClick={() => void load()}>Оновити</Button></Space>
-        {selectedPeriod ? <p className="mt-2 text-sm text-ink-500">Термін першого подання: {new Intl.DateTimeFormat("uk-UA",
+        {selectedPeriod ? <p className="mt-2 text-sm text-ink-500">Перше подання: з 28-го числа до {new Intl.DateTimeFormat("uk-UA",
           { timeZone: "Europe/Kyiv", dateStyle: "medium", timeStyle: "short" }).format(new Date(selectedPeriod.due_at))} за Києвом</p> : null}
       </Card>
       {coverageReady && (tab === "coverage" || tab === "submissions") ? <>

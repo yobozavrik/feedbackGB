@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { canUseUtilityStore, utilityContext, validUuid } from "@/lib/utilityAccess";
 import { utilityTrace } from "@/lib/utilityLog";
+import { utilityInitialWindowState } from "@/lib/utilityWindow";
 
 export const runtime = "nodejs";
 const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
@@ -69,13 +70,15 @@ export async function POST(req: Request) {
     .select("id,period_start,period_end,due_at,status").eq("id", periodId).maybeSingle();
   if (periodError) return trace.fail("query_failed", 500, "utility.period.read_failed", "error", { store_id: storeId, period_id: periodId });
   if (!period) return trace.fail("period_closed", 409, "utility.period.closed", "info", { store_id: storeId, period_id: periodId });
-  if (period.status !== "open" || new Date(period.due_at).getTime() < Date.now()) {
+  const windowState = utilityInitialWindowState(period);
+  if (windowState !== "open") {
     const { data: prior, error: priorError } = await db.from("utility_submissions").select("id")
       .eq("store_id", storeId).eq("period_id", periodId).eq("category", category)
       .is("superseded_at", null).maybeSingle();
     if (priorError) return trace.fail("query_failed", 500, "utility.upload.prior_read_failed", "error",
       { store_id: storeId, period_id: periodId, category });
-    if (!prior) return trace.fail("period_closed", 409, "utility.period.closed", "info",
+    if (!prior) return trace.fail(windowState === "upcoming" ? "window_not_open" : "period_closed",
+      409, "utility.period.closed", "info",
       { store_id: storeId, period_id: periodId, category });
   }
   const { count: pendingCount, error: countError } = await db.from("utility_uploads")
