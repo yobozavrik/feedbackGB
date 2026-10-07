@@ -39,6 +39,12 @@ export async function GET(req: Request) {
   const auth = checkCronAuth(req);
   if (!auth.ok) return trace.fail(auth.error, auth.status, "utility.access.denied", "warn");
   if (process.env.UTILITY_READINGS_ENABLED !== "true") return trace.json({ ok: true, skipped: true, reason: "feature_disabled" });
+  if (process.env.UTILITY_DELIVERY_TRANSPORT === "mtproto") {
+    return trace.json({ ok: true, skipped: true, reason: "external_mtproto_worker" });
+  }
+  if (process.env.UTILITY_DELIVERY_TRANSPORT && process.env.UTILITY_DELIVERY_TRANSPORT !== "bot_api") {
+    return trace.fail("invalid_delivery_transport", 503, "utility.delivery.config_failed", "error");
+  }
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_UTILITY_CHAT_ID;
   if (!token || !chatId) return trace.fail("utility_telegram_not_configured", 503, "utility.delivery.config_failed", "error");

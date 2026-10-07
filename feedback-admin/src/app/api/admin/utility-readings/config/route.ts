@@ -1,6 +1,7 @@
 import { adminUtilityContext } from "@/lib/admin/utilityAccess";
 import { utilityTrace } from "@/lib/admin/utilityLog";
 import { utilityReadingsEnabled } from "@/lib/admin/utilityFeature";
+import { utilityDeliveryConfigured } from "@/lib/admin/utilityDeliveryConfig";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +35,5 @@ export async function GET(req: Request) {
     return trace.fail("period_catalog_too_large", 507, "utility.admin.read_failed", "error");
   }
   return trace.json({ stores: stores.data ?? [], periods: periods.data ?? [], current_period_id: currentPeriodId,
-    delivery_enabled: process.env.UTILITY_READINGS_ENABLED === "true"
-      && !!process.env.TELEGRAM_UTILITY_CHAT_ID?.trim()
-      && !!process.env.TELEGRAM_BOT_TOKEN?.trim() });
+    delivery_enabled: utilityDeliveryConfigured() });
 }

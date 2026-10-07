@@ -1,0 +1,16 @@
+services:
+  worker:
+    build: .
+    restart: unless-stopped
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:?required}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:?required}
+      UTILITY_TELEGRAM_CHAT_ID: ${UTILITY_TELEGRAM_CHAT_ID:?required}
+      SUPABASE_URL: ${SUPABASE_URL:?required}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?required}
+      UTILITY_TELEGRAM_ENABLED: ${UTILITY_TELEGRAM_ENABLED:-false}
+      TELEGRAM_SESSION_PATH: /data/utility-account
+    volumes:
+      - utility_telegram_session:/data
+volumes:
+  utility_telegram_session:
