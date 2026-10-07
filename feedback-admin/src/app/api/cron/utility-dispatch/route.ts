@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkCronAuth } from "@/lib/cronAuth";
 import { getServerSupabase } from "@/lib/supabase";
+import { TelegramError, telegramAlbum } from "@/lib/admin/utilityTelegram";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,10 +9,6 @@ export const maxDuration = 300;
 const categoryLabel: Record<string, string> = {
   electricity: "Електроенергія", water: "Вода", heating: "Опалення", other: "Інші послуги",
 };
-
-class TelegramError extends Error {
-  constructor(public code: string, public retryAfter: number | null = null) { super(code); }
-}
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -87,21 +84,37 @@ export async function GET(req: Request) {
     ids.push(messageId);
     const { error: firstLedgerError } = await db.from("utility_delivery_jobs").update({ message_ids: ids }).eq("id", job.id);
     if (firstLedgerError) throw new Error("delivery_ledger_write_failed");
-    for (const [index, photo] of photos.entries()) {
+    for (let start = 0; start < photos.length; start += 10) {
+      const batch = photos.slice(start, start + 10);
+      const form = new FormData();
+      form.set("chat_id", chatId);
+      const media: Array<{ type: "photo"; media: string; caption?: string }> = [];
+      const attachments: Array<{ blob: Blob; filename: string }> = [];
+      for (const [index, photo] of batch.entries()) {
         const { data: upload, error: uploadError } = await db.from("utility_uploads")
           .select("storage_path,mime").eq("id", photo.upload_id).single();
         if (uploadError || !upload) throw new Error("upload_missing");
         const { data: blob, error: downloadError } = await db.storage.from("utility-reading-photos").download(upload.storage_path);
         if (downloadError || !blob) throw new Error("photo_download_failed");
-        const form = new FormData();
-        form.set("chat_id", chatId);
-        form.set("caption", `${categoryLabel[submission.category] ?? submission.category} · фото ${index + 1}/${photos.length}`.slice(0, 1000));
         const extension = upload.mime === "image/png" ? "png" : upload.mime === "image/webp" ? "webp" : "jpg";
-        form.set("photo", blob, `utility-${photo.id}.${extension}`);
-        const photoMessageId = await telegram("sendPhoto", token, form);
-        ids.push(photoMessageId);
-        const { error: ledgerError } = await db.from("utility_delivery_jobs").update({ message_ids: ids }).eq("id", job.id);
-        if (ledgerError) throw new Error("delivery_ledger_write_failed");
+        const attachment = `photo${index}`;
+        const filename = `utility-${photo.id}.${extension}`;
+        attachments.push({ blob, filename });
+        if (batch.length > 1) form.set(attachment, blob, filename);
+        media.push({ type: "photo", media: `attach://${attachment}`,
+          ...(index === 0 ? { caption: `${categoryLabel[submission.category] ?? submission.category} · фото ${start + 1}–${start + batch.length}/${photos.length}` } : {}),
+        });
+      }
+      if (batch.length === 1) {
+        form.set("photo", attachments[0].blob, attachments[0].filename);
+        form.set("caption", media[0].caption ?? "Фото послуги");
+        ids.push(await telegram("sendPhoto", token, form));
+      } else {
+        form.set("media", JSON.stringify(media));
+        ids.push(...await telegramAlbum(token, form, batch.length));
+      }
+      const { error: ledgerError } = await db.from("utility_delivery_jobs").update({ message_ids: ids }).eq("id", job.id);
+      if (ledgerError) throw new Error("delivery_ledger_write_failed");
     }
     outcome = "sent";
   } catch (error) {

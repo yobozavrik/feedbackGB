@@ -38,6 +38,7 @@ export function UtilityReadingsForm() {
   const [success, setSuccess] = useState<string | null>(null);
   const clientId = useRef(crypto.randomUUID());
   const uploaded = useRef<Map<string, string>>(new Map());
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     void fetch("/api/utility-readings/stores")
@@ -65,8 +66,9 @@ export function UtilityReadingsForm() {
   }
 
   async function submit() {
-    if (!storeId || !config?.period || !category) return;
+    if (submittingRef.current || !storeId || !config?.period || !category) return;
     if (photos.length < 1) { setError("Додайте хоча б одне фото"); return; }
+    submittingRef.current = true;
     setSending(true); setError(null);
     try {
       const uploadIds: string[] = [];
@@ -107,7 +109,7 @@ export function UtilityReadingsForm() {
       clientId.current = crypto.randomUUID(); uploaded.current.clear();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Помилка подання");
-    } finally { setSending(false); }
+    } finally { submittingRef.current = false; setSending(false); }
   }
 
   const selectedStore = stores.find((store) => store.id === storeId);
@@ -119,7 +121,7 @@ export function UtilityReadingsForm() {
     <div className="px-1"><h1 className="font-display text-display text-ink-900">Надати показники</h1>
       <p className="mt-1 text-body text-ink-700">Оберіть послугу, зробіть фото та надішліть.</p></div>
     {stores.length > 1 ? <div className="card p-4"><label htmlFor="utility-store" className="field-label">Магазин</label>
-      <select id="utility-store" className="field-input field-select" value={storeId ?? ""}
+      <select id="utility-store" className="field-input field-select" value={storeId ?? ""} disabled={sending}
         onChange={(event) => setStoreId(Number(event.target.value))}>
         {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
       </select></div> : null}
@@ -158,7 +160,7 @@ export function UtilityReadingsForm() {
     {error ? <div className="callout callout-danger">{error}</div> : null}
     {success ? <div className="callout callout-success">{success}</div> : null}
     <div className="bottom-action-bar"><div className="mx-auto flex w-full max-w-md gap-2">
-      <button type="button" className="btn-back" onClick={() => {
+      <button type="button" className="btn-back" disabled={sending} onClick={() => {
         if (category) { setCategory(null); setPhotos([]); setError(null); setSuccess(null); }
         else history.back();
       }}>Назад</button>
