@@ -4,7 +4,35 @@ import { canUseUtilityStore, utilityContext, validUuid } from "@/lib/utilityAcce
 
 export const runtime = "nodejs";
 const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+const MAX_REQUEST_BYTES = MAX_PHOTO_BYTES + 64 * 1024;
 const CATEGORIES = new Set(["electricity", "water", "heating", "other"]);
+
+async function boundedFormData(req: Request): Promise<FormData | "too_large" | null> {
+  const contentType = req.headers.get("content-type");
+  if (!contentType?.startsWith("multipart/form-data;") || !req.body) return null;
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_REQUEST_BYTES) {
+        return "too_large";
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return await new Request(req.url, { method: "POST", headers: { "content-type": contentType }, body: bytes }).formData();
+  } catch {
+    return null;
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 function imageType(bytes: Uint8Array): { mime: string; ext: string } | null {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { mime: "image/jpeg", ext: "jpg" };
@@ -16,11 +44,12 @@ function imageType(bytes: Uint8Array): { mime: string; ext: string } | null {
 /** One photo per request keeps the request below hosting body limits. */
 export async function POST(req: Request) {
   const contentLength = Number(req.headers.get("content-length") ?? 0);
-  if (contentLength > MAX_PHOTO_BYTES + 64 * 1024) return NextResponse.json({ error: "photo_too_large" }, { status: 413 });
+  if (contentLength > MAX_REQUEST_BYTES) return NextResponse.json({ error: "photo_too_large" }, { status: 413 });
   const context = await utilityContext();
   if ("error" in context) return NextResponse.json({ error: context.error }, { status: context.status });
   const { db, actor } = context;
-  const form = await req.formData().catch(() => null);
+  const form = await boundedFormData(req);
+  if (form === "too_large") return NextResponse.json({ error: "photo_too_large" }, { status: 413 });
   const storeId = Number(form?.get("store_id"));
   const periodId = form?.get("period_id");
   const category = form?.get("category");
